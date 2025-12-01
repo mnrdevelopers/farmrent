@@ -377,24 +377,23 @@
                         </a>
                     </li>
                     <!-- Role Selection Dropdown (only shown if not logged in) -->
-    <li class="nav-item dropdown" id="role-dropdown">
-        <a class="nav-link dropdown-toggle" href="#" id="roleDropdown" role="button" data-bs-toggle="dropdown">
-            <i class="fas fa-user-tag"></i> Sign Up As
-        </a>
-        <ul class="dropdown-menu">
-            <li><a class="dropdown-item" href="#" onclick="setRole('customer')"><i class="fas fa-user me-2"></i>Customer</a></li>
-            <li><a class="dropdown-item" href="#" onclick="setRole('seller')"><i class="fas fa-store me-2"></i>Seller</a></li>
-            <li><a class="dropdown-item" href="#" onclick="setRole('admin')"><i class="fas fa-user-shield me-2"></i>Admin</a></li>
-        </ul>
-    </li>
-    
-    <!-- User Dropdown (shown when logged in) -->
-    <li class="nav-item dropdown" id="auth-dropdown">
-        <a class="nav-link" href="auth.html?role=customer">
-            <i class="fas fa-user"></i> Login
-        </a>
-    </li>
-</div>
+                    <li class="nav-item dropdown" id="role-dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="roleDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-tag"></i> Sign Up As
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" onclick="setRole('customer')"><i class="fas fa-user me-2"></i>Customer</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="setRole('seller')"><i class="fas fa-store me-2"></i>Seller</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="setRole('admin')"><i class="fas fa-user-shield me-2"></i>Admin</a></li>
+                        </ul>
+                    </li>
+                    
+                    <!-- User Dropdown (shown when logged in) -->
+                    <li class="nav-item dropdown" id="auth-dropdown">
+                        <a class="nav-link" href="auth.html?role=customer">
+                            <i class="fas fa-user"></i> Login
+                        </a>
+                    </li>
                 </ul>
             </div>
         </div>
@@ -808,8 +807,12 @@
             // Smooth scrolling for anchor links
             document.querySelectorAll('a[href^="#"]').forEach(anchor => {
                 anchor.addEventListener('click', function (e) {
+                    const href = this.getAttribute('href');
+                    if (href === "#") return; // Ignore plain '#' links
+                    
                     e.preventDefault();
-                    const target = document.querySelector(this.getAttribute('href'));
+                    
+                    const target = document.querySelector(href);
                     if (target) {
                         target.scrollIntoView({
                             behavior: 'smooth',
@@ -821,41 +824,47 @@
         });
 
         // Role selection function
-function setRole(role) {
-    localStorage.setItem('selectedRole', role);
-    window.location.href = `auth.html?role=${role}`;
-}
+        function setRole(role) {
+            localStorage.setItem('selectedRole', role);
+            window.location.href = `auth.html?role=${role}`;
+        }
 
-// Check if user is logged in and show appropriate status
-function checkLoginStatus() {
-    const user = JSON.parse(localStorage.getItem('currentUser'));
-    if (user) {
-        document.getElementById('auth-dropdown').innerHTML = `
-            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
-                <i class="fas fa-user-circle"></i> ${user.name}
-            </a>
-            <ul class="dropdown-menu">
-                <li><a class="dropdown-item" href="profile.html"><i class="fas fa-user me-2"></i>Profile</a></li>
-                <li><a class="dropdown-item" href="orders.html"><i class="fas fa-clipboard-list me-2"></i>My Orders</a></li>
-                ${user.role === 'seller' ? '<li><a class="dropdown-item" href="seller.html"><i class="fas fa-store me-2"></i>Seller Dashboard</a></li>' : ''}
-                ${user.role === 'admin' ? '<li><a class="dropdown-item" href="admin.html"><i class="fas fa-user-shield me-2"></i>Admin Panel</a></li>' : ''}
-                <li><hr class="dropdown-divider"></li>
-                <li><a class="dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
-            </ul>
-        `;
-        document.getElementById('role-dropdown').remove();
-    }
-}
+        // Check if user is logged in and show appropriate status
+        function checkLoginStatus() {
+            const user = JSON.parse(localStorage.getItem('currentUser'));
+            if (user) {
+                const authDropdown = document.getElementById('auth-dropdown');
+                if (authDropdown) {
+                    authDropdown.innerHTML = `
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-circle"></i> ${user.name}
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="profile.html"><i class="fas fa-user me-2"></i>Profile</a></li>
+                            <li><a class="dropdown-item" href="orders.html"><i class="fas fa-clipboard-list me-2"></i>My Orders</a></li>
+                            ${user.role === 'seller' ? '<li><a class="dropdown-item" href="seller.html"><i class="fas fa-store me-2"></i>Seller Dashboard</a></li>' : ''}
+                            ${user.role === 'admin' ? '<li><a class="dropdown-item" href="admin.html"><i class="fas fa-user-shield me-2"></i>Admin Panel</a></li>' : ''}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+                        </ul>
+                    `;
+                }
+                const roleDropdown = document.getElementById('role-dropdown');
+                if (roleDropdown) {
+                    roleDropdown.remove();
+                }
+            }
+        }
 
-function logout() {
-    localStorage.removeItem('currentUser');
-    window.location.reload();
-}
+        function logout() {
+            localStorage.removeItem('currentUser');
+            window.location.reload();
+        }
 
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    checkLoginStatus();
-});
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            checkLoginStatus();
+        });
     </script>
 </body>
 </html>
