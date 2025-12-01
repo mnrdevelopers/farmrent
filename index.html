@@ -376,20 +376,24 @@
                             <span class="badge bg-warning text-dark" id="cart-count">0</span>
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="auth.html">
-                            <i class="fas fa-user"></i> Login
-                        </a>
-                    </li>
-                    <div class="nav-item dropdown ms-2">
-    <a class="nav-link dropdown-toggle" href="#" id="roleDropdown" role="button" data-bs-toggle="dropdown">
-        <i class="fas fa-user-tag"></i> Sign Up As
-    </a>
-    <ul class="dropdown-menu">
-        <li><a class="dropdown-item" href="#" onclick="setRole('customer')"><i class="fas fa-user me-2"></i>Customer</a></li>
-        <li><a class="dropdown-item" href="#" onclick="setRole('seller')"><i class="fas fa-store me-2"></i>Seller</a></li>
-        <li><a class="dropdown-item" href="#" onclick="setRole('admin')"><i class="fas fa-user-shield me-2"></i>Admin</a></li>
-    </ul>
+                    <!-- Role Selection Dropdown (only shown if not logged in) -->
+    <li class="nav-item dropdown" id="role-dropdown">
+        <a class="nav-link dropdown-toggle" href="#" id="roleDropdown" role="button" data-bs-toggle="dropdown">
+            <i class="fas fa-user-tag"></i> Sign Up As
+        </a>
+        <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="#" onclick="setRole('customer')"><i class="fas fa-user me-2"></i>Customer</a></li>
+            <li><a class="dropdown-item" href="#" onclick="setRole('seller')"><i class="fas fa-store me-2"></i>Seller</a></li>
+            <li><a class="dropdown-item" href="#" onclick="setRole('admin')"><i class="fas fa-user-shield me-2"></i>Admin</a></li>
+        </ul>
+    </li>
+    
+    <!-- User Dropdown (shown when logged in) -->
+    <li class="nav-item dropdown" id="auth-dropdown">
+        <a class="nav-link" href="auth.html?role=customer">
+            <i class="fas fa-user"></i> Login
+        </a>
+    </li>
 </div>
                 </ul>
             </div>
