@@ -1,12 +1,11 @@
-// firebase-config.js
-// Replace with your actual Firebase config
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_AUTH_DOMAIN",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_STORAGE_BUCKET",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyBp1yyC1IF_rmOWwFdZRcbcsCHNbJ3Sdro",
+  authDomain: "mnr-devops-2e97d.firebaseapp.com",
+  projectId: "mnr-devops-2e97d",
+  storageBucket: "mnr-devops-2e97d.firebasestorage.app",
+  messagingSenderId: "464172080556",
+  appId: "1:464172080556:web:e5133cdbe52811eb7aee09",
+  measurementId: "G-L8S57RBM5X"
 };
 
 // Initialize Firebase
