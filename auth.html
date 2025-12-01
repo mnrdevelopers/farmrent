@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FarmRent - Authentication</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --farm-green: #2B5C2B;
+            --earth-brown: #8B4513;
+            --sun-yellow: #F2C14E;
+            --accent-red: #D0614C;
+            --clean-white: #F7F7F7;
+        }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+        }
+        
+        .auth-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+            max-width: 1200px;
+            margin: 20px auto;
+        }
+        
+        .auth-sidebar {
+            background: linear-gradient(135deg, var(--farm-green), var(--earth-brown));
+            color: white;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        
+        .role-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+        
+        .role-badge {
+            background: var(--sun-yellow);
+            color: var(--farm-green);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+        
+        .auth-form {
+            padding: 40px;
+        }
+        
+        .form-title {
+            color: var(--farm-green);
+            font-weight: 700;
+            margin-bottom: 30px;
+        }
+        
+        .form-control {
+            border-radius: 8px;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            transition: all 0.3s;
+        }
+        
+        .form-control:focus {
+            border-color: var(--farm-green);
+            box-shadow: 0 0 0 0.2rem rgba(43, 92, 43, 0.25);
+        }
+        
+        .btn-primary {
+            background-color: var(--farm-green);
+            border-color: var(--farm-green);
+            padding: 12px;
+            font-weight: 600;
+            border-radius: 8px;
+        }
+        
+        .btn-primary:hover {
+            background-color: #1e4a1e;
+            border-color: #1e4a1e;
+        }
+        
+        .form-switch {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+            gap: 10px;
+        }
+        
+        .form-switch button {
+            background: none;
+            border: none;
+            color: var(--farm-green);
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        .form-switch button.active {
+            border-bottom: 2px solid var(--farm-green);
+        }
+        
+        .role-highlight {
+            background: rgba(43, 92, 43, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            border-left: 4px solid var(--sun-yellow);
+        }
+        
+        .back-home {
+            color: var(--farm-green);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .back-home:hover {
+            color: var(--earth-brown);
+        }
+        
+        .role-features {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .role-features li {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .role-features li i {
+            color: var(--sun-yellow);
+            margin-right: 10px;
+        }
+        
+        .auth-tabs {
+            display: flex;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #eee;
+        }
+        
+        .auth-tab {
+            flex: 1;
+            text-align: center;
+            padding: 15px;
+            background: none;
+            border: none;
+            font-weight: 600;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .auth-tab.active {
+            color: var(--farm-green);
+            border-bottom: 3px solid var(--farm-green);
+        }
+        
+        .form-section {
+            display: none;
+        }
+        
+        .form-section.active {
+            display: block;
+            animation: fadeIn 0.5s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .role-benefits {
+            background: rgba(242, 193, 78, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .navbar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: var(--farm-green);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">
+                <i class="fas fa-tractor me-2"></i>FarmRent
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main Authentication Container -->
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="auth-container">
+                    <div class="row g-0">
+                        <!-- Sidebar with Role Info -->
+                        <div class="col-lg-5">
+                            <div class="auth-sidebar">
+                                <a href="index.html" class="back-home">
+                                    <i class="fas fa-arrow-left me-2"></i> Back to Home
+                                </a>
+                                
+                                <div id="role-info">
+                                    <!-- Role info will be populated by JavaScript -->
+                                </div>
+                                
+                                <div class="role-highlight">
+                                    <h5>Benefits:</h5>
+                                    <ul class="role-features" id="role-features">
+                                        <!-- Features will be populated by JavaScript -->
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Authentication Form -->
+                        <div class="col-lg-7">
+                            <div class="auth-form">
+                                <div class="auth-tabs">
+                                    <button class="auth-tab active" onclick="switchTab('login')">Login</button>
+                                    <button class="auth-tab" onclick="switchTab('signup')">Sign Up</button>
+                                </div>
+                                
+                                <!-- Login Form -->
+                                <div id="login-form" class="form-section active">
+                                    <h3 class="form-title">Login to Your Account</h3>
+                                    <form id="loginForm">
+                                        <div class="mb-3">
+                                            <label for="loginEmail" class="form-label">Email Address</label>
+                                            <input type="email" class="form-control" id="loginEmail" placeholder="Enter your email" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="loginPassword" class="form-label">Password</label>
+                                            <input type="password" class="form-control" id="loginPassword" placeholder="Enter your password" required>
+                                        </div>
+                                        <div class="mb-3 form-check">
+                                            <input type="checkbox" class="form-check-input" id="rememberMe">
+                                            <label class="form-check-label" for="rememberMe">Remember me</label>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary w-100">Login</button>
+                                        <div class="text-center mt-3">
+                                            <a href="#" class="text-decoration-none" style="color: var(--farm-green);">Forgot Password?</a>
+                                        </div>
+                                    </form>
+                                </div>
+                                
+                                <!-- Signup Form -->
+                                <div id="signup-form" class="form-section">
+                                    <h3 class="form-title">Create New Account</h3>
+                                    <form id="signupForm">
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <label for="signupName" class="form-label">Full Name</label>
+                                                <input type="text" class="form-control" id="signupName" placeholder="Enter your full name" required>
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <label for="signupMobile" class="form-label">Mobile Number</label>
+                                                <input type="tel" class="form-control" id="signupMobile" placeholder="Enter your mobile number" required>
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="signupEmail" class="form-label">Email Address</label>
+                                            <input type="email" class="form-control" id="signupEmail" placeholder="Enter your email" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="signupPassword" class="form-label">Password</label>
+                                            <input type="password" class="form-control" id="signupPassword" placeholder="Create a password" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="signupConfirmPassword" class="form-label">Confirm Password</label>
+                                            <input type="password" class="form-control" id="signupConfirmPassword" placeholder="Confirm your password" required>
+                                        </div>
+                                        
+                                        <!-- Seller Specific Fields (shown only for seller role) -->
+                                        <div id="seller-fields" style="display: none;">
+                                            <div class="mb-3">
+                                                <label for="businessName" class="form-label">Business/Shop Name</label>
+                                                <input type="text" class="form-control" id="businessName" placeholder="Enter your business name">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="gstNumber" class="form-label">GST Number (Optional)</label>
+                                                <input type="text" class="form-control" id="gstNumber" placeholder="Enter GST number if available">
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Admin Specific Fields (shown only for admin role) -->
+                                        <div id="admin-fields" style="display: none;">
+                                            <div class="mb-3">
+                                                <label for="adminCode" class="form-label">Admin Access Code</label>
+                                                <input type="password" class="form-control" id="adminCode" placeholder="Enter admin access code">
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-3 form-check">
+                                            <input type="checkbox" class="form-check-input" id="termsAgree" required>
+                                            <label class="form-check-label" for="termsAgree">
+                                                I agree to the <a href="#" class="text-decoration-none" style="color: var(--farm-green);">Terms & Conditions</a>
+                                            </label>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary w-100">Create Account</button>
+                                    </form>
+                                </div>
+                                
+                                <div class="role-benefits" id="dynamic-benefits">
+                                    <!-- Dynamic benefits will be shown here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Authentication JavaScript -->
+    <script>
+        // Get role from URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const role = urlParams.get('role') || 'customer';
+        
+        // Role-specific data
+        const roleData = {
+            customer: {
+                title: "Customer Account",
+                icon: "fas fa-user",
+                color: "var(--farm-green)",
+                features: [
+                    "Rent farming equipment easily",
+                    "Track your rental orders",
+                    "Get exclusive customer offers",
+                    "24/7 customer support",
+                    "Flexible rental durations"
+                ],
+                signupBenefits: "Create account to rent tractors, harvesters, and other farming equipment.",
+                loginBenefits: "Login to manage your rentals and access your account."
+            },
+            seller: {
+                title: "Seller Account",
+                icon: "fas fa-store",
+                color: "var(--earth-brown)",
+                features: [
+                    "List your equipment for rent",
+                    "Manage rental requests",
+                    "Track earnings and payments",
+                    "Seller dashboard analytics",
+                    "Direct customer communication"
+                ],
+                signupBenefits: "Register as seller to list your farming equipment for rental.",
+                loginBenefits: "Login to manage your listed equipment and rental requests."
+            },
+            admin: {
+                title: "Admin Account",
+                icon: "fas fa-user-shield",
+                color: "var(--accent-red)",
+                features: [
+                    "Manage all user accounts",
+                    "Approve seller registrations",
+                    "Monitor all rental transactions",
+                    "Access analytics dashboard",
+                    "Manage equipment categories"
+                ],
+                signupBenefits: "Contact system administrator for admin account creation.",
+                loginBenefits: "Login to access admin panel and manage the platform."
+            }
+        };
+        
+        // Initialize role
+        function initializeRole() {
+            const roleInfo = document.getElementById('role-info');
+            const featuresList = document.getElementById('role-features');
+            const dynamicBenefits = document.getElementById('dynamic-benefits');
+            
+            // Update role badge and title
+            document.title = `FarmRent - ${roleData[role].title}`;
+            
+            roleInfo.innerHTML = `
+                <div class="role-icon">
+                    <i class="${roleData[role].icon}"></i>
+                </div>
+                <span class="role-badge" style="background: ${roleData[role].color};">
+                    ${role.charAt(0).toUpperCase() + role.slice(1)}
+                </span>
+                <h3>${roleData[role].title}</h3>
+                <p>Welcome to FarmRent ${role} portal. ${role === 'admin' ? 'System administration access.' : 'Manage your farming equipment ' + (role === 'seller' ? 'rentals' : 'needs') + ' efficiently.'}</p>
+            `;
+            
+            // Update features list
+            featuresList.innerHTML = '';
+            roleData[role].features.forEach(feature => {
+                featuresList.innerHTML += `
+                    <li><i class="fas fa-check-circle"></i> ${feature}</li>
+                `;
+            });
+            
+            // Show/hide role-specific fields
+            const sellerFields = document.getElementById('seller-fields');
+            const adminFields = document.getElementById('admin-fields');
+            
+            if (role === 'seller') {
+                sellerFields.style.display = 'block';
+            } else if (role === 'admin') {
+                adminFields.style.display = 'block';
+            }
+            
+            // Update dynamic benefits
+            updateBenefits('login');
+        }
+        
+        // Switch between login and signup tabs
+        function switchTab(tabName) {
+            // Update active tab
+            document.querySelectorAll('.auth-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector(`button[onclick="switchTab('${tabName}')"]`).classList.add('active');
+            
+            // Show active form
+            document.querySelectorAll('.form-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            document.getElementById(`${tabName}-form`).classList.add('active');
+            
+            // Update benefits text
+            updateBenefits(tabName);
+        }
+        
+        // Update benefits text based on role and tab
+        function updateBenefits(tab) {
+            const dynamicBenefits = document.getElementById('dynamic-benefits');
+            if (tab === 'login') {
+                dynamicBenefits.innerHTML = `
+                    <i class="fas fa-info-circle me-2"></i>
+                    ${roleData[role].loginBenefits}
+                `;
+            } else {
+                dynamicBenefits.innerHTML = `
+                    <i class="fas fa-info-circle me-2"></i>
+                    ${roleData[role].signupBenefits}
+                `;
+            }
+        }
+        
+        // Handle login form submission
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            // Basic validation
+            if (!email || !password) {
+                showAlert('Please fill in all fields', 'danger');
+                return;
+            }
+            
+            // Simulate login process (in real app, this would connect to Firebase)
+            const users = JSON.parse(localStorage.getItem('users')) || [];
+            const user = users.find(u => u.email === email && u.password === password && u.role === role);
+            
+            if (user) {
+                // Store current user in localStorage
+                localStorage.setItem('currentUser', JSON.stringify(user));
+                
+                // Show success message
+                showAlert('Login successful! Redirecting...', 'success');
+                
+                // Redirect based on role
+                setTimeout(() => {
+                    if (role === 'customer') {
+                        window.location.href = 'index.html';
+                    } else if (role === 'seller') {
+                        window.location.href = 'seller.html';
+                    } else if (role === 'admin') {
+                        window.location.href = 'admin.html';
+                    }
+                }, 1500);
+            } else {
+                showAlert('Invalid email or password for this role', 'danger');
+            }
+        });
+        
+        // Handle signup form submission
+        document.getElementById('signupForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Get form values
+            const name = document.getElementById('signupName').value;
+            const mobile = document.getElementById('signupMobile').value;
+            const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
+            const confirmPassword = document.getElementById('signupConfirmPassword').value;
+            
+            // Validation
+            if (!name || !mobile || !email || !password || !confirmPassword) {
+                showAlert('Please fill in all required fields', 'danger');
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                showAlert('Passwords do not match', 'danger');
+                return;
+            }
+            
+            if (mobile.length !== 10 || isNaN(mobile)) {
+                showAlert('Please enter a valid 10-digit mobile number', 'danger');
+                return;
+            }
+            
+            // For admin signup, check access code
+            if (role === 'admin') {
+                const adminCode = document.getElementById('adminCode').value;
+                if (adminCode !== 'ADMIN2023') { // Default admin code
+                    showAlert('Invalid admin access code', 'danger');
+                    return;
+                }
+            }
+            
+            // Get additional fields based on role
+            let additionalInfo = {};
+            if (role === 'seller') {
+                additionalInfo.businessName = document.getElementById('businessName').value || '';
+                additionalInfo.gstNumber = document.getElementById('gstNumber').value || '';
+            }
+            
+            // Check if user already exists
+            const users = JSON.parse(localStorage.getItem('users')) || [];
+            const existingUser = users.find(u => u.email === email);
+            
+            if (existingUser) {
+                showAlert('User with this email already exists', 'danger');
+                return;
+            }
+            
+            // Create new user
+            const newUser = {
+                id: Date.now(),
+                name,
+                email,
+                mobile,
+                password, // In real app, this should be hashed
+                role,
+                ...additionalInfo,
+                createdAt: new Date().toISOString(),
+                status: role === 'seller' ? 'pending' : 'active'
+            };
+            
+            // Save to localStorage (in real app, this would go to Firebase)
+            users.push(newUser);
+            localStorage.setItem('users', JSON.stringify(users));
+            
+            // Auto login after signup
+            localStorage.setItem('currentUser', JSON.stringify(newUser));
+            
+            showAlert('Account created successfully!', 'success');
+            
+            // Redirect based on role after signup
+            setTimeout(() => {
+                if (role === 'seller') {
+                    window.location.href = 'seller-pending.html'; // Seller approval pending page
+                } else {
+                    window.location.href = 'index.html';
+                }
+            }, 1500);
+        });
+        
+        // Show alert message
+        function showAlert(message, type) {
+            // Remove existing alerts
+            const existingAlert = document.querySelector('.alert');
+            if (existingAlert) {
+                existingAlert.remove();
+            }
+            
+            // Create alert element
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            // Add to form
+            const form = document.querySelector('.auth-form .form-section.active');
+            form.insertBefore(alertDiv, form.firstChild);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                if (alertDiv.parentElement) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeRole();
+            
+            // Check if user is already logged in
+            const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+            if (currentUser && currentUser.role === role) {
+                // Redirect to appropriate page
+                if (role === 'customer') {
+                    window.location.href = 'index.html';
+                } else if (role === 'seller') {
+                    window.location.href = 'seller.html';
+                } else if (role === 'admin') {
+                    window.location.href = 'admin.html';
+                }
+            }
+        });
+    </script>
+</body>
+</html>
