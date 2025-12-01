@@ -8,13 +8,13 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
 
-    <!-- Add Firebase SDKs to index.html -->
-<script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-storage-compat.js"></script>
-<script src="firebase-config.js"></script>
     <style>
         :root {
             --farm-green: #2B5C2B;
@@ -41,313 +41,45 @@
             font-size: 1.5rem;
         }
         
-        .nav-link {
-            color: white !important;
-            font-weight: 500;
-        }
+        .nav-link { color: white !important; font-weight: 500; }
+        .nav-link:hover { color: var(--sun-yellow) !important; }
         
-        .nav-link:hover {
-            color: var(--sun-yellow) !important;
-        }
+        .btn-primary { background-color: var(--farm-green); border-color: var(--farm-green); color: white; }
+        .btn-primary:hover { background-color: #1e4a1e; border-color: #1e4a1e; }
         
-        .btn-primary {
-            background-color: var(--farm-green);
-            border-color: var(--farm-green);
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            background-color: #1e4a1e;
-            border-color: #1e4a1e;
-        }
-        
-        .btn-warning {
-            background-color: var(--sun-yellow);
-            border-color: var(--sun-yellow);
-            color: var(--farm-green);
-            font-weight: 600;
-        }
-        
-        .btn-warning:hover {
-            background-color: #e0b143;
-            border-color: #e0b143;
-            color: var(--farm-green);
-        }
-        
-        .btn-outline-primary {
-            color: var(--farm-green);
-            border-color: var(--farm-green);
-        }
-        
-        .btn-outline-primary:hover {
-            background-color: var(--farm-green);
-            color: white;
-        }
+        .btn-warning { background-color: var(--sun-yellow); border-color: var(--sun-yellow); color: var(--farm-green); font-weight: 600; }
+        .btn-warning:hover { background-color: #e0b143; border-color: #e0b143; }
         
         .hero-section {
             background: linear-gradient(rgba(43, 92, 43, 0.9), rgba(139, 69, 19, 0.8)), url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80');
-            background-size: cover;
-            background-position: center;
-            color: white;
-            padding: 120px 0;
-            position: relative;
-        }
-        
-        .hero-section h1 {
-            font-weight: 700;
-            text-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+            background-size: cover; background-position: center;
+            color: white; padding: 120px 0;
         }
         
         .category-card {
-            border: none;
-            border-radius: 8px;
-            transition: transform 0.3s, box-shadow 0.3s;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-            overflow: hidden;
-            background: white;
+            border: none; border-radius: 8px; transition: transform 0.3s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px;
+            background: white; padding: 20px; text-align: center; height: 100%;
         }
-        
-        .category-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.15);
-        }
-        
-        .category-icon {
-            font-size: 2.5rem;
-            color: var(--farm-green);
-            margin-bottom: 15px;
-        }
+        .category-card:hover { transform: translateY(-5px); }
+        .category-icon { font-size: 2.5rem; color: var(--farm-green); margin-bottom: 15px; }
         
         .equipment-card {
-            border: none;
-            border-radius: 8px;
-            transition: transform 0.3s, box-shadow 0.3s;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-            overflow: hidden;
-            background: white;
-        }
-        
-        .equipment-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.15);
-        }
-        
-        .price-tag {
-            font-weight: bold;
-            color: var(--farm-green);
-            font-size: 1.2rem;
-        }
-        
-        .sale-badge {
-            background-color: var(--accent-red);
-            color: white;
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            font-weight: bold;
-        }
-        
-        .footer {
-            background-color: var(--farm-green);
-            color: white;
-            padding: 40px 0;
-            margin-top: 50px;
-        }
-        
-        .whatsapp-btn {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background-color: #25D366;
-            color: white;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-            z-index: 1000;
+            border: none; border-radius: 8px; overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; background: white;
             transition: transform 0.3s;
         }
+        .equipment-card:hover { transform: translateY(-5px); }
+        .equipment-img { height: 200px; width: 100%; object-fit: cover; }
+        .price-tag { font-weight: bold; color: var(--farm-green); font-size: 1.2rem; }
         
-        .whatsapp-btn:hover {
-            transform: scale(1.1);
-            color: white;
-        }
-        
-        .section-title {
-            color: var(--farm-green);
-            margin-bottom: 30px;
-            position: relative;
-            padding-bottom: 10px;
-            font-weight: 700;
-        }
-        
-        .section-title:after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 50px;
-            height: 3px;
-            background-color: var(--sun-yellow);
-        }
-        
-        .section-title.center:after {
-            left: 50%;
-            transform: translateX(-50%);
-        }
-        
-        .process-step {
-            text-align: center;
-            padding: 20px;
-        }
-        
-        .step-icon {
-            width: 80px;
-            height: 80px;
-            background: linear-gradient(135deg, var(--farm-green), var(--earth-brown));
-            color: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-            font-size: 30px;
-        }
-        
-        .testimonial-card {
-            border: none;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            padding: 25px;
-            margin-bottom: 20px;
-            background: white;
-            border-left: 4px solid var(--sun-yellow);
-        }
-        
-        .testimonial-text {
-            font-style: italic;
-            margin-bottom: 15px;
-        }
-        
-        .client-info {
-            display: flex;
-            align-items: center;
-        }
-        
-        .client-avatar {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            background-color: var(--earth-brown);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            margin-right: 15px;
-        }
-        
-        .stats-section {
-            background: linear-gradient(135deg, var(--farm-green), var(--earth-brown));
-            color: white;
-            padding: 60px 0;
-        }
-        
-        .stat-item {
-            text-align: center;
-            padding: 20px;
-        }
-        
-        .stat-number {
-            font-size: 2.5rem;
-            font-weight: bold;
-            margin-bottom: 10px;
-            color: var(--sun-yellow);
-        }
-        
-        .newsletter-section {
-            background-color: var(--earth-brown);
-            color: white;
-            padding: 60px 0;
-        }
-        
-        .newsletter-form {
-            max-width: 500px;
-            margin: 0 auto;
-        }
-        
-        .category-badge {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            background-color: var(--sun-yellow);
-            color: var(--farm-green);
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: bold;
-        }
-        
-        .feature-highlight {
-            background-color: var(--sun-yellow);
-            color: var(--farm-green);
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            display: inline-block;
-            margin-bottom: 10px;
-        }
-        
-        .nav-pills .nav-link.active {
-            background-color: var(--farm-green);
-            color: white;
-        }
-        
-        .nav-pills .nav-link {
-            color: var(--farm-green);
-        }
-        
-        .card-header {
-            background-color: var(--farm-green);
-            color: white;
-            font-weight: 600;
-        }
-        
-        .alert-warning {
-            background-color: rgba(242, 193, 78, 0.2);
-            border-color: var(--sun-yellow);
-            color: var(--farm-green);
-        }
-        
-        .bg-earth {
-            background-color: var(--earth-brown);
-        }
-        
-        .text-sun {
-            color: var(--sun-yellow);
-        }
-        
-        .text-accent {
-            color: var(--accent-red);
-        }
-        
-        .bg-clean {
-            background-color: var(--clean-white);
-        }
-        
-        .seasonal-offer {
-            background: linear-gradient(135deg, var(--sun-yellow), #ffd166);
-            color: var(--farm-green);
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 30px;
+        .footer { background-color: var(--farm-green); color: white; padding: 40px 0; margin-top: 50px; }
+        .whatsapp-btn {
+            position: fixed; bottom: 20px; right: 20px;
+            background-color: #25D366; color: white;
+            width: 60px; height: 60px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); z-index: 1000;
         }
     </style>
 </head>
@@ -355,600 +87,132 @@
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
         <div class="container">
-            <a class="navbar-brand" href="index.html">
-                <i class="fas fa-tractor me-2"></i>FarmRent
-            </a>
+            <a class="navbar-brand" href="index.html"><i class="fas fa-tractor me-2"></i>FarmRent</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="index.html">Home</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="browse.html">Browse Equipment</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="about.html">About Us</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="contact.html">Contact</a>
-                    </li>
-                </ul>
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link" href="cart.html">
-                            <i class="fas fa-shopping-cart"></i> Cart
-                            <span class="badge bg-warning text-dark" id="cart-count">0</span>
-                        </a>
-                    </li>
-                    <!-- Role Selection Dropdown (only shown if not logged in) -->
-                    <li class="nav-item dropdown" id="role-dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="roleDropdown" role="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-user-tag"></i> Sign Up As
-                        </a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#" onclick="setRole('customer')"><i class="fas fa-user me-2"></i>Customer</a></li>
-                            <li><a class="dropdown-item" href="#" onclick="setRole('seller')"><i class="fas fa-store me-2"></i>Seller</a></li>
-                            <li><a class="dropdown-item" href="#" onclick="setRole('admin')"><i class="fas fa-user-shield me-2"></i>Admin</a></li>
-                        </ul>
-                    </li>
-                    
-                    <!-- User Dropdown (shown when logged in) -->
-                    <li class="nav-item dropdown" id="auth-dropdown">
-                        <a class="nav-link" href="auth.html?role=customer">
-                            <i class="fas fa-user"></i> Login
-                        </a>
-                    </li>
+                <ul class="navbar-nav me-auto" id="navbar-auth">
+                    <!-- Populated by JS -->
                 </ul>
             </div>
         </div>
     </nav>
 
     <!-- Hero Section -->
-    <section class="hero-section">
+    <section class="hero-section text-center">
         <div class="container">
-            <div class="row align-items-center">
-                <div class="col-lg-6">
-                    <h1 class="display-4 fw-bold mb-4">Modern Farming Made Easy</h1>
-                    <p class="lead mb-4">India's leading farmer equipment rental service. Get modern farming tools and machinery delivered to your farm.</p>
-                    <div class="d-flex flex-wrap gap-3">
-                        <a href="browse.html" class="btn btn-warning btn-lg">Browse Equipment</a>
-                        <a href="#how-it-works" class="btn btn-outline-light btn-lg">How It Works</a>
-                    </div>
-                </div>
-                <div class="col-lg-6 text-center">
-                    <div class="seasonal-offer">
-                        <h4><i class="fas fa-seedling me-2"></i>Monsoon Special</h4>
-                        <p class="mb-0">Get 20% off on tractor and cultivator rentals this season!</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Categories Section -->
-    <section class="py-5 bg-clean">
-        <div class="container">
-            <h2 class="section-title">Farming Equipment Categories</h2>
-            <div class="row">
-                <div class="col-md-4 col-sm-6">
-                    <div class="card category-card text-center p-4 h-100">
-                        <div class="category-icon">
-                            <i class="fas fa-tractor"></i>
-                        </div>
-                        <h5>Tractors & Cultivators</h5>
-                        <p class="text-muted">Farm tractors, cultivators, and soil preparation equipment.</p>
-                        <a href="browse.html?category=tractor" class="btn btn-outline-primary mt-auto">View Equipment</a>
-                    </div>
-                </div>
-                <div class="col-md-4 col-sm-6">
-                    <div class="card category-card text-center p-4 h-100">
-                        <div class="category-icon">
-                            <i class="fas fa-dragon"></i>
-                        </div>
-                        <h5>Harvesting Equipment</h5>
-                        <p class="text-muted">Combine harvesters, threshers, and crop processing machines.</p>
-                        <a href="browse.html?category=harvester" class="btn btn-outline-primary mt-auto">View Equipment</a>
-                    </div>
-                </div>
-                <div class="col-md-4 col-sm-6">
-                    <div class="card category-card text-center p-4 h-100">
-                        <div class="category-icon">
-                            <i class="fas fa-question-circle"></i>
-                        </div>
-                        <h5>Spraying & Irrigation</h5>
-                        <p class="text-muted">Spray machines, water tankers, and irrigation equipment.</p>
-                        <a href="browse.html?category=spray" class="btn btn-outline-primary mt-auto">View Equipment</a>
-                    </div>
-                </div>
-                <div class="col-md-4 col-sm-6">
-                    <div class="card category-card text-center p-4 h-100">
-                        <div class="category-icon">
-                            <i class="fas fa-helicopter"></i>
-                        </div>
-                        <h5>Modern Farming Tech</h5>
-                        <p class="text-muted">Agricultural drones and advanced farming technology.</p>
-                        <a href="browse.html?category=tech" class="btn btn-outline-primary mt-auto">View Equipment</a>
-                    </div>
-                </div>
-                <div class="col-md-4 col-sm-6">
-                    <div class="card category-card text-center p-4 h-100">
-                        <div class="category-icon">
-                            <i class="fas fa-truck-pickup"></i>
-                        </div>
-                        <h5>Transport & Utility</h5>
-                        <p class="text-muted">Trolleys, water tankers, and farm transport vehicles.</p>
-                        <a href="browse.html?category=transport" class="btn btn-outline-primary mt-auto">View Equipment</a>
-                    </div>
-                </div>
-                <div class="col-md-4 col-sm-6">
-                    <div class="card category-card text-center p-4 h-100">
-                        <div class="category-icon">
-                            <i class="fas fa-tools"></i>
-                        </div>
-                        <h5>Farm Tools</h5>
-                        <p class="text-muted">Grass cutters, cranes, JCBs, and other farm utility tools.</p>
-                        <a href="browse.html?category=tools" class="btn btn-outline-primary mt-auto">View Equipment</a>
-                    </div>
-                </div>
-            </div>
+            <h1 class="display-4 fw-bold mb-4">Modern Farming Made Easy</h1>
+            <p class="lead mb-4">India's leading farmer equipment rental service.</p>
+            <a href="#featured-equipment" class="btn btn-warning btn-lg">Browse Equipment</a>
         </div>
     </section>
 
     <!-- Featured Equipment -->
-    <section class="py-5">
+    <section class="py-5" id="featured-equipment">
         <div class="container">
-            <h2 class="section-title">Popular Farming Equipment</h2>
-            <div class="row" id="featured-equipment">
-                <!-- Equipment cards will be populated by JavaScript -->
-            </div>
-            <div class="text-center mt-4">
-                <a href="browse.html" class="btn btn-primary btn-lg">View All Equipment</a>
-            </div>
-        </div>
-    </section>
-
-    <!-- Stats Section -->
-    <section class="stats-section">
-        <div class="container">
-            <div class="row text-center">
-                <div class="col-md-3 col-6">
-                    <div class="stat-item">
-                        <div class="stat-number">500+</div>
-                        <div class="stat-label">Happy Farmers</div>
-                    </div>
+            <h2 class="text-center mb-5" style="color: var(--farm-green)">Available Equipment</h2>
+            <div class="row" id="equipment-container">
+                <div class="col-12 text-center">
+                    <div class="spinner-border text-success" role="status"></div>
+                    <p class="mt-2">Loading live listings...</p>
                 </div>
-                <div class="col-md-3 col-6">
-                    <div class="stat-item">
-                        <div class="stat-number">25+</div>
-                        <div class="stat-label">Districts Covered</div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-6">
-                    <div class="stat-item">
-                        <div class="stat-number">50,000+</div>
-                        <div class="stat-label">Acres Served</div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-6">
-                    <div class="stat-item">
-                        <div class="stat-number">24/7</div>
-                        <div class="stat-label">Farmer Support</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- How It Works -->
-    <section class="py-5 bg-clean" id="how-it-works">
-        <div class="container">
-            <h2 class="section-title text-center">How It Works</h2>
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="process-step">
-                        <div class="step-icon">
-                            <i class="fas fa-search"></i>
-                        </div>
-                        <h4>Browse & Select</h4>
-                        <p>Choose from our wide range of farming equipment. Filter by type, capacity, or location.</p>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="process-step">
-                        <div class="step-icon">
-                            <i class="fas fa-calendar-check"></i>
-                        </div>
-                        <h4>Book & Confirm</h4>
-                        <p>Select rental dates, add to cart, and confirm your booking with easy payment options.</p>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="process-step">
-                        <div class="step-icon">
-                            <i class="fas fa-truck"></i>
-                        </div>
-                        <h4>Deliver & Use</h4>
-                        <p>We deliver equipment to your farm. Fully serviced and ready for your farming needs.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Testimonials -->
-    <section class="py-5">
-        <div class="container">
-            <h2 class="section-title text-center">What Farmers Say</h2>
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="testimonial-card">
-                        <div class="testimonial-text">
-                            "Rented a tractor and cultivator for my 10-acre farm. The equipment was in excellent condition and the service was prompt. Saved me from big investment!"
-                        </div>
-                        <div class="client-info">
-                            <div class="client-avatar">SP</div>
-                            <div>
-                                <h5 class="mb-0">Suresh Patel</h5>
-                                <small class="text-muted">Farmer, Karimnagar</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="testimonial-card">
-                        <div class="testimonial-text">
-                            "The agricultural drone service helped me monitor my crop health and spray pesticides efficiently. Modern technology at affordable rental rates!"
-                        </div>
-                        <div class="client-info">
-                            <div class="client-avatar">RM</div>
-                            <div>
-                                <h5 class="mb-0">Ramesh</h5>
-                                <small class="text-muted">Farm Owner, Warangal</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="testimonial-card">
-                        <div class="testimonial-text">
-                            "As a small farmer, I can't afford to buy a harvester. FarmRent made harvesting season stress-free with their reliable equipment rental service."
-                        </div>
-                        <div class="client-info">
-                            <div class="client-avatar">PK</div>
-                            <div>
-                                <h5 class="mb-0">Surya Kumar</h5>
-                                <small class="text-muted">Small Farmer, Nizamabad</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Newsletter -->
-    <section class="newsletter-section">
-        <div class="container text-center">
-            <h2 class="section-title center text-sun">Stay Updated</h2>
-            <p class="lead mb-4">Subscribe to get updates on new equipment, seasonal offers, and farming tips.</p>
-            <div class="newsletter-form">
-                <div class="input-group input-group-lg">
-                    <input type="email" class="form-control" placeholder="Your email address">
-                    <button class="btn btn-warning" type="button">Subscribe</button>
-                </div>
-                <small class="mt-2 d-block">We respect your privacy. Unsubscribe at any time.</small>
             </div>
         </div>
     </section>
 
     <!-- Footer -->
     <footer class="footer">
-        <div class="container">
-            <div class="row">
-                <div class="col-lg-4 mb-4">
-                    <h5><i class="fas fa-tractor me-2 text-sun"></i>FarmRent</h5>
-                    <p>India's trusted farming equipment rental service. Modern equipment for modern farmers.</p>
-                    <div class="mt-3">
-                        <a href="#" class="text-decoration-none me-3 text-sun"><i class="fab fa-facebook-f"></i></a>
-                        <a href="#" class="text-decoration-none me-3 text-sun"><i class="fab fa-twitter"></i></a>
-                        <a href="#" class="text-decoration-none me-3 text-sun"><i class="fab fa-instagram"></i></a>
-                        <a href="#" class="text-decoration-none me-3 text-sun"><i class="fab fa-youtube"></i></a>
-                    </div>
-                </div>
-                <div class="col-lg-2 col-md-6 mb-4">
-                    <h5>Quick Links</h5>
-                    <ul class="list-unstyled">
-                        <li><a href="index.html" class="text-decoration-none text-light">Home</a></li>
-                        <li><a href="browse.html" class="text-decoration-none text-light">Browse Equipment</a></li>
-                        <li><a href="about.html" class="text-decoration-none text-light">About Us</a></li>
-                        <li><a href="contact.html" class="text-decoration-none text-light">Contact</a></li>
-                    </ul>
-                </div>
-                <div class="col-lg-3 col-md-6 mb-4">
-                    <h5>Contact Info</h5>
-                    <ul class="list-unstyled">
-                        <li><i class="fas fa-map-marker-alt me-2 text-sun"></i> Nizamabad, Telangana, India</li>
-                        <li><i class="fas fa-phone me-2 text-sun"></i> +91 98765 43210</li>
-                        <li><i class="fas fa-envelope me-2 text-sun"></i> info@farmrent.com</li>
-                        <li><i class="fas fa-clock me-2 text-sun"></i> Mon-Sun: 6:00 AM - 9:00 PM</li>
-                    </ul>
-                </div>
-                <div class="col-lg-3 mb-4">
-                    <h5>Popular Equipment</h5>
-                    <ul class="list-unstyled">
-                        <li><a href="browse.html?category=tractor" class="text-decoration-none text-light">Tractors</a></li>
-                        <li><a href="browse.html?category=harvester" class="text-decoration-none text-light">Harvesters</a></li>
-                        <li><a href="browse.html?category=spray" class="text-decoration-none text-light">Spray Machines</a></li>
-                        <li><a href="browse.html?category=tech" class="text-decoration-none text-light">Agricultural Drones</a></li>
-                    </ul>
-                </div>
-            </div>
-            <hr class="bg-sun">
-            <div class="row">
-                <div class="col-md-6">
-                    <p>&copy; 2025 FarmRent. All rights reserved.</p>
-                </div>
-                <div class="col-md-6 text-md-end">
-                    <a href="#" class="text-decoration-none me-3 text-light">Terms of Service</a>
-                    <a href="#" class="text-decoration-none text-light">Privacy Policy</a>
-                </div>
-            </div>
+        <div class="container text-center">
+            <p>&copy; 2025 FarmRent. All rights reserved.</p>
         </div>
     </footer>
 
     <!-- WhatsApp Button -->
-    <a href="https://wa.me/917416006394?text=Hi%2C%20I'm%20interested%20in%20renting%20farming%20equipment" class="whatsapp-btn" target="_blank">
-        <i class="fab fa-whatsapp"></i>
-    </a>
+    <a href="https://wa.me/917416006394" class="whatsapp-btn" target="_blank"><i class="fab fa-whatsapp"></i></a>
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- Custom JavaScript -->
     <script>
-        // Sample equipment data - Farmer specific
-        const equipmentData = [
-            {
-                id: 1,
-                name: "Farm Tractor 45HP",
-                category: "Tractors & Cultivators",
-                pricePerDay: 2500,
-                pricePerHour: 350,
-                image: "Farm_Tractor_45HP.png",
-                featured: true,
-                sale: true
-            },
-            {
-                id: 2,
-                name: "Combine Harvester",
-                category: "Harvesting Equipment",
-                pricePerDay: 8000,
-                pricePerHour: 1200,
-                image: "Combine_Harvester.png",
-                featured: true
-            },
-            {
-                id: 3,
-                name: "Agricultural Drone",
-                category: "Modern Farming Tech",
-                pricePerDay: 1500,
-                pricePerHour: 250,
-                image: "Agricultural_Drone.png",
-                featured: true
-            },
-            {
-                id: 4,
-                name: "Power Spray Machine",
-                category: "Spraying & Irrigation",
-                pricePerDay: 600,
-                pricePerHour: 90,
-                image: "Power_Spray_Machine.png",
-                featured: true,
-                sale: true
-            },
-            {
-                id: 5,
-                name: "Farm Cultivator",
-                category: "Tractors & Cultivators",
-                pricePerDay: 1200,
-                pricePerHour: 180,
-                image: "Farm_Cultivator.png",
-                featured: true
-            },
-            {
-                id: 6,
-                name: "Water Tanker 5000L",
-                category: "Transport & Utility",
-                pricePerDay: 1800,
-                pricePerHour: 280,
-                image: "Water_Tanker_5000L.png",
-                featured: true
-            }
-        ];
-
-        // Display featured equipment
-        function displayFeaturedEquipment() {
-            const container = document.getElementById('featured-equipment');
-            container.innerHTML = '';
+        document.addEventListener('DOMContentLoaded', async () => {
+            const db = firebase.firestore();
             
-            equipmentData.filter(item => item.featured).forEach(item => {
-                const card = document.createElement('div');
-                card.className = 'col-lg-4 col-md-6';
-                card.innerHTML = `
-                    <div class="card equipment-card h-100">
-                        <div class="position-relative">
-                            <img src="${item.image}" class="card-img-top" alt="${item.name}" style="height: 200px; object-fit: cover;">
-                            <span class="category-badge">${item.category}</span>
-                            ${item.sale ? '<span class="sale-badge position-absolute" style="top:15px; left:15px;">Special Offer</span>' : ''}
-                        </div>
-                        <div class="card-body d-flex flex-column">
-                            <h5 class="card-title">${item.name}</h5>
-                            <div class="mt-auto">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <div class="price-tag">₹${item.pricePerDay}/day</div>
-                                    <small class="text-muted">or ₹${item.pricePerHour}/hour</small>
-                                </div>
-                                <a href="item.html?id=${item.id}" class="btn btn-primary w-100">View Details</a>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                container.appendChild(card);
-            });
-        }
-
-        // Update cart count
-        function updateCartCount() {
-            const cart = JSON.parse(localStorage.getItem('cart')) || [];
-            document.getElementById('cart-count').textContent = cart.length;
-        }
-
-        // Initialize page
-        document.addEventListener('DOMContentLoaded', () => {
-            displayFeaturedEquipment();
-            updateCartCount();
-            
-            // Smooth scrolling for anchor links
-            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-                anchor.addEventListener('click', function (e) {
-                    const href = this.getAttribute('href');
-                    if (href === "#") return; // Ignore plain '#' links
-                    
-                    e.preventDefault();
-                    
-                    const target = document.querySelector(href);
-                    if (target) {
-                        target.scrollIntoView({
-                            behavior: 'smooth',
-                            block: 'start'
-                        });
-                    }
-                });
-            });
-        });
-
-        // Role selection function
-        function setRole(role) {
-            localStorage.setItem('selectedRole', role);
-            window.location.href = `auth.html?role=${role}`;
-        }
-
-        // Check if user is logged in and show appropriate status
-        function checkLoginStatus() {
-            const user = JSON.parse(localStorage.getItem('currentUser'));
-            if (user) {
-                const authDropdown = document.getElementById('auth-dropdown');
-                if (authDropdown) {
-                    authDropdown.innerHTML = `
-                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-user-circle"></i> ${user.name}
-                        </a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="profile.html"><i class="fas fa-user me-2"></i>Profile</a></li>
-                            <li><a class="dropdown-item" href="orders.html"><i class="fas fa-clipboard-list me-2"></i>My Orders</a></li>
-                            ${user.role === 'seller' ? '<li><a class="dropdown-item" href="seller.html"><i class="fas fa-store me-2"></i>Seller Dashboard</a></li>' : ''}
-                            ${user.role === 'admin' ? '<li><a class="dropdown-item" href="admin.html"><i class="fas fa-user-shield me-2"></i>Admin Panel</a></li>' : ''}
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
-                        </ul>
+            // Auth State Listener
+            firebase.auth().onAuthStateChanged((user) => {
+                const nav = document.getElementById('navbar-auth');
+                if (user) {
+                    db.collection('users').doc(user.uid).get().then(doc => {
+                        const role = doc.data()?.role || 'customer';
+                        let dashLink = '';
+                        if(role === 'admin') dashLink = '<li><a class="dropdown-item" href="admin.html">Admin Panel</a></li>';
+                        if(role === 'seller') dashLink = '<li><a class="dropdown-item" href="seller.html">Seller Dashboard</a></li>';
+                        
+                        nav.innerHTML = `
+                            <li class="nav-item"><a class="nav-link" href="#">Hi, ${doc.data()?.name || 'User'}</a></li>
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">Account</a>
+                                <ul class="dropdown-menu">
+                                    ${dashLink}
+                                    <li><a class="dropdown-item" href="#" onclick="firebase.auth().signOut()">Logout</a></li>
+                                </ul>
+                            </li>
+                        `;
+                    });
+                } else {
+                    nav.innerHTML = `
+                        <li class="nav-item"><a class="nav-link" href="auth.html?role=customer">Login</a></li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">Sign Up As</a>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="auth.html?role=customer">Customer</a></li>
+                                <li><a class="dropdown-item" href="auth.html?role=seller">Seller</a></li>
+                            </ul>
+                        </li>
                     `;
                 }
-                const roleDropdown = document.getElementById('role-dropdown');
-                if (roleDropdown) {
-                    roleDropdown.remove();
-                }
-            }
-        }
-
-        function logout() {
-            localStorage.removeItem('currentUser');
-            window.location.reload();
-        }
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            checkLoginStatus();
-        });
-
-        // Firebase auth state listener
-firebase.auth().onAuthStateChanged((user) => {
-    if (user) {
-        // User is signed in
-        firebase.firestore().collection('users').doc(user.uid).get()
-            .then((doc) => {
-                if (doc.exists) {
-                    const userData = doc.data();
-                    updateNavbarForLoggedInUser(userData);
-                }
-            })
-            .catch((error) => {
-                console.error("Error getting user data:", error);
             });
-    } else {
-        // User is signed out
-        updateNavbarForLoggedOutUser();
-    }
-});
 
-function updateNavbarForLoggedInUser(userData) {
-    const navbarAuth = document.getElementById('navbar-auth');
-    navbarAuth.innerHTML = `
-        <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
-                <i class="fas fa-user-circle me-1"></i> ${userData.name}
-            </a>
-            <ul class="dropdown-menu">
-                <li><a class="dropdown-item" href="profile.html"><i class="fas fa-user me-2"></i>Profile</a></li>
-                <li><a class="dropdown-item" href="orders.html"><i class="fas fa-clipboard-list me-2"></i>My Orders</a></li>
-                ${userData.role === 'seller' ? '<li><a class="dropdown-item" href="seller.html"><i class="fas fa-store me-2"></i>Seller Dashboard</a></li>' : ''}
-                ${userData.role === 'admin' ? '<li><a class="dropdown-item" href="admin.html"><i class="fas fa-user-shield me-2"></i>Admin Panel</a></li>' : ''}
-                <li><hr class="dropdown-divider"></li>
-                <li><a class="dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
-            </ul>
-        </li>
-    `;
-    
-    // Store user data in localStorage
-    localStorage.setItem('currentUser', JSON.stringify({
-        uid: userData.uid,
-        email: userData.email,
-        ...userData
-    }));
-}
+            // Fetch Live Equipment
+            const container = document.getElementById('equipment-container');
+            try {
+                // Fetch approved equipment
+                const snap = await db.collection('equipment')
+                                    .where('status', '==', 'approved')
+                                    .limit(6)
+                                    .get();
+                
+                if (snap.empty) {
+                    container.innerHTML = '<div class="col-12 text-center text-muted"><h4>No equipment listed yet. Be the first seller!</h4></div>';
+                    return;
+                }
 
-function updateNavbarForLoggedOutUser() {
-    const navbarAuth = document.getElementById('navbar-auth');
-    navbarAuth.innerHTML = `
-        <li class="nav-item dropdown" id="role-dropdown">
-            <a class="nav-link dropdown-toggle" href="#" id="roleDropdown" role="button" data-bs-toggle="dropdown">
-                <i class="fas fa-user-tag me-1"></i> Sign Up As
-            </a>
-            <ul class="dropdown-menu">
-                <li><a class="dropdown-item" href="auth.html?role=customer"><i class="fas fa-user me-2"></i>Customer</a></li>
-                <li><a class="dropdown-item" href="auth.html?role=seller"><i class="fas fa-store me-2"></i>Seller</a></li>
-                <li><a class="dropdown-item" href="auth.html?role=admin"><i class="fas fa-user-shield me-2"></i>Admin</a></li>
-            </ul>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link" href="auth.html?role=customer">
-                <i class="fas fa-sign-in-alt me-1"></i> Login
-            </a>
-        </li>
-    `;
-}
-
-async function logout() {
-    try {
-        await firebase.auth().signOut();
-        localStorage.removeItem('currentUser');
-        window.location.reload();
-    } catch (error) {
-        console.error('Logout error:', error);
-    }
-}
+                container.innerHTML = '';
+                snap.forEach(doc => {
+                    const item = doc.data();
+                    const img = item.images && item.images.length ? item.images[0] : 'https://via.placeholder.com/300?text=FarmRent';
+                    
+                    container.innerHTML += `
+                        <div class="col-md-4 mb-4">
+                            <div class="equipment-card h-100">
+                                <img src="${img}" class="equipment-img" alt="${item.name}">
+                                <div class="p-3">
+                                    <h5>${item.name}</h5>
+                                    <p class="text-muted small">${item.category}</p>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="price-tag">₹${item.pricePerDay}/day</div>
+                                        <button class="btn btn-sm btn-outline-primary">View Details</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            } catch (error) {
+                console.error(error);
+                container.innerHTML = '<div class="col-12 text-center text-danger">Failed to load equipment.</div>';
+            }
+        });
     </script>
 </body>
 </html>
