@@ -1002,8 +1002,12 @@ async function loadTestimonials() {
         
     } catch (error) {
         console.error('Error loading testimonials:', error);
-        document.getElementById('testimonials-container')?.innerHTML = getDefaultTestimonials();
+        const container = document.getElementById('testimonials-container');
+        if (container) {
+            container.innerHTML = getDefaultTestimonials();
+        }
     }
+}
 
 // Create testimonial card
 function createTestimonialCard(testimonial) {
