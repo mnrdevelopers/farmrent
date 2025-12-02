@@ -491,14 +491,7 @@ function displayCheckoutSummary(cart) {
 
 // Process payment using Razorpay (Simulated Escrow/Route)
 async function processPayment() {
-    window.firebaseHelpers.showAlert('Payment processing disabled temporarily to fix critical error. Order is not placed in Firestore.', 'danger');
-    
-    // Safety redirect after simulated failure
-    setTimeout(() => {
-        window.location.href = 'checkout.html';
-    }, 3000);
-    
-    /* const form = document.getElementById('checkout-form');
+    const form = document.getElementById('checkout-form');
     if (!form.checkValidity()) {
         form.reportValidity();
         window.firebaseHelpers.showAlert('Please fill all required customer details.', 'warning');
@@ -538,6 +531,10 @@ async function processPayment() {
         handler: async function (response) {
             // This handler is called on successful payment
             
+            // In a multi-vendor/escrow setup:
+            // 1. The server would receive the webhook from Razorpay confirming success.
+            // 2. The server would then process the Route/Escrow settlement.
+            
             // SIMULATING SUCCESSFUL PAYMENT & SETTLEMENT
             await placeOrderInFirestore(orderId, customerData, response.razorpay_payment_id, total);
             
@@ -550,6 +547,7 @@ async function processPayment() {
         theme: {
             color: "#2B5C2B" // Farm Green
         }
+        // In a real app, we would add "route" options for multi-vendor split here
     };
 
     const rzp = new window.Razorpay(options);
@@ -559,11 +557,10 @@ async function processPayment() {
     });
 
     rzp.open();
-    */
 }
 
 // Final step: Save order to Firestore after (simulated) successful payment
-/* async function placeOrderInFirestore(orderId, customerData, paymentId, totalAmount) {
+async function placeOrderInFirestore(orderId, customerData, paymentId, totalAmount) {
     const cart = JSON.parse(localStorage.getItem('cart')) || [];
     
     if (cart.length === 0) {
@@ -624,7 +621,6 @@ async function processPayment() {
         window.firebaseHelpers.showAlert('Order placement failed in database. Please contact support.', 'danger');
     }
 }
-*/
 
 // Initialize authentication
 function initializeAuth() {
@@ -1008,7 +1004,6 @@ async function loadTestimonials() {
         console.error('Error loading testimonials:', error);
         document.getElementById('testimonials-container')?.innerHTML = getDefaultTestimonials();
     }
-}
 
 // Create testimonial card
 function createTestimonialCard(testimonial) {
