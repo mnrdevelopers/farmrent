@@ -617,7 +617,9 @@ function initializeAuth() {
                 .then((doc) => {
                     if (doc.exists) {
                         window.currentUser = { uid: user.uid, ...doc.data() };
-                        updateNavbarForLoggedInUser(window.currentUser);
+                        // Corrected assignment from using `=` outside of a valid declaration context
+                        currentUser = window.currentUser; 
+                        updateNavbarForLoggedInUser(currentUser);
                     }
                 })
                 .catch((error) => {
