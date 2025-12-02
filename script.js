@@ -617,9 +617,7 @@ function initializeAuth() {
                 .then((doc) => {
                     if (doc.exists) {
                         window.currentUser = { uid: user.uid, ...doc.data() };
-                        // Corrected assignment from using `=` outside of a valid declaration context
-                        currentUser = window.currentUser; 
-                        updateNavbarForLoggedInUser(currentUser);
+                        updateNavbarForLoggedInUser(window.currentUser);
                     }
                 })
                 .catch((error) => {
@@ -1160,6 +1158,12 @@ function updateCartCount() {
         cartCountElement.textContent = cart.length;
     }
 }
+
+// Check authentication and role (Delegated to firebase-config.js)
+// async function checkAuthAndRole(requiredRole) { ... }
+
+// Get current user (Delegated to firebase-config.js)
+// function getCurrentUser() { ... }
 
 // Update cart count when script loads
 updateCartCount();
