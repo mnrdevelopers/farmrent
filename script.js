@@ -19,6 +19,10 @@ document.addEventListener('DOMContentLoaded', () => {
         loadCartPage();
     } else if (path === 'checkout.html') {
         loadCheckoutPage();
+    } else if (path === 'profile.html') {
+        loadProfilePage();
+    } else if (path === 'orders.html') {
+        loadOrdersPage();
     } else {
         loadHomepageData();
     }
@@ -452,6 +456,25 @@ async function loadCheckoutPage() {
     // --- FIX END ---
 
     displayCheckoutSummary(cart);
+
+    // Add event listener for pickup option toggle
+    document.getElementById('pickup-checkbox').addEventListener('change', toggleDeliveryAddress);
+    toggleDeliveryAddress(); // Initial check
+}
+
+// Toggle delivery address visibility based on pickup option
+function toggleDeliveryAddress() {
+    const isPickup = document.getElementById('pickup-checkbox').checked;
+    const addressGroup = document.getElementById('delivery-address-group');
+    const addressInput = document.getElementById('delivery-address');
+
+    if (isPickup) {
+        addressGroup.style.display = 'none';
+        addressInput.removeAttribute('required');
+    } else {
+        addressGroup.style.display = 'block';
+        addressInput.setAttribute('required', 'required');
+    }
 }
 
 // Display items and calculate total on the checkout page
@@ -504,6 +527,13 @@ async function processPayment() {
         return;
     }
     
+    const isPickup = document.getElementById('pickup-checkbox').checked;
+    
+    if (!isPickup && !document.getElementById('delivery-address').value.trim()) {
+         window.firebaseHelpers.showAlert('Please provide a delivery address or select self-pickup.', 'warning');
+         return;
+    }
+
     const keyId = await window.firebaseHelpers.getRazorpayKeyId();
     if (!keyId) {
         window.firebaseHelpers.showAlert('Payment gateway key missing. Cannot proceed.', 'danger');
@@ -517,8 +547,9 @@ async function processPayment() {
         name: document.getElementById('customer-name').value,
         email: document.getElementById('customer-email').value,
         phone: document.getElementById('customer-phone').value,
-        address: document.getElementById('delivery-address').value,
+        address: isPickup ? 'Self-Pickup' : document.getElementById('delivery-address').value,
         notes: document.getElementById('additional-notes').value,
+        isPickup: isPickup, // Include pickup preference
     };
     
     // Simulate Order Creation (In a real app, this MUST be a secure server-side call)
@@ -590,6 +621,7 @@ async function placeOrderInFirestore(orderId, customerData, paymentId, totalAmou
             customerPhone: customerData.phone,
             deliveryAddress: customerData.address,
             notes: customerData.notes,
+            isPickup: customerData.isPickup, // New field
             
             // Added consolidated fields for easier querying/display
             equipmentNames: itemNames,
@@ -619,7 +651,7 @@ async function placeOrderInFirestore(orderId, customerData, paymentId, totalAmou
         
         // Redirect to success page or orders history
         setTimeout(() => {
-            window.location.href = 'index.html'; // Redirect to home for now
+            window.location.href = 'orders.html'; // Redirect to orders page
         }, 3000);
 
     } catch (error) {
@@ -1184,6 +1216,183 @@ function updateCartCount() {
     }
 }
 
+// --- NEW FUNCTIONS FOR PROFILE AND ORDERS PAGE ---
+
+// Load Profile Page (profile.html)
+async function loadProfilePage() {
+    const user = await window.firebaseHelpers.getCurrentUser();
+    if (!user) {
+        window.firebaseHelpers.showAlert('You must be logged in to view your profile.', 'danger');
+        setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 2000);
+        return;
+    }
+
+    // Set form data
+    document.getElementById('profile-name').value = user.name || '';
+    document.getElementById('profile-email').value = user.email || '';
+    document.getElementById('profile-phone').value = user.mobile || '';
+    document.getElementById('profile-address').value = user.address || '';
+    document.getElementById('profile-city').value = user.city || '';
+    
+    // Display joined date
+    if (user.createdAt && user.createdAt.toDate) {
+        document.getElementById('join-date').textContent = user.createdAt.toDate().toLocaleDateString();
+    } else if (user.createdAt) {
+        document.getElementById('join-date').textContent = new Date(user.createdAt).toLocaleDateString();
+    }
+    
+    // Handle form submission
+    document.getElementById('profile-form').addEventListener('submit', handleProfileUpdate);
+}
+
+// Handle profile form submission
+async function handleProfileUpdate(e) {
+    e.preventDefault();
+    if (!window.currentUser) return;
+
+    const updates = {
+        name: document.getElementById('profile-name').value,
+        mobile: document.getElementById('profile-phone').value,
+        address: document.getElementById('profile-address').value,
+        city: document.getElementById('profile-city').value,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    try {
+        await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(updates);
+        window.firebaseHelpers.showAlert('Profile updated successfully!', 'success');
+        
+        // Update local currentUser object
+        window.currentUser = { ...window.currentUser, ...updates };
+
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        window.firebaseHelpers.showAlert('Error updating profile. Please try again.', 'danger');
+    }
+}
+
+// Load Orders Page (orders.html)
+async function loadOrdersPage() {
+    const user = await window.firebaseHelpers.getCurrentUser();
+    if (!user) {
+        window.firebaseHelpers.showAlert('You must be logged in to view your orders.', 'danger');
+        setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 2000);
+        return;
+    }
+    
+    try {
+        const ordersSnapshot = await window.FirebaseDB.collection('orders')
+            .where('userId', '==', user.uid)
+            .orderBy('createdAt', 'desc')
+            .get();
+        
+        const container = document.getElementById('orders-list');
+        container.innerHTML = '';
+        
+        if (ordersSnapshot.empty) {
+            container.innerHTML = `
+                <div class="col-12 text-center py-5">
+                    <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+                    <h4>You have no rental history</h4>
+                    <p>Start browsing to place your first order.</p>
+                    <a href="browse.html" class="btn btn-primary mt-3">Browse Equipment</a>
+                </div>
+            `;
+            return;
+        }
+        
+        ordersSnapshot.forEach(doc => {
+            const order = { id: doc.id, ...doc.data() };
+            container.innerHTML += createOrderCard(order);
+        });
+        
+    } catch (error) {
+        console.error('Error loading orders:', error);
+        document.getElementById('orders-list').innerHTML = `
+            <div class="col-12 text-center py-5 text-danger">
+                <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
+                <h4>Error loading orders</h4>
+                <p>Please try again later.</p>
+            </div>
+        `;
+    }
+}
+
+// Create HTML card for an order
+function createOrderCard(order) {
+    const statusClass = `order-status-${order.status || 'pending'}`;
+    const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
+    const date = window.firebaseHelpers.formatDate(order.createdAt);
+    const deliveryType = order.isPickup ? '<span class="badge bg-warning text-dark me-2"><i class="fas fa-hand-paper me-1"></i>Self-Pickup</span>' : '<span class="badge bg-success me-2"><i class="fas fa-truck me-1"></i>Delivery</span>';
+    
+    return `
+        <div class="col-lg-12 mb-4">
+            <div class="card order-card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0">Order #${order.id.substring(0, 8)}</h5>
+                        <small class="text-muted">Placed on: ${date}</small>
+                    </div>
+                    <div>
+                        ${deliveryType}
+                        <span class="status-badge ${statusClass}">${statusText}</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <h6>Equipment Rented:</h6>
+                    <ul class="list-unstyled mb-3">
+                        ${order.items.map(item => `
+                            <li class="d-flex align-items-center mb-1">
+                                <img src="${item.imageUrl || 'https://placehold.co/40x40'}" class="rounded me-2" style="width: 40px; height: 40px; object-fit: cover;">
+                                <div>
+                                    <strong>${item.name}</strong> - ${item.rentalValue} ${item.rentalType === 'day' ? 'Day(s)' : 'Hour(s)'}
+                                    <small class="text-muted d-block">Seller: ${item.businessName}</small>
+                                </div>
+                            </li>
+                        `).join('')}
+                    </ul>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>Total Amount:</strong> <span class="text-primary">${window.firebaseHelpers.formatCurrency(order.totalAmount)}</span>
+                        </div>
+                        <div class="col-md-6 text-md-end">
+                            <strong>Location:</strong> ${order.isPickup ? order.sellerBusinessNames.split(',')[0] + ' (Pickup)' : order.deliveryAddress}
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer text-end">
+                    ${order.status === 'pending' ? `
+                        <button class="btn btn-sm btn-danger" onclick="cancelOrder('${order.id}')">Cancel Order</button>
+                    ` : ''}
+                    <button class="btn btn-sm btn-outline-primary" onclick="viewOrderDetailsModal('${order.id}')">View Details</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Function to view order details in a modal (simplified, assumes existing modal structure)
+async function viewOrderDetailsModal(orderId) {
+    // This is a placeholder. In a complete app, you'd fetch the order and populate a modal.
+    window.firebaseHelpers.showAlert(`Fetching details for Order #${orderId.substring(0, 8)}... (Feature Coming Soon)`, 'info');
+}
+
+// Function to cancel an order
+async function cancelOrder(orderId) {
+    if (!confirm('Are you sure you want to cancel this order? Cancellation is subject to seller approval.')) return;
+    
+    try {
+        await window.FirebaseDB.collection('orders').doc(orderId).update({
+            status: 'cancelled',
+            cancellationRequestedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        window.firebaseHelpers.showAlert('Cancellation requested. Status will be updated shortly.', 'success');
+        loadOrdersPage();
+    } catch (error) {
+        console.error('Error cancelling order:', error);
+        window.firebaseHelpers.showAlert('Failed to cancel order. Please contact support.', 'danger');
+    }
+}
 // Check authentication and role (Delegated to firebase-config.js)
 // async function checkAuthAndRole(requiredRole) { ... }
 
