@@ -1161,11 +1161,5 @@ function updateCartCount() {
     }
 }
 
-// Check authentication and role (Delegated to firebase-config.js)
-// async function checkAuthAndRole(requiredRole) { ... }
-
-// Get current user (Delegated to firebase-config.js)
-// function getCurrentUser() { ... }
-
 // Update cart count when script loads
 updateCartCount();
