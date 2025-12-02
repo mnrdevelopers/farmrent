@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FarmRent - My Orders</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles.css">
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-remote-config-compat.js"></script>
+    <style>
+        .order-card .card-header {
+            background-color: var(--farm-green);
+            color: white;
+        }
+        .order-status-pending {
+            background-color: #FFF3CD;
+            color: #856404;
+        }
+        .order-status-active {
+            background-color: #D1ECF1;
+            color: #0C5460;
+        }
+        .order-status-completed {
+            background-color: #D4EDDA;
+            color: #155724;
+        }
+        .order-status-cancelled {
+            background-color: #F8D7DA;
+            color: #721C24;
+        }
+        .status-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation (Placeholder for script.js to populate) -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">
+                <i class="fas fa-tractor me-2"></i>FarmRent
+            </a>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item"><a class="nav-link" href="index.html">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="browse.html">Browse Equipment</a></li>
+                </ul>
+                <ul class="navbar-nav" id="navbar-auth">
+                    <!-- Auth links loaded by script.js -->
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Orders Section -->
+    <section class="py-5">
+        <div class="container">
+            <h1 class="section-title">My Rental Orders</h1>
+            
+            <div id="loading" class="text-center py-5">
+                <div class="spinner-border text-primary"></div>
+                <p class="mt-3">Loading rental history...</p>
+            </div>
+
+            <div class="row" id="orders-list">
+                <!-- Order cards will be dynamically populated by script.js -->
+            </div>
+        </div>
+    </section>
+
+    <!-- Order Details Modal (Reuse existing modal structure if necessary, though simpler to define here) -->
+    <div class="modal fade" id="orderDetailsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Order Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Detailed information will go here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p class="text-center">&copy; 2025 FarmRent. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Firebase Configuration -->
+    <script src="firebase-config.js"></script>
+    
+    <!-- Custom JavaScript -->
+    <script>
+        // Use existing script.js functions
+        document.addEventListener('DOMContentLoaded', () => {
+            if (document.getElementById('loading')) {
+                document.getElementById('loading').style.display = 'none';
+            }
+        });
+    </script>
+    <script src="script.js"></script>
+</body>
+</html>
