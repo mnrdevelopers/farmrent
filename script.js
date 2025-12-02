@@ -433,17 +433,23 @@ async function loadCheckoutPage() {
         return;
     }
     
+    // --- FIX START: Use getCurrentUser to ensure auth status is resolved ---
+    const user = await window.firebaseHelpers.getCurrentUser();
+    
     // Pre-fill user details if logged in
-    if (window.currentUser) {
-        document.getElementById('customer-name').value = window.currentUser.name || '';
-        document.getElementById('customer-email').value = window.currentUser.email || '';
-        document.getElementById('customer-phone').value = window.currentUser.mobile || '';
+    if (user) {
+        // Update the global window.currentUser and use the fetched data
+        window.currentUser = user; 
+        document.getElementById('customer-name').value = user.name || '';
+        document.getElementById('customer-email').value = user.email || '';
+        document.getElementById('customer-phone').value = user.mobile || '';
     } else {
         // If not logged in, force login redirect for checkout security
         window.firebaseHelpers.showAlert('You must be logged in to checkout.', 'danger');
         setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 2000);
         return;
     }
+    // --- FIX END ---
 
     displayCheckoutSummary(cart);
 }
@@ -640,6 +646,7 @@ function initializeAuth() {
                 });
         } else {
             // User is signed out
+            window.currentUser = null; // Ensure global is cleared
             updateNavbarForLoggedOutUser();
         }
     });
