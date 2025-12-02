@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FarmRent - My Profile</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles.css">
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-remote-config-compat.js"></script>
+    <style>
+        .profile-card {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            padding: 30px;
+        }
+        .info-panel {
+            background-color: var(--clean-white);
+            border-radius: 8px;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation (Placeholder for script.js to populate) -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">
+                <i class="fas fa-tractor me-2"></i>FarmRent
+            </a>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item"><a class="nav-link" href="index.html">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="browse.html">Browse Equipment</a></li>
+                </ul>
+                <ul class="navbar-nav" id="navbar-auth">
+                    <!-- Auth links loaded by script.js -->
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Profile Section -->
+    <section class="py-5">
+        <div class="container">
+            <h1 class="section-title">My Profile</h1>
+            <div class="row">
+                <!-- Profile Form -->
+                <div class="col-lg-8 mb-4">
+                    <div class="profile-card">
+                        <h4 class="mb-4 text-primary"><i class="fas fa-user-edit me-2"></i>Edit Personal Details</h4>
+                        <form id="profile-form">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="profile-name" class="form-label">Full Name *</label>
+                                    <input type="text" class="form-control" id="profile-name" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="profile-email" class="form-label">Email Address *</label>
+                                    <input type="email" class="form-control" id="profile-email" required readonly disabled>
+                                    <div class="form-text">Cannot change email address.</div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="profile-phone" class="form-label">Phone Number *</label>
+                                    <input type="tel" class="form-control" id="profile-phone" pattern="[0-9]{10}" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="profile-city" class="form-label">City/Town</label>
+                                    <input type="text" class="form-control" id="profile-city">
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="profile-address" class="form-label">Default Address</label>
+                                <textarea class="form-control" id="profile-address" rows="3" placeholder="Primary delivery address"></textarea>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-save me-2"></i>Save Changes
+                            </button>
+                        </form>
+                        
+                        <hr class="my-4">
+                        <p class="text-muted">Need to change your password? You can do so via the Firebase Authentication flow (e.g., using the "Forgot Password" link on the login page).</p>
+                    </div>
+                </div>
+
+                <!-- Account Info -->
+                <div class="col-lg-4">
+                    <div class="info-panel">
+                        <h4 class="mb-3 text-warning"><i class="fas fa-info-circle me-2"></i>Account Status</h4>
+                        
+                        <div class="mb-4">
+                            <h6>Role</h6>
+                            <span class="badge bg-primary fs-6">Customer</span>
+                        </div>
+
+                        <div class="mb-4">
+                            <h6>Member Since</h6>
+                            <p id="join-date">Loading...</p>
+                        </div>
+                        
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>
+                            Your email is verified and account is active.
+                        </div>
+
+                        <a href="orders.html" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-clipboard-list me-2"></i>View My Orders
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p class="text-center">&copy; 2025 FarmRent. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Firebase Configuration -->
+    <script src="firebase-config.js"></script>
+    
+    <!-- Custom JavaScript -->
+    <script src="script.js"></script>
+</body>
+</html>
