@@ -6,10 +6,19 @@
     --clean-white: #F7F7F7;
 }
 
+/* Ensure HTML and Body allow scrolling */
+html, body {
+    height: 100%; /* Changed from min-height if present */
+    min-height: 100vh;
+    overflow-x: hidden; /* Prevent horizontal scrollbars */
+}
+
 body {
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     color: #333;
     background-color: var(--clean-white);
+    /* Remove any fixed heights or hidden overflow declarations that might cause sticking */
+    /* overflow-y: auto; or overflow-y: scroll; should be the default, but we ensure no 'hidden' is applied globally */
 }
 
 .navbar {
@@ -204,6 +213,15 @@ body {
     font-size: 30px;
 }
 
+.process-step:nth-child(2) .step-icon {
+    background: linear-gradient(135deg, var(--sun-yellow), var(--accent-red));
+}
+
+.process-step:nth-child(3) .step-icon {
+    background: linear-gradient(135deg, #1e4a1e, var(--farm-green));
+}
+
+
 .testimonial-card {
     border: none;
     border-radius: 8px;
@@ -339,4 +357,10 @@ body {
     width: 3rem;
     height: 3rem;
     border-width: 0.25em;
+}
+
+/* Ensure global scrollability */
+html, body {
+    overflow-y: scroll;
+    min-height: 100vh;
 }
