@@ -28,9 +28,10 @@ try {
         remoteConfig.settings.minimumFetchIntervalMillis = 3600000; 
         
         // Set default values for Remote Config keys
-        // IMPORTANT: The key 'imgbb_api_key' must be configured in the Firebase Console
+        // IMPORTANT: These keys must be configured in the Firebase Console
         remoteConfig.defaultConfig = {
-            "imgbb_api_key": "" // Placeholder for the ImgBB key
+            "imgbb_api_key": "", // Placeholder for the ImgBB key
+            "razorpay_key_id": "rzp_test_XXXXXXXXXXXXXXXX" // Placeholder for Razorpay test key
         };
         
         // Fetch and activate the configuration values
@@ -99,14 +100,13 @@ window.firebaseHelpers = {
     generateId: () => {
         return Date.now().toString(36) + Math.random().toString(36).substr(2);
     },
-    
+
     /**
      * Fetches the ImgBB API key from Firebase Remote Config.
      * @returns {Promise<string>} The ImgBB API key.
      */
     getImgbbApiKey: async () => {
         if (!remoteConfig) {
-            // Fallback warning if Remote Config is not loaded
             window.firebaseHelpers.showAlert('Remote Config is not available. Check SDK inclusion.', 'warning');
             return ""; 
         }
@@ -119,7 +119,30 @@ window.firebaseHelpers = {
             return apiKey;
         } catch (error) {
             console.error("Error retrieving ImgBB API Key:", error);
-            window.firebaseHelpers.showAlert('Failed to retrieve API Key from Remote Config.', 'danger');
+            window.firebaseHelpers.showAlert('Failed to retrieve ImgBB API Key from Remote Config.', 'danger');
+            return ""; 
+        }
+    },
+    
+    /**
+     * Fetches the Razorpay Key ID from Firebase Remote Config.
+     * @returns {Promise<string>} The Razorpay Key ID.
+     */
+    getRazorpayKeyId: async () => {
+        if (!remoteConfig) {
+            window.firebaseHelpers.showAlert('Remote Config is not available. Check SDK inclusion.', 'warning');
+            return ""; 
+        }
+        try {
+            // Get the value set in the Firebase console for 'razorpay_key_id'
+            const keyId = remoteConfig.getString('razorpay_key_id');
+            if (!keyId || keyId === "rzp_test_XXXXXXXXXXXXXXXX") {
+                 window.firebaseHelpers.showAlert('Razorpay Key ID is missing or using placeholder in Remote Config.', 'warning');
+            }
+            return keyId;
+        } catch (error) {
+            console.error("Error retrieving Razorpay Key ID:", error);
+            window.firebaseHelpers.showAlert('Failed to retrieve Razorpay Key ID from Remote Config.', 'danger');
             return ""; 
         }
     },
