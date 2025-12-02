@@ -9,6 +9,7 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
+let remoteConfig;
 try {
     // Check if Firebase is already initialized
     if (!firebase.apps.length) {
@@ -18,7 +19,35 @@ try {
     // Initialize Firebase services
     const auth = firebase.auth();
     const db = firebase.firestore();
-    const storage = firebase.storage();
+    // Firebase Storage is removed and replaced by ImgBB upload helper
+    
+    // Initialize Remote Config and set minimum fetch interval
+    if (firebase.remoteConfig) {
+        remoteConfig = firebase.remoteConfig();
+        // Set minimum fetch interval for production (3600000ms = 1 hour)
+        remoteConfig.settings.minimumFetchIntervalMillis = 3600000; 
+        
+        // Set default values for Remote Config keys
+        // IMPORTANT: The key 'imgbb_api_key' must be configured in the Firebase Console
+        remoteConfig.defaultConfig = {
+            "imgbb_api_key": "" // Placeholder for the ImgBB key
+        };
+        
+        // Fetch and activate the configuration values
+        remoteConfig.fetchAndActivate()
+            .then(activated => {
+                if (activated) {
+                    console.log("Remote Config activated and using latest values.");
+                } else {
+                    console.log("Remote Config using cached values.");
+                }
+            })
+            .catch(error => {
+                console.error("Error fetching or activating remote config. Using default values:", error);
+            });
+    } else {
+        console.warn('Firebase Remote Config SDK not detected. API key fetching may fail.');
+    }
     
     // Enable Firestore offline persistence
     db.enablePersistence()
@@ -33,9 +62,8 @@ try {
     // Export Firebase services
     window.FirebaseAuth = auth;
     window.FirebaseDB = db;
-    window.FirebaseStorage = storage;
     
-    console.log('Firebase initialized successfully');
+    console.log('Firebase initialized successfully (Storage replaced by ImgBB)');
     
 } catch (error) {
     console.error('Firebase initialization error:', error);
@@ -72,17 +100,76 @@ window.firebaseHelpers = {
         return Date.now().toString(36) + Math.random().toString(36).substr(2);
     },
     
-    // Upload file to Firebase Storage
-    uploadFile: async (path, file) => {
+    /**
+     * Fetches the ImgBB API key from Firebase Remote Config.
+     * @returns {Promise<string>} The ImgBB API key.
+     */
+    getImgbbApiKey: async () => {
+        if (!remoteConfig) {
+            // Fallback warning if Remote Config is not loaded
+            window.firebaseHelpers.showAlert('Remote Config is not available. Check SDK inclusion.', 'warning');
+            return ""; 
+        }
         try {
-            const storageRef = FirebaseStorage.ref();
-            const fileRef = storageRef.child(`${path}/${Date.now()}_${file.name}`);
-            const snapshot = await fileRef.put(file);
-            const downloadURL = await snapshot.ref.getDownloadURL();
-            return downloadURL;
+            // Get the value set in the Firebase console for 'imgbb_api_key'
+            const apiKey = remoteConfig.getString('imgbb_api_key');
+            if (!apiKey) {
+                 window.firebaseHelpers.showAlert('ImgBB API key is empty in Remote Config. Upload will fail.', 'danger');
+            }
+            return apiKey;
         } catch (error) {
-            console.error('Error uploading file:', error);
-            throw error;
+            console.error("Error retrieving ImgBB API Key:", error);
+            window.firebaseHelpers.showAlert('Failed to retrieve API Key from Remote Config.', 'danger');
+            return ""; 
+        }
+    },
+
+    /**
+     * Uploads a file to ImgBB and returns the URL.
+     * @param {string} path - Ignored, for compatibility with old function signature.
+     * @param {File} file - The image file to upload.
+     * @returns {Promise<string>} The public URL of the uploaded image.
+     */
+    uploadFile: async (path, file) => {
+        const apiKey = await window.firebaseHelpers.getImgbbApiKey();
+        if (!apiKey) {
+            throw new Error('Image upload failed: ImgBB API Key is missing or invalid.');
+        }
+
+        // Convert file to Base64 (ImgBB recommended method for client uploads)
+        const toBase64 = f => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(f);
+            reader.onload = () => resolve(reader.result.split(',')[1]); // Only need the base64 part
+            reader.onerror = error => reject(error);
+        });
+
+        try {
+            const base64Image = await toBase64(file);
+
+            const formData = new FormData();
+            formData.append('image', base64Image); // ImgBB expects 'image' field for base64
+
+            const response = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.json();
+                throw new Error(errorBody.error?.message || `ImgBB upload failed with status ${response.status}`);
+            }
+
+            const result = await response.json();
+            if (result.success) {
+                return result.data.url;
+            } else {
+                throw new Error(result.error?.message || 'ImgBB upload failed: Unknown error');
+            }
+
+        } catch (error) {
+            console.error('Error uploading file to ImgBB:', error);
+            throw new Error('Image upload failed: ' + (error.message || 'Network error'));
         }
     },
     
