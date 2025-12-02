@@ -1,0 +1,463 @@
+:root {
+    --farm-green: #2B5C2B;
+    --earth-brown: #8B4513;
+    --sun-yellow: #F2C14E;
+    --accent-red: #D0614C;
+    --clean-white: #F7F7F7;
+    --admin-blue: #1a237e;
+    --admin-dark: #0d47a1;
+    --admin-accent: #2196f3;
+}
+
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background-color: #f8f9fa;
+    color: #333;
+}
+
+/* Sidebar Styles */
+.sidebar {
+    background: linear-gradient(180deg, var(--admin-blue), var(--admin-dark));
+    color: white;
+    height: 100vh;
+    position: fixed;
+    width: 250px;
+    padding-top: 20px;
+    box-shadow: 3px 0 10px rgba(0,0,0,0.1);
+    z-index: 1000;
+}
+
+.sidebar-header {
+    padding: 0 20px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.sidebar-header h3 {
+    color: var(--sun-yellow);
+    font-weight: 700;
+}
+
+.nav-link {
+    color: rgba(255,255,255,0.8);
+    padding: 12px 20px;
+    margin: 5px 10px;
+    border-radius: 8px;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.nav-link:hover {
+    color: white;
+    background: rgba(255,255,255,0.1);
+}
+
+.nav-link.active {
+    background: var(--sun-yellow);
+    color: var(--admin-blue);
+    font-weight: 600;
+}
+
+.sidebar-footer {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    padding: 20px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+/* Main Content Styles */
+.main-content {
+    margin-left: 250px;
+    padding: 20px;
+    min-height: 100vh;
+}
+
+.navbar-custom {
+    background: white;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    padding: 15px 0;
+    position: sticky;
+    top: 0;
+    z-index: 999;
+}
+
+.page-header {
+    margin-bottom: 30px;
+}
+
+.page-header h1 {
+    color: var(--admin-blue);
+    font-weight: 700;
+}
+
+/* Dashboard Cards */
+.dashboard-card {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    transition: transform 0.3s;
+    border: none;
+    height: 100%;
+}
+
+.dashboard-card:hover {
+    transform: translateY(-5px);
+}
+
+.card-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    margin-bottom: 15px;
+}
+
+.card-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--admin-blue);
+}
+
+.card-label {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+/* Stats Cards Colors */
+.card-earnings .card-icon {
+    background: linear-gradient(135deg, #4CAF50, #2E7D32);
+    color: white;
+}
+
+.card-orders .card-icon {
+    background: linear-gradient(135deg, #2196F3, #0D47A1);
+    color: white;
+}
+
+.card-equipment .card-icon {
+    background: linear-gradient(135deg, #FF9800, #EF6C00);
+    color: white;
+}
+
+.card-rating .card-icon {
+    background: linear-gradient(135deg, #9C27B0, #6A1B9A);
+    color: white;
+}
+
+/* Table Styles */
+.table-container {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+}
+
+.table th {
+    background-color: var(--admin-blue);
+    color: white;
+    border: none;
+    font-weight: 600;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+.status-badge {
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.status-active {
+    background-color: #D4EDDA;
+    color: #155724;
+}
+
+.status-pending {
+    background-color: #FFF3CD;
+    color: #856404;
+}
+
+.status-suspended {
+    background-color: #F8D7DA;
+    color: #721C24;
+}
+
+.status-approved {
+    background-color: #D1ECF1;
+    color: #0C5460;
+}
+
+.status-rejected {
+    background-color: #E2E3E5;
+    color: #383D41;
+}
+
+.role-customer {
+    background-color: #E3F2FD;
+    color: #1565C0;
+}
+
+.role-seller {
+    background-color: #F3E5F5;
+    color: #7B1FA2;
+}
+
+.role-admin {
+    background-color: #E8F5E9;
+    color: #2E7D32;
+}
+
+.order-status-pending {
+    background-color: #FFF3CD;
+    color: #856404;
+}
+
+.order-status-active {
+    background-color: #D1ECF1;
+    color: #0C5460;
+}
+
+.order-status-completed {
+    background-color: #D4EDDA;
+    color: #155724;
+}
+
+.order-status-cancelled {
+    background-color: #F8D7DA;
+    color: #721C24;
+}
+
+/* Button Styles */
+.btn-primary {
+    background-color: var(--admin-blue);
+    border-color: var(--admin-blue);
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+.btn-primary:hover {
+    background-color: var(--admin-dark);
+    border-color: var(--admin-dark);
+}
+
+.btn-warning {
+    background-color: var(--sun-yellow);
+    border-color: var(--sun-yellow);
+    color: var(--admin-blue);
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+.btn-outline-primary {
+    color: var(--admin-blue);
+    border-color: var(--admin-blue);
+}
+
+.btn-outline-primary:hover {
+    background-color: var(--admin-blue);
+    color: white;
+}
+
+/* Modal Styles */
+.modal-header {
+    background-color: var(--admin-blue);
+    color: white;
+}
+
+.modal-header .btn-close {
+    filter: invert(1);
+}
+
+/* Chart Container */
+.chart-container {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    height: 100%;
+}
+
+/* Equipment Cards */
+.equipment-card {
+    background: white;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    transition: transform 0.3s;
+    height: 100%;
+}
+
+.equipment-card:hover {
+    transform: translateY(-5px);
+}
+
+.equipment-img {
+    height: 200px;
+    width: 100%;
+    object-fit: cover;
+}
+
+.equipment-price {
+    color: var(--admin-blue);
+    font-weight: 700;
+    font-size: 1.2rem;
+}
+
+/* Category Cards */
+.category-card {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    transition: transform 0.3s;
+    height: 100%;
+}
+
+.category-card:hover {
+    transform: translateY(-5px);
+}
+
+.category-icon {
+    font-size: 3rem;
+    color: var(--admin-blue);
+    margin-bottom: 15px;
+}
+
+/* Quick Actions */
+.quick-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.action-btn {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 15px;
+    flex: 1;
+    min-width: 150px;
+    text-align: center;
+    transition: all 0.3s;
+}
+
+.action-btn:hover {
+    background: var(--admin-blue);
+    color: white;
+    border-color: var(--admin-blue);
+}
+
+/* Loading Spinner */
+.loading {
+    display: none;
+    text-align: center;
+    padding: 40px;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.2);
+    z-index: 2000;
+}
+
+.loading.active {
+    display: block;
+}
+
+/* Action Buttons */
+.btn-action {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 2px;
+    border: none;
+    background: transparent;
+    transition: all 0.2s;
+}
+
+.btn-action:hover {
+    transform: scale(1.1);
+}
+
+.btn-view {
+    color: #2196F3;
+    background: rgba(33, 150, 243, 0.1);
+}
+
+.btn-view:hover {
+    background: rgba(33, 150, 243, 0.2);
+}
+
+.btn-edit {
+    color: #FF9800;
+    background: rgba(255, 152, 0, 0.1);
+}
+
+.btn-edit:hover {
+    background: rgba(255, 152, 0, 0.2);
+}
+
+.btn-delete {
+    color: #F44336;
+    background: rgba(244, 67, 54, 0.1);
+}
+
+.btn-delete:hover {
+    background: rgba(244, 67, 54, 0.2);
+}
+
+.btn-approve {
+    color: #4CAF50;
+    background: rgba(76, 175, 80, 0.1);
+}
+
+.btn-approve:hover {
+    background: rgba(76, 175, 80, 0.2);
+}
+
+.btn-reject {
+    color: #F44336;
+    background: rgba(244, 67, 54, 0.1);
+}
+
+.btn-reject:hover {
+    background: rgba(244, 67, 54, 0.2);
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 100%;
+        height: auto;
+        position: relative;
+    }
+    
+    .main-content {
+        margin-left: 0;
+    }
+    
+    .quick-actions {
+        flex-direction: column;
+    }
+    
+    .table-responsive {
+        overflow-x: auto;
+    }
+}
