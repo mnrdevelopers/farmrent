@@ -567,6 +567,14 @@ async function placeOrderInFirestore(orderId, customerData, paymentId, totalAmou
         window.firebaseHelpers.showAlert('Cart is empty, cannot place order.', 'danger');
         return;
     }
+    
+    // Extract a representative item name and seller details from the first item in the cart
+    // This simplifies the order document for dashboard views
+    const primaryItem = cart[0];
+    const itemNames = cart.map(item => item.name).join(', ');
+    const sellerIds = [...new Set(cart.map(item => item.sellerId))].join(', ');
+    const businessNames = [...new Set(cart.map(item => item.businessName))].join(', ');
+
 
     try {
         const orderData = {
@@ -576,7 +584,14 @@ async function placeOrderInFirestore(orderId, customerData, paymentId, totalAmou
             customerPhone: customerData.phone,
             deliveryAddress: customerData.address,
             notes: customerData.notes,
-            items: cart,
+            
+            // Added consolidated fields for easier querying/display
+            equipmentNames: itemNames,
+            sellerIds: sellerIds,
+            sellerBusinessNames: businessNames,
+
+            items: cart, // Detailed breakdown of items
+
             totalAmount: totalAmount,
             platformFee: window.razorpayContext.fees,
             status: 'pending', // Pending seller approval
