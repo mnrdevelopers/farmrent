@@ -1,9 +1,7 @@
 // Main application JavaScript
 
 // Initialize Firebase
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
+// Initialized in firebase-config.js
 
 // Global variables
 let currentUser = null;
@@ -17,10 +15,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Initialize authentication
 function initializeAuth() {
-    auth.onAuthStateChanged((user) => {
+    // Access Firebase Auth from window global object
+    window.FirebaseAuth.onAuthStateChanged((user) => {
         if (user) {
             // User is signed in
-            db.collection('users').doc(user.uid).get()
+            window.FirebaseDB.collection('users').doc(user.uid).get()
                 .then((doc) => {
                     if (doc.exists) {
                         currentUser = { uid: user.uid, ...doc.data() };
@@ -52,10 +51,12 @@ function updateNavbarForLoggedInUser(userData) {
     `;
     
     if (userData.role === 'seller') {
+        // Use window.location.href instead of a relative path for a cleaner switch
         dropdownHtml += '<li><a class="dropdown-item" href="seller.html"><i class="fas fa-store me-2"></i>Seller Dashboard</a></li>';
     }
     
     if (userData.role === 'admin') {
+        // Use window.location.href instead of a relative path for a cleaner switch
         dropdownHtml += '<li><a class="dropdown-item" href="admin.html"><i class="fas fa-user-shield me-2"></i>Admin Panel</a></li>';
     }
     
@@ -72,7 +73,11 @@ function updateNavbarForLoggedInUser(userData) {
 // Update navbar for logged out user
 function updateNavbarForLoggedOutUser() {
     const navbarAuth = document.getElementById('navbar-auth');
+    // Ensure cart count is preserved or restored
+    const cartItem = document.getElementById('cart-count')?.parentElement?.parentElement?.innerHTML || '';
+
     navbarAuth.innerHTML = `
+        ${cartItem}
         <li class="nav-item dropdown" id="role-dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="roleDropdown" role="button" data-bs-toggle="dropdown">
                 <i class="fas fa-user-tag me-1"></i> Sign Up As
@@ -94,11 +99,11 @@ function updateNavbarForLoggedOutUser() {
 // Logout function
 async function logout() {
     try {
-        await auth.signOut();
+        await window.FirebaseAuth.signOut();
         window.location.reload();
     } catch (error) {
         console.error('Logout error:', error);
-        showAlert('Error logging out', 'danger');
+        window.firebaseHelpers.showAlert('Error logging out', 'danger');
     }
 }
 
@@ -131,7 +136,7 @@ async function loadHomepageData() {
 // Load categories
 async function loadCategories() {
     try {
-        const snapshot = await db.collection('categories')
+        const snapshot = await window.FirebaseDB.collection('categories')
             .where('status', '==', 'active')
             .orderBy('order', 'asc')
             .limit(6)
@@ -167,33 +172,68 @@ async function loadCategories() {
     }
 }
 
-// Load featured equipment
+// Load featured equipment (Modified to display approved equipment if no featured exists)
 async function loadFeaturedEquipment() {
     try {
-        const snapshot = await db.collection('equipment')
+        const container = document.getElementById('featured-equipment');
+        container.innerHTML = '<div class="col-12 text-center py-5"><div class="spinner-border text-primary loading-spinner"></div><p class="mt-3">Loading popular equipment...</p></div>';
+
+        // 1. Try to load explicitly featured equipment
+        let featuredSnapshot = await window.FirebaseDB.collection('equipment')
             .where('featured', '==', true)
             .where('status', '==', 'approved')
             .limit(6)
             .get();
         
-        const container = document.getElementById('featured-equipment');
+        let equipmentToShow = [];
+        featuredSnapshot.forEach(doc => {
+            equipmentToShow.push({ id: doc.id, ...doc.data() });
+        });
+        
+        // 2. If fewer than 6 featured items, fill the rest with the newest approved items
+        const limit = 6;
+        if (equipmentToShow.length < limit) {
+            // Get IDs of items already selected as featured
+            const featuredIds = equipmentToShow.map(e => e.id);
+            
+            const fillCount = limit - equipmentToShow.length;
+
+            let regularSnapshot = await window.FirebaseDB.collection('equipment')
+                .where('status', '==', 'approved')
+                // Note: We cannot filter by `featured != true` directly in Firestore,
+                // so we rely on sorting by creation time to get the newest, most likely to be added, items.
+                .orderBy('createdAt', 'desc')
+                .limit(fillCount * 2) // Fetch more than needed to filter out featured items locally
+                .get();
+            
+            regularSnapshot.forEach(doc => {
+                const equipment = { id: doc.id, ...doc.data() };
+                // Only add if it's not already in the featured list and not marked featured
+                if (!featuredIds.includes(equipment.id) && !equipment.featured) {
+                    equipmentToShow.push(equipment);
+                }
+            });
+
+            equipmentToShow = equipmentToShow.slice(0, limit); // Enforce the final limit
+        }
+
         container.innerHTML = '';
         
-        if (snapshot.empty) {
-            container.innerHTML = '<div class="col-12 text-center"><p>No featured equipment available</p></div>';
+        if (equipmentToShow.length === 0) {
+            container.innerHTML = '<div class="col-12 text-center py-5"><p>No equipment available to display right now.</p></div>';
             return;
         }
         
-        snapshot.forEach(doc => {
-            const equipment = doc.data();
+        equipmentToShow.forEach(equipment => {
             const col = document.createElement('div');
             col.className = 'col-lg-4 col-md-6 mb-4';
-            col.innerHTML = createEquipmentCard(equipment, doc.id);
+            col.innerHTML = createEquipmentCard(equipment, equipment.id);
             container.appendChild(col);
         });
         
     } catch (error) {
         console.error('Error loading featured equipment:', error);
+        document.getElementById('featured-equipment').innerHTML = '<div class="col-12 text-center py-5 text-danger"><p>Error loading equipment. Please try again later.</p></div>';
     }
 }
 
@@ -206,7 +246,7 @@ function createEquipmentCard(equipment, id) {
             <div class="position-relative">
                 <img src="${imageUrl}" class="card-img-top" alt="${equipment.name}" style="height: 200px; object-fit: cover;">
                 <span class="category-badge">${equipment.category || 'Equipment'}</span>
-                ${equipment.onSale ? '<span class="sale-badge position-absolute" style="top:15px; left:15px;">Special Offer</span>' : ''}
+                ${equipment.onSale || equipment.featured ? '<span class="sale-badge position-absolute" style="top:15px; left:15px;">' + (equipment.featured ? 'Featured' : 'Special Offer') + '</span>' : ''}
             </div>
             <div class="card-body d-flex flex-column">
                 <h5 class="card-title">${equipment.name}</h5>
@@ -225,7 +265,7 @@ function createEquipmentCard(equipment, id) {
 // Load stats
 async function loadStats() {
     try {
-        const statsSnapshot = await db.collection('stats').doc('platform').get();
+        const statsSnapshot = await window.FirebaseDB.collection('stats').doc('platform').get();
         const stats = statsSnapshot.exists ? statsSnapshot.data() : {
             happyFarmers: 500,
             districtsCovered: 25,
@@ -303,7 +343,7 @@ function loadHowItWorks() {
 // Load testimonials
 async function loadTestimonials() {
     try {
-        const snapshot = await db.collection('testimonials')
+        const snapshot = await window.FirebaseDB.collection('testimonials')
             .where('approved', '==', true)
             .limit(3)
             .get();
@@ -402,7 +442,7 @@ function getDefaultTestimonials() {
 // Load popular equipment for footer
 async function loadPopularEquipmentFooter() {
     try {
-        const snapshot = await db.collection('equipment')
+        const snapshot = await window.FirebaseDB.collection('equipment')
             .where('status', '==', 'approved')
             .orderBy('rentalCount', 'desc')
             .limit(4)
@@ -439,23 +479,23 @@ async function subscribeNewsletter() {
     const email = emailInput.value.trim();
     
     if (!email || !validateEmail(email)) {
-        showAlert('Please enter a valid email address', 'warning');
+        window.firebaseHelpers.showAlert('Please enter a valid email address', 'warning');
         return;
     }
     
     try {
-        await db.collection('newsletterSubscriptions').add({
+        await window.FirebaseDB.collection('newsletterSubscriptions').add({
             email: email,
             subscribedAt: firebase.firestore.FieldValue.serverTimestamp(),
             active: true
         });
         
-        showAlert('Successfully subscribed to newsletter!', 'success');
+        window.firebaseHelpers.showAlert('Successfully subscribed to newsletter!', 'success');
         emailInput.value = '';
         
     } catch (error) {
         console.error('Error subscribing to newsletter:', error);
-        showAlert('Error subscribing. Please try again.', 'danger');
+        window.firebaseHelpers.showAlert('Error subscribing. Please try again.', 'danger');
     }
 }
 
@@ -465,37 +505,8 @@ function validateEmail(email) {
     return re.test(email);
 }
 
-// Show alert message
-function showAlert(message, type = 'info') {
-    // Remove existing alerts
-    const existingAlert = document.querySelector('.app-alert');
-    if (existingAlert) {
-        existingAlert.remove();
-    }
-    
-    // Create alert element
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show app-alert position-fixed top-0 end-0 m-3`;
-    alertDiv.style.zIndex = '9999';
-    alertDiv.style.maxWidth = '400px';
-    alertDiv.innerHTML = `
-        <div class="d-flex align-items-center">
-            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
-            <div>${message}</div>
-        </div>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    // Add to body
-    document.body.appendChild(alertDiv);
-    
-    // Auto remove after 5 seconds
-    setTimeout(() => {
-        if (alertDiv.parentElement) {
-            alertDiv.remove();
-        }
-    }, 5000);
-}
+// Show alert message (Delegated to firebase-config.js)
+// function showAlert(message, type = 'info') { ... }
 
 // Initialize event listeners
 function initializeEventListeners() {
@@ -520,63 +531,19 @@ function initializeEventListeners() {
 
 // Update cart count
 function updateCartCount() {
+    // Note: cart is usually stored in local storage or session, but using a placeholder since we don't have a specific cart implementation
     const cart = JSON.parse(localStorage.getItem('cart')) || [];
-    document.getElementById('cart-count').textContent = cart.length;
-}
-
-// Check authentication and role
-async function checkAuthAndRole(requiredRole) {
-    try {
-        const user = await getCurrentUser();
-        
-        if (!user) {
-            return { authenticated: false, user: null };
-        }
-        
-        if (requiredRole && user.role !== requiredRole) {
-            return { 
-                authenticated: true, 
-                authorized: false, 
-                user: user,
-                message: `Access denied. Required role: ${requiredRole}`
-            };
-        }
-        
-        return { 
-            authenticated: true, 
-            authorized: true, 
-            user: user 
-        };
-        
-    } catch (error) {
-        console.error('Error checking auth:', error);
-        return { authenticated: false, error: error.message };
+    const cartCountElement = document.getElementById('cart-count');
+    if (cartCountElement) {
+        cartCountElement.textContent = cart.length;
     }
 }
 
-// Get current user
-function getCurrentUser() {
-    return new Promise((resolve, reject) => {
-        const unsubscribe = auth.onAuthStateChanged(user => {
-            unsubscribe();
-            if (user) {
-                db.collection('users').doc(user.uid).get()
-                    .then(doc => {
-                        if (doc.exists) {
-                            resolve({
-                                uid: user.uid,
-                                email: user.email,
-                                emailVerified: user.emailVerified,
-                                ...doc.data()
-                            });
-                        } else {
-                            reject(new Error('User data not found'));
-                        }
-                    })
-                    .catch(reject);
-            } else {
-                resolve(null);
-            }
-        }, reject);
-    });
-}
+// Check authentication and role (Delegated to firebase-config.js)
+// async function checkAuthAndRole(requiredRole) { ... }
+
+// Get current user (Delegated to firebase-config.js)
+// function getCurrentUser() { ... }
+
+// Update cart count when script loads
+updateCartCount();
