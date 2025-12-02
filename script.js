@@ -8,9 +8,6 @@ let currentUser = null;
 let allEquipmentData = []; // To store all approved equipment for client-side filtering/sorting
 let selectedEquipment = {}; // Holds data for the currently open modal
 
-// Constants for Razorpay (SIMULATED - Key fetched from Remote Config)
-// const RAZORPAY_KEY_ID = "rzp_test_XXXXXXXXXXXXXXXX"; // REMOVED HARDCODED KEY
-
 // Initialize page
 document.addEventListener('DOMContentLoaded', () => {
     initializeAuth();
