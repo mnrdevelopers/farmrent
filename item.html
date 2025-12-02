@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loading Equipment Details...</title>
+</head>
+<body>
+    <script>
+        // Extract the item ID from the URL query parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const itemId = urlParams.get('id');
+
+        if (itemId) {
+            // Redirect to the browse page and pass the item ID as a hash parameter 
+            // to trigger the modal display logic in browse.html's script.js.
+            window.location.replace(`browse.html#item=${itemId}`);
+        } else {
+            // If no ID is provided, just go to the main browse page
+            window.location.replace('browse.html');
+        }
+    </script>
+</body>
+</html>
