@@ -1179,7 +1179,9 @@
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-storage-compat.js"></script>
+    <!-- ADDED: Firebase Remote Config SDK for fetching ImgBB key -->
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-remote-config-compat.js"></script>
+    <!-- REMOVED: <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-storage-compat.js"></script> -->
     <script src="firebase-config.js"></script>
 <script>
     // Global variables
@@ -1800,17 +1802,18 @@
             }
             equipmentData.specifications = specs;
             
-            // Save to Firestore
+            // Save initial document to Firestore
             const docRef = await window.FirebaseDB.collection('equipment').add(equipmentData);
             
-            // Upload images if any
+            // Upload images using the new ImgBB helper
             const imageFiles = document.getElementById('image-upload').files;
             if (imageFiles.length > 0) {
                 const imageUrls = [];
                 for (let i = 0; i < imageFiles.length; i++) {
                     const file = imageFiles[i];
+                    // The path argument is still passed but ignored in the new helper
                     const downloadURL = await window.firebaseHelpers.uploadFile(
-                        `equipment/${docRef.id}`,
+                        `equipment/${docRef.id}`, // Path is ignored by new helper
                         file
                     );
                     imageUrls.push(downloadURL);
@@ -2518,14 +2521,16 @@
         if (this.files[0]) {
             try {
                 const file = this.files[0];
-                const downloadURL = await window.firebaseHelpers.uploadFile(
-                    `profile_pictures/${currentUser.uid}`,
-                    file
-                );
                 
-                // Show loading
+                // Show loading placeholder
                 const profilePic = document.getElementById('profile-picture');
                 profilePic.src = 'https://via.placeholder.com/100?text=Uploading...';
+                
+                // Use the new ImgBB helper
+                const downloadURL = await window.firebaseHelpers.uploadFile(
+                    `profile_pictures/${currentUser.uid}`, // Path is passed but ignored by the new helper
+                    file
+                );
                 
                 // Update profile picture in Firestore
                 await window.FirebaseDB.collection('users').doc(currentUser.uid).update({
@@ -2541,10 +2546,12 @@
                 
             } catch (error) {
                 console.error('Error uploading profile picture:', error);
-                window.firebaseHelpers.showAlert('Error uploading profile picture', 'danger');
+                window.firebaseHelpers.showAlert('Error uploading profile picture. ' + error.message, 'danger');
                 
-                // Restore original picture
-                document.getElementById('profile-picture').src = sellerData.profilePicture || 'https://via.placeholder.com/100';
+                // Restore original picture or default placeholder on failure
+                const currentSellerData = await window.FirebaseDB.collection('users').doc(currentUser.uid).get();
+                const restoredSrc = currentSellerData.data()?.profilePicture || 'https://via.placeholder.com/100';
+                document.getElementById('profile-picture').src = restoredSrc;
             }
         }
     });
