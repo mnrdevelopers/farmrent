@@ -787,6 +787,7 @@ function createEquipmentCard(equipment) {
     const statusClass = `status-${equipment.status || 'pending'}`;
     const statusText = (equipment.status || 'pending').charAt(0).toUpperCase() + (equipment.status || 'pending').slice(1);
     const imageUrl = equipment.images && equipment.images[0] ? equipment.images[0] : 'https://via.placeholder.com/300x200/2B5C2B/FFFFFF?text=Equipment';
+    const isFeatured = equipment.featured === true;
     
     return `
         <div class="col-lg-4 col-md-6 mb-4">
@@ -811,6 +812,13 @@ function createEquipmentCard(equipment) {
                             </button>
                             <button class="btn btn-sm btn-danger" onclick="rejectEquipment('${equipment.id}')">
                                 <i class="fas fa-times"></i>
+                            </button>
+                        ` : ''}
+                        ${equipment.status === 'approved' ? `
+                            <button class="btn btn-sm ${isFeatured ? 'btn-warning' : 'btn-outline-warning'}" 
+                                    onclick="markEquipmentAsFeatured('${equipment.id}', ${!isFeatured})"
+                                    title="${isFeatured ? 'Unmark as Featured' : 'Mark as Featured'}">
+                                <i class="fas fa-star"></i>
                             </button>
                         ` : ''}
                     </div>
@@ -890,6 +898,12 @@ async function viewEquipmentDetails(equipmentId) {
                                 ${equipment.status || 'pending'}
                             </span>
                         </div>
+                        <div class="mb-3">
+                            <strong>Featured:</strong> 
+                            <span class="status-badge status-${equipment.featured ? 'approved' : 'rejected'}">
+                                ${equipment.featured ? 'Yes' : 'No'}
+                            </span>
+                        </div>
                         ${equipment.specifications && Object.keys(equipment.specifications).length > 0 ? `
                             <div class="mb-3">
                                 <strong>Specifications:</strong>
@@ -905,6 +919,30 @@ async function viewEquipmentDetails(equipmentId) {
             `;
             
             document.getElementById('equipment-modal-body').innerHTML = modalBody;
+            
+            // Update modal footer with actions
+            const modalFooter = document.querySelector('#equipmentModal .modal-footer');
+            modalFooter.innerHTML = `<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>`;
+
+            if (equipment.status === 'approved') {
+                const isFeatured = equipment.featured === true;
+                modalFooter.innerHTML += `
+                    <button type="button" class="btn ${isFeatured ? 'btn-warning' : 'btn-primary'}" 
+                            onclick="markEquipmentAsFeatured('${equipmentId}', ${!isFeatured}, true)">
+                        <i class="fas fa-star me-2"></i> ${isFeatured ? 'Unmark as Featured' : 'Mark as Featured'}
+                    </button>
+                `;
+            } else if (equipment.status === 'pending') {
+                 modalFooter.innerHTML += `
+                    <button type="button" class="btn btn-success" onclick="approveEquipment('${equipmentId}', true)">
+                        <i class="fas fa-check me-2"></i> Approve
+                    </button>
+                    <button type="button" class="btn btn-danger" onclick="rejectEquipment('${equipmentId}')">
+                        <i class="fas fa-times me-2"></i> Reject
+                    </button>
+                `;
+            }
+
             const modal = new bootstrap.Modal(document.getElementById('equipmentModal'));
             modal.show();
         }
@@ -915,7 +953,7 @@ async function viewEquipmentDetails(equipmentId) {
 }
 
 // Approve equipment
-async function approveEquipment(equipmentId) {
+async function approveEquipment(equipmentId, closeAndReload = false) {
     if (!confirm('Approve this equipment listing?')) return;
     
     try {
@@ -925,6 +963,12 @@ async function approveEquipment(equipmentId) {
         });
         
         window.firebaseHelpers.showAlert('Equipment approved successfully', 'success');
+        
+        if (closeAndReload) {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('equipmentModal'));
+            modal.hide();
+        }
+        
         loadDashboardData();
         loadEquipment();
         
@@ -951,6 +995,31 @@ async function rejectEquipment(equipmentId) {
     } catch (error) {
         console.error('Error rejecting equipment:', error);
         window.firebaseHelpers.showAlert('Error rejecting equipment', 'danger');
+    }
+}
+
+// Mark equipment as featured (New Functionality to resolve homepage issue)
+async function markEquipmentAsFeatured(equipmentId, isFeatured, closeAndReload = false) {
+    const actionText = isFeatured ? 'Mark as Featured' : 'Unmark as Featured';
+    if (!confirm(`Are you sure you want to ${actionText.toLowerCase()}?`)) return;
+
+    try {
+        await window.FirebaseDB.collection('equipment').doc(equipmentId).update({
+            featured: isFeatured,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        window.firebaseHelpers.showAlert(`Equipment ${actionText.toLowerCase()} successfully!`, 'success');
+        
+        if (closeAndReload) {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('equipmentModal'));
+            modal.hide();
+        }
+
+        loadEquipment(); // Reload equipment grid
+    } catch (error) {
+        console.error(`Error ${actionText.toLowerCase()}:`, error);
+        window.firebaseHelpers.showAlert(`Error ${actionText.toLowerCase()}`, 'danger');
     }
 }
 
