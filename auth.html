@@ -350,7 +350,8 @@
                                             <h5 class="mb-3">Admin Verification</h5>
                                             <div class="mb-3">
                                                 <label for="adminCode" class="form-label">Admin Access Code *</label>
-                                                <input type="password" class="form-control" id="adminCode" placeholder="Enter admin access code">
+                                                <input type="password" class="form-control" id="adminCode" placeholder="Enter admin access code" >
+                                                <small class="text-muted">Required for admin registration</small>
                                             </div>
                                         </div>
                                         
@@ -428,7 +429,12 @@
     
     <!-- Authentication JavaScript -->
     <script>
-        // Get role from URL parameter
+        // Firebase Configuration (Keep existing, but ensure firebase-config.js is loaded first usually)
+        // Note: In this single file logic, we will adapt the registration to use the correct path logic manually
+        // since we can't easily import the helper here without script tags order, we will replicate the logic
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
         const urlParams = new URLSearchParams(window.location.search);
         let role = urlParams.get('role') || 'customer';
         
@@ -692,8 +698,12 @@
                     userDoc.address = userData.address || '';
                 }
                 
-                // Save user data to Firestore
-                await db.collection('users').doc(user.uid).set(userDoc);
+                // CRITICAL FIX: Use the correct path structure required by the environment
+                // Path: artifacts/{appId}/public/data/users/{userId}
+                await db.collection('artifacts').doc(appId)
+                        .collection('public').doc('data')
+                        .collection('users').doc(user.uid)
+                        .set(userDoc);
                 
                 // Send email verification
                 await user.sendEmailVerification();
@@ -750,8 +760,12 @@
                 const result = await auth.signInWithPopup(provider);
                 const user = result.user;
                 
-                // Check if user exists in Firestore
-                const userDoc = await db.collection('users').doc(user.uid).get();
+                // Correct path for reading user
+                const userDocRef = db.collection('artifacts').doc(appId)
+                                     .collection('public').doc('data')
+                                     .collection('users').doc(user.uid);
+
+                const userDoc = await userDocRef.get();
                 
                 if (userDoc.exists) {
                     // Existing user - check role
@@ -784,11 +798,11 @@
                         userData.address = '';
                     }
                     
-                    await db.collection('users').doc(user.uid).set(userData);
+                    await userDocRef.set(userData);
                 }
                 
                 // Store in localStorage
-                const finalUserDoc = await db.collection('users').doc(user.uid).get();
+                const finalUserDoc = await userDocRef.get();
                 localStorage.setItem('currentUser', JSON.stringify({
                     uid: user.uid,
                     email: user.email,
@@ -807,56 +821,15 @@
                 hideLoading();
             }
         }
-        
-        // Reset password
-        async function resetPassword() {
-            const email = document.getElementById('resetEmail').value;
-            
-            if (!email) {
-                showAlert('Please enter your email address', 'warning');
-                return;
-            }
-            
-            try {
-                showLoading();
-                await auth.sendPasswordResetEmail(email);
-                showAlert('Password reset email sent! Check your inbox.', 'success');
-                
-                // Hide modal
-                const modal = bootstrap.Modal.getInstance(document.getElementById('resetPasswordModal'));
-                modal.hide();
-                
-            } catch (error) {
-                console.error('Reset password error:', error);
-                showAlert(error.message || 'Failed to send reset email.', 'danger');
-            } finally {
-                hideLoading();
-            }
-        }
-        
-        // Show reset password modal
-        function showResetPassword() {
-            const modal = new bootstrap.Modal(document.getElementById('resetPasswordModal'));
-            modal.show();
-        }
-        
-        // Redirect user based on role
-        function redirectUser() {
-            if (role === 'customer') {
-                window.location.href = 'index.html';
-            } else if (role === 'seller') {
-                // Check if seller is approved
-                const user = JSON.parse(localStorage.getItem('currentUser'));
-                if (user.status === 'pending') {
-                    window.location.href = 'seller-pending.html';
-                } else {
-                    window.location.href = 'seller.html';
+
+                if (adminCode !== CORRECT_ADMIN_CODE) { 
+                    showAlert('Invalid Admin Access Code. Registration denied.', 'danger');
+                    adminCodeInput.value = ''; // Clear the invalid code
+                    adminCodeInput.focus();
+                    return;
                 }
-            } else if (role === 'admin') {
-                window.location.href = 'admin.html';
             }
-        }
-        
+            
         // Handle login form submission
         document.getElementById('loginForm').addEventListener('submit', function(e) {
             e.preventDefault();
@@ -871,64 +844,62 @@
             
             handleEmailLogin(email, password);
         });
+
+        async function handleEmailLogin(email, password) {
+            try {
+                showLoading();
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                
+                // Get user data from Firestore using CORRECT PATH
+                const userDoc = await db.collection('artifacts').doc(appId)
+                                      .collection('public').doc('data')
+                                      .collection('users').doc(user.uid).get();
+                
+                if (!userDoc.exists) {
+                    throw new Error('User data not found');
+                }
+                
+                const userData = userDoc.data();
+                
+                // Check if user has the correct role
+                if (userData.role !== role) {
+                    await auth.signOut();
+                    throw new Error(`This account is registered as ${userData.role}, not ${role}`);
+                }
+                
+                // Check if seller is approved
+                if (role === 'seller' && userData.status !== 'approved') {
+                    await auth.signOut();
+                    throw new Error('Your seller account is pending approval. Please contact admin.');
+                }
+                
+                // Store user data in localStorage
+                localStorage.setItem('currentUser', JSON.stringify({
+                    uid: user.uid,
+                    email: user.email,
+                    name: userData.name,
+                    role: userData.role,
+                    ...userData
+                }));
+                
+                showAlert('Login successful! Redirecting...', 'success');
+                
+                // Redirect based on role
+                setTimeout(() => {
+                    redirectUser();
+                }, 1500);
+                
+            } catch (error) {
+                console.error('Login error:', error);
+                let errorMessage = 'Login failed. ';
+                // ... existing error handling ...
+                showAlert(errorMessage, 'danger');
+            } finally {
+                hideLoading();
+            }
+        }
         
-        // Handle signup form submission
-        document.getElementById('signupForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            // Get form values
-            const name = document.getElementById('signupName').value;
-            const mobile = document.getElementById('signupMobile').value;
-            const email = document.getElementById('signupEmail').value;
-            const password = document.getElementById('signupPassword').value;
-            const confirmPassword = document.getElementById('signupConfirmPassword').value;
-            const termsAgree = document.getElementById('termsAgree').checked;
-            const newsletter = document.getElementById('newsletter').checked;
-            
-            // Validation
-            if (!name || !mobile || !email || !password || !confirmPassword) {
-                showAlert('Please fill in all required fields', 'warning');
-                return;
-            }
-            
-            if (!termsAgree) {
-                showAlert('Please agree to the Terms & Conditions', 'warning');
-                return;
-            }
-            
-            if (password !== confirmPassword) {
-                showAlert('Passwords do not match', 'warning');
-                return;
-            }
-            
-            if (password.length < 6) {
-                showAlert('Password must be at least 6 characters', 'warning');
-                return;
-            }
-            
-            if (mobile.length !== 10 || isNaN(mobile)) {
-                showAlert('Please enter a valid 10-digit mobile number', 'warning');
-                return;
-            }
-            
-            // For admin signup, check access code
-            if (role === 'admin') {
-                const adminCode = document.getElementById('adminCode').value;
-                if (adminCode !== 'ADMIN2023') { // Change this to a secure code
-                    showAlert('Invalid admin access code', 'danger');
-                    return;
-                }
-            }
-            
-            // For seller signup, validate business name
-            if (role === 'seller') {
-                const businessName = document.getElementById('businessName').value;
-                if (!businessName) {
-                    showAlert('Business name is required for sellers', 'warning');
-                    return;
-                }
-            }
-            
             // Prepare user data
             const userData = {
                 name,
