@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FarmRent - Contact Us</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles.css">
+    <!-- Firebase SDKs (Included for consistency with other pages) -->
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-remote-config-compat.js"></script>
+    <style>
+        .contact-card {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            padding: 30px;
+            height: 100%;
+        }
+        .contact-icon {
+            font-size: 2rem;
+            color: var(--farm-green);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation (Loaded by script.js) -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">
+                <i class="fas fa-tractor me-2"></i>FarmRent
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="index.html">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="browse.html">Browse Equipment</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="about.html">About Us</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="contact.html">Contact</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav" id="navbar-auth">
+                    <li class="nav-item">
+                        <a class="nav-link" href="cart.html">
+                            <i class="fas fa-shopping-cart"></i> Cart
+                            <span class="badge bg-warning text-dark" id="cart-count">0</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Contact Section -->
+    <section class="py-5">
+        <div class="container">
+            <h1 class="section-title">Get in Touch</h1>
+            <p class="lead text-muted">We are here to help with your rental needs, technical support, and seller inquiries.</p>
+            
+            <div class="row mt-4">
+                <!-- Contact Information -->
+                <div class="col-lg-4 mb-4">
+                    <div class="contact-card text-center">
+                        <i class="fas fa-phone contact-icon mb-3"></i>
+                        <h5>Call Support</h5>
+                        <p class="lead mb-1"><strong>+91 98765 43210</strong></p>
+                        <p class="text-muted small">Available Mon-Sun, 6:00 AM - 9:00 PM</p>
+                    </div>
+                </div>
+                <div class="col-lg-4 mb-4">
+                    <div class="contact-card text-center">
+                        <i class="fas fa-envelope contact-icon mb-3"></i>
+                        <h5>Email Us</h5>
+                        <p class="lead mb-1"><strong>info@farmrent.com</strong></p>
+                        <p class="text-muted small">We typically respond within 24 hours.</p>
+                    </div>
+                </div>
+                <div class="col-lg-4 mb-4">
+                    <div class="contact-card text-center">
+                        <i class="fas fa-map-marker-alt contact-icon mb-3"></i>
+                        <h5>Our Location</h5>
+                        <p class="lead mb-1"><strong>Nizamabad, Telangana, India</strong></p>
+                        <p class="text-muted small">Headquarters for FarmRent operations.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contact Form -->
+            <div class="row mt-5">
+                <div class="col-lg-8 offset-lg-2">
+                    <div class="contact-card">
+                        <h4 class="mb-4 text-warning"><i class="fas fa-paper-plane me-2"></i>Send us a Message</h4>
+                        <form id="contact-form">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="contact-name" class="form-label">Your Name *</label>
+                                    <input type="text" class="form-control" id="contact-name" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="contact-email" class="form-label">Email Address *</label>
+                                    <input type="email" class="form-control" id="contact-email" required>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="contact-subject" class="form-label">Subject *</label>
+                                <select class="form-select" id="contact-subject" required>
+                                    <option value="">Select a Subject</option>
+                                    <option value="rental">Rental Inquiry</option>
+                                    <option value="seller">Seller Registration Support</option>
+                                    <option value="technical">Technical Issue / Bug Report</option>
+                                    <option value="feedback">General Feedback</option>
+                                    <option value="other">Other Inquiry</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="contact-message" class="form-label">Message *</label>
+                                <textarea class="form-control" id="contact-message" rows="5" required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-paper-plane me-2"></i>Submit Message
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Map Placeholder -->
+    <div class="container-fluid p-0 mt-5">
+        <h2 class="section-title center">Find Us</h2>
+        <div style="height: 300px; width: 100%; background-color: #e9ecef; display: flex; align-items: center; justify-content: center;">
+            <p class="text-muted">Map Placeholder (Nizamabad, Telangana)</p>
+        </div>
+    </div>
+
+    <!-- Footer (Copied from index.html) -->
+    <footer class="footer">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-4 mb-4">
+                    <h5><i class="fas fa-tractor me-2 text-sun"></i>FarmRent</h5>
+                    <p>India's trusted farming equipment rental service. Modern equipment for modern farmers.</p>
+                    <div class="mt-3">
+                        <a href="#" class="text-decoration-none me-3 text-sun"><i class="fab fa-facebook-f"></i></a>
+                        <a href="#" class="text-decoration-none me-3 text-sun"><i class="fab fa-twitter"></i></a>
+                        <a href="#" class="text-decoration-none me-3 text-sun"><i class="fab fa-instagram"></i></a>
+                        <a href="#" class="text-decoration-none me-3 text-sun"><i class="fab fa-youtube"></i></a>
+                    </div>
+                </div>
+                <div class="col-lg-2 col-md-6 mb-4">
+                    <h5>Quick Links</h5>
+                    <ul class="list-unstyled">
+                        <li><a href="index.html" class="text-decoration-none text-light">Home</a></li>
+                        <li><a href="browse.html" class="text-decoration-none text-light">Browse Equipment</a></li>
+                        <li><a href="about.html" class="text-decoration-none text-light">About Us</a></li>
+                        <li><a href="contact.html" class="text-decoration-none text-light">Contact</a></li>
+                    </ul>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-4">
+                    <h5>Contact Info</h5>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-map-marker-alt me-2 text-sun"></i> Nizamabad, Telangana, India</li>
+                        <li><i class="fas fa-phone me-2 text-sun"></i> +91 98765 43210</li>
+                        <li><i class="fas fa-envelope me-2 text-sun"></i> info@farmrent.com</li>
+                        <li><i class="fas fa-clock me-2 text-sun"></i> Mon-Sun: 6:00 AM - 9:00 PM</li>
+                    </ul>
+                </div>
+                <div class="col-lg-3 mb-4">
+                    <h5>Popular Equipment</h5>
+                    <ul class="list-unstyled" id="popular-equipment-footer">
+                        <!-- Will be populated dynamically -->
+                    </ul>
+                </div>
+            </div>
+            <hr class="bg-sun">
+            <div class="row">
+                <div class="col-md-6">
+                    <p>&copy; 2025 FarmRent. All rights reserved.</p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <a href="#" class="text-decoration-none me-3 text-light">Terms of Service</a>
+                    <a href="#" class="text-decoration-none text-light">Privacy Policy</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- WhatsApp Button -->
+    <a href="https://wa.me/917416006394?text=Hi%2C%20I'm%20interested%20in%20renting%20farming%20equipment" class="whatsapp-btn" target="_blank">
+        <i class="fab fa-whatsapp"></i>
+    </a>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Firebase Configuration -->
+    <script src="firebase-config.js"></script>
+    
+    <!-- Custom JavaScript -->
+    <script src="script.js"></script>
+    
+    <script>
+        // Simple form submission handler (to prevent default action)
+        document.getElementById('contact-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            // In a real app, this would send data to Firestore or a server endpoint
+            window.firebaseHelpers.showAlert('Thank you for your message! We will get back to you shortly.', 'success');
+            this.reset();
+        });
+    </script>
+</body>
+</html>
