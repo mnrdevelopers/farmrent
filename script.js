@@ -4,6 +4,7 @@
 let currentUser = null;
 let allEquipmentData = []; // To store all approved equipment for client-side filtering/sorting
 let selectedEquipment = {}; // Holds data for the currently open modal
+let isAuthInitialized = false; // Flag to track if onAuthStateChanged has run
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', () => {
@@ -197,7 +198,12 @@ function displayEquipmentGrid(equipmentList) {
     container.innerHTML = '';
 
     if (equipmentList.length === 0) {
-        container.innerHTML = '<div class="col-12 text-center py-5"><i class="fas fa-search-minus fa-3x text-muted mb-3"></i><p class="mt-3">No equipment matches your criteria.</p></div>';
+        container.innerHTML = `
+            <div class="col-12 text-center py-5">
+                <i class="fas fa-search-minus fa-3x text-muted mb-3"></i>
+                <p class="mt-3">No equipment matches your criteria.</p>
+            </div>
+        `;
         return;
     }
 
@@ -405,6 +411,18 @@ async function rentNowModal() {
 
 // Load logic for Cart page (cart.html)
 async function loadCartPage() {
+    // Wait for authentication initialization to complete before reading cart data
+    if (!isAuthInitialized) {
+        await new Promise(resolve => {
+            const checkAuth = setInterval(() => {
+                if (isAuthInitialized) {
+                    clearInterval(checkAuth);
+                    resolve();
+                }
+            }, 100);
+        });
+    }
+
     await updateCartCount();
     const cart = await getCartFromFirestore(); // <<< MODIFIED: Read from Firestore
     displayCartItems(cart); // <<< MODIFIED: Pass cart data
@@ -753,6 +771,9 @@ function initializeAuth() {
                 })
                 .catch((error) => {
                     console.error("Error getting user data:", error);
+                })
+                .finally(() => {
+                    isAuthInitialized = true;
                 });
         } else {
             // User is signed out
@@ -760,6 +781,7 @@ function initializeAuth() {
             updateNavbarForLoggedOutUser();
             // Update cart count for unauthenticated user (will show local storage items)
             updateCartCount();
+            isAuthInitialized = true;
         }
     });
 }
