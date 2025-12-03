@@ -56,8 +56,9 @@ async function getCartFromFirestore() {
             return [];
         }
     } catch (error) {
+        // Log the full error to the console, but return gracefully
         console.error('Error fetching cart from Firestore:', error);
-        // Fallback to empty array on error
+        // Fallback to empty array on permission error
         return [];
     }
 }
@@ -84,8 +85,9 @@ async function updateCartInFirestore(cartItems) {
         console.log('Cart updated successfully in Firestore.');
 
     } catch (error) {
+        // Log the full error to the console, but show a user-friendly alert
         console.error('Error updating cart in Firestore:', error);
-        window.firebaseHelpers.showAlert('Failed to save cart. Please check your connection.', 'danger');
+        window.firebaseHelpers.showAlert('Failed to save cart. Please check your connection or login status.', 'danger');
     }
     // Update count immediately after successful database operation
     await updateCartCount();
