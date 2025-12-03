@@ -30,9 +30,9 @@ try {
         // Set default values for Remote Config keys
         // IMPORTANT: These keys must be configured in the Firebase Console
         remoteConfig.defaultConfig = {
-    "imgbb_api_key": "", // Empty placeholder
-    "razorpay_key_id": "" // Empty placeholder - will be fetched from server
-};
+            "imgbb_api_key": "", // Placeholder for the ImgBB key
+            "razorpay_key_id": "rzp_test_RYqQhRehAtLv0Z" // Placeholder for Razorpay test key
+        };
         
         // Fetch and activate the configuration values
         // We ensure this runs immediately to fetch keys
@@ -130,34 +130,25 @@ window.firebaseHelpers = {
      * Fetches the Razorpay Key ID from Firebase Remote Config.
      * @returns {Promise<string>} The Razorpay Key ID.
      */
-   getRazorpayKeyId: async () => {
-    if (!remoteConfig) {
-        window.firebaseHelpers.showAlert('Remote Config is not available. Check SDK inclusion.', 'warning');
-        return ""; 
-    }
-    try {
-        // Fetch the latest values from Remote Config
-        await remoteConfig.fetchAndActivate();
-        
-        // Get the value set in the Firebase console for 'razorpay_key_id'
-        const keyId = remoteConfig.getString('razorpay_key_id');
-        
-        // Only check if it's completely empty
-        if (!keyId) {
-            console.warn('Razorpay Key ID is empty in Remote Config.');
-            window.firebaseHelpers.showAlert('Payment gateway configuration issue. Please contact support.', 'danger');
-            return "";
+    getRazorpayKeyId: async () => {
+        if (!remoteConfig) {
+            window.firebaseHelpers.showAlert('Remote Config is not available. Check SDK inclusion.', 'warning');
+            return ""; 
         }
-        
-        console.log('Razorpay Key ID retrieved successfully from Remote Config.');
-        return keyId;
-        
-    } catch (error) {
-        console.error("Error retrieving Razorpay Key ID:", error);
-        window.firebaseHelpers.showAlert('Failed to retrieve payment gateway key. Please check your connection.', 'danger');
-        return ""; 
-    }
-},
+        try {
+            // Get the value set in the Firebase console for 'razorpay_key_id'
+            const keyId = remoteConfig.getString('razorpay_key_id');
+            // Check if key is empty or still the placeholder value set in defaultConfig
+            if (!keyId || keyId === "rzp_test_XXXXXXXXXXXXXXXX") {
+                 window.firebaseHelpers.showAlert('Razorpay Key ID is missing or using placeholder in Remote Config. Check Firebase Console configuration.', 'danger');
+            }
+            return keyId;
+        } catch (error) {
+            console.error("Error retrieving Razorpay Key ID:", error);
+            window.firebaseHelpers.showAlert('Failed to retrieve Razorpay Key ID from Remote Config.', 'danger');
+            return ""; 
+        }
+    },
 
     /**
      * Uploads a file to ImgBB and returns the URL.
