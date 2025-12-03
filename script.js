@@ -35,8 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function getPlatformFeeRate() {
     try {
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        // Assuming Admin panel saves platform settings in a globally accessible document.
-        // Path: /artifacts/{appId}/public/data/settings/platform
+        // Path: /artifacts/{appId}/public/data/settings/platform (Matches Admin Save Path)
         const settingsRef = window.FirebaseDB.collection('artifacts').doc(appId)
             .collection('public').doc('data').collection('settings').doc('platform');
 
@@ -47,6 +46,7 @@ async function getPlatformFeeRate() {
             console.log(`Platform fee rate loaded: ${platformFeeRate * 100}%`);
         } else {
             console.warn('Platform fee setting not found, using default rate of 5%.');
+            platformFeeRate = 0.05;
         }
     } catch (error) {
         console.error('Error fetching platform fee rate:', error);
@@ -632,7 +632,10 @@ function displayCheckoutSummary(cart) {
     const total = subtotal + fees;
     
     // FIX: Update fee display with dynamic percentage
-    document.getElementById('checkout-fees-label').textContent = `Platform Fee (${(platformFeeRate * 100).toFixed(0)}%):`;
+    const feeLabelElement = document.getElementById('checkout-fees-label');
+    if (feeLabelElement) {
+        feeLabelElement.textContent = `Platform Fee (${(platformFeeRate * 100).toFixed(0)}%):`;
+    }
 
     document.getElementById('checkout-subtotal').textContent = window.firebaseHelpers.formatCurrency(subtotal);
     document.getElementById('checkout-fees').textContent = window.firebaseHelpers.formatCurrency(fees);
