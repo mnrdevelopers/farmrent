@@ -90,7 +90,7 @@ window.firebaseHelpers = {
         return new Date(timestamp).toLocaleString();
     },
     
-    // Format currency in Indian Rupees
+    // Format currency in Indian Rupees (REMOVED DAY/HOUR reference as it varies)
     formatCurrency: (amount) => {
         if (amount === undefined || amount === null) return '₹0';
         return '₹' + amount.toLocaleString('en-IN');
