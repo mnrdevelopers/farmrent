@@ -1,8 +1,5 @@
 // Main application JavaScript
 
-// Initialize Firebase
-// Initialized in firebase-config.js
-
 // Global variables
 let currentUser = null;
 let allEquipmentData = []; // To store all approved equipment for client-side filtering/sorting
@@ -29,11 +26,79 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeEventListeners();
 });
 
+// --- FIREBASE CART MANAGEMENT HELPERS ---
+
+// Helper to get the Firestore document reference for the current user's cart
+function getCartDocRef(userId) {
+    // Note: __app_id is a global variable provided by the Canvas environment.
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+    // Path: /artifacts/{appId}/users/{userId}/cart/currentCart
+    return window.FirebaseDB.collection('artifacts').doc(appId)
+        .collection('users').doc(userId)
+        .collection('cart').doc('currentCart'); 
+}
+
+// Function to fetch cart data from Firestore (or localStorage fallback for unauthenticated users)
+async function getCartFromFirestore() {
+    if (!window.currentUser || !window.currentUser.uid) {
+        // Fallback for unauthenticated users (session-based cart, will not persist across logins/devices)
+        return JSON.parse(localStorage.getItem('cart')) || [];
+    }
+
+    try {
+        const cartRef = getCartDocRef(window.currentUser.uid);
+        const doc = await cartRef.get();
+
+        if (doc.exists && doc.data().items) {
+            return doc.data().items;
+        } else {
+            return [];
+        }
+    } catch (error) {
+        console.error('Error fetching cart from Firestore:', error);
+        // Fallback to empty array on error
+        return [];
+    }
+}
+
+// Function to update cart data in Firestore (or localStorage fallback)
+async function updateCartInFirestore(cartItems) {
+    if (!window.currentUser || !window.currentUser.uid) {
+        // Fallback to localStorage for unauthenticated users
+        localStorage.setItem('cart', JSON.stringify(cartItems));
+        updateCartCount();
+        return;
+    }
+
+    // Clear localStorage for authenticated users to prevent conflicts
+    localStorage.removeItem('cart');
+
+    try {
+        const cartRef = getCartDocRef(window.currentUser.uid);
+        await cartRef.set({
+            items: cartItems,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        
+        console.log('Cart updated successfully in Firestore.');
+
+    } catch (error) {
+        console.error('Error updating cart in Firestore:', error);
+        window.firebaseHelpers.showAlert('Failed to save cart. Please check your connection.', 'danger');
+    }
+    // Update count immediately after successful database operation
+    await updateCartCount();
+}
+
+
+// --- EXISTING FUNCTIONS MODIFIED TO USE FIRESTORE CART ---
+
 // Load data specifically for the Browse page
 async function loadBrowsePageData() {
     await loadAllEquipment();
     await loadCategoriesForFilter();
-    updateCartCount();
+    await updateCartCount(); // Now uses async call
     // Check if redirect from item.html occurred
     const hash = window.location.hash.substring(1);
     const itemIdMatch = hash.match(/item=([^&]+)/);
@@ -262,7 +327,7 @@ function updateModalPrice(type, value) {
 }
 
 // Add item to cart from modal
-function addToCartModal() {
+async function addToCartModal() {
     const item = selectedEquipment;
     const { durationType, durationValue, calculatedPrice } = item.rentalDetails;
     
@@ -271,8 +336,8 @@ function addToCartModal() {
         return;
     }
 
-    let cart = JSON.parse(localStorage.getItem('cart')) || [];
-    
+    let cart = await getCartFromFirestore(); // <<< MODIFIED: Read from Firestore
+
     const cartItem = {
         id: item.id,
         name: item.name,
@@ -294,8 +359,7 @@ function addToCartModal() {
         cart.push(cartItem);
     }
 
-    localStorage.setItem('cart', JSON.stringify(cart));
-    updateCartCount();
+    await updateCartInFirestore(cart); // <<< MODIFIED: Write to Firestore
     
     const modal = bootstrap.Modal.getInstance(document.getElementById('equipmentDetailsModal'));
     modal.hide();
@@ -304,7 +368,7 @@ function addToCartModal() {
 }
 
 // Direct rent/checkout from modal
-function rentNowModal() {
+async function rentNowModal() {
     const item = selectedEquipment;
     const { calculatedPrice } = item.rentalDetails;
 
@@ -313,8 +377,7 @@ function rentNowModal() {
         return;
     }
 
-    // Clear cart and add only the current item for direct checkout
-    localStorage.setItem('cart', JSON.stringify([
+    const singleItemCart = [
         {
             id: item.id,
             name: item.name,
@@ -327,9 +390,9 @@ function rentNowModal() {
             rentalValue: item.rentalDetails.durationValue,
             imageUrl: item.images && item.images[0]
         }
-    ]));
+    ];
 
-    updateCartCount();
+    await updateCartInFirestore(singleItemCart); // <<< MODIFIED: Overwrite cart in Firestore
     
     const modal = bootstrap.Modal.getInstance(document.getElementById('equipmentDetailsModal'));
     modal.hide();
@@ -339,14 +402,19 @@ function rentNowModal() {
 }
 
 // Load logic for Cart page (cart.html)
-function loadCartPage() {
-    updateCartCount();
-    displayCartItems();
+async function loadCartPage() {
+    await updateCartCount();
+    const cart = await getCartFromFirestore(); // <<< MODIFIED: Read from Firestore
+    displayCartItems(cart); // <<< MODIFIED: Pass cart data
 }
 
 // Display items currently in the cart
-function displayCartItems() {
-    const cart = JSON.parse(localStorage.getItem('cart')) || [];
+async function displayCartItems(cart) { // <<< MODIFIED: Accepts cart array
+    // Only display cart if user is logged in, otherwise prompt for login/show empty cart if fallback used
+    if (!window.currentUser && cart.length > 0) {
+        window.firebaseHelpers.showAlert('You are viewing a non-persistent cart. Log in to save your cart items.', 'info');
+    }
+
     const container = document.getElementById('cart-items-container');
     const loadingElement = document.getElementById('cart-loading');
     if (loadingElement) loadingElement.style.display = 'none';
@@ -400,14 +468,14 @@ function displayCartItems() {
 }
 
 // Remove item from cart
-function removeItemFromCart(index) {
-    let cart = JSON.parse(localStorage.getItem('cart')) || [];
+async function removeItemFromCart(index) {
+    let cart = await getCartFromFirestore(); // <<< MODIFIED: Read from Firestore
     cart.splice(index, 1);
-    localStorage.setItem('cart', JSON.stringify(cart));
+    
+    await updateCartInFirestore(cart); // <<< MODIFIED: Write back to Firestore
     
     window.firebaseHelpers.showAlert('Item removed from cart.', 'info');
-    updateCartCount();
-    displayCartItems();
+    displayCartItems(cart); // <<< MODIFIED: Pass updated cart
 }
 
 // Update the summary section on the cart page
@@ -423,36 +491,41 @@ function updateCartSummary(subtotal, fees, total) {
 
 // Start checkout (redirect to checkout page)
 function startCheckout() {
+    // Only allow checkout if user is logged in
+    if (!window.currentUser) {
+        window.firebaseHelpers.showAlert('Please log in before proceeding to checkout.', 'warning');
+        setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 1500);
+        return;
+    }
     window.location.href = 'checkout.html';
 }
 
 // Load logic for Checkout page (checkout.html)
 async function loadCheckoutPage() {
-    updateCartCount();
+    await updateCartCount();
     
-    const cart = JSON.parse(localStorage.getItem('cart')) || [];
-    if (cart.length === 0) {
-        window.firebaseHelpers.showAlert('Your cart is empty. Redirecting to browse.', 'warning');
-        setTimeout(() => { window.location.href = 'browse.html'; }, 2000);
-        return;
-    }
+    const cart = await getCartFromFirestore(); // <<< MODIFIED: Read from Firestore
     
     // --- FIX START: Use getCurrentUser to ensure auth status is resolved ---
     const user = await window.firebaseHelpers.getCurrentUser();
     
-    // Pre-fill user details if logged in
-    if (user) {
-        // Update the global window.currentUser and use the fetched data
-        window.currentUser = user; 
-        document.getElementById('customer-name').value = user.name || '';
-        document.getElementById('customer-email').value = user.email || '';
-        document.getElementById('customer-phone').value = user.mobile || '';
-    } else {
-        // If not logged in, force login redirect for checkout security
-        window.firebaseHelpers.showAlert('You must be logged in to checkout.', 'danger');
-        setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 2000);
+    if (!user || cart.length === 0) {
+        if (!user) {
+            window.firebaseHelpers.showAlert('You must be logged in to checkout.', 'danger');
+            setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 2000);
+        } else {
+            window.firebaseHelpers.showAlert('Your cart is empty. Redirecting to browse.', 'warning');
+            setTimeout(() => { window.location.href = 'browse.html'; }, 2000);
+        }
         return;
     }
+    
+    // Update the global window.currentUser and use the fetched data
+    window.currentUser = user; 
+    document.getElementById('customer-name').value = user.name || '';
+    document.getElementById('customer-email').value = user.email || '';
+    document.getElementById('customer-phone').value = user.mobile || '';
+
     // --- FIX END ---
 
     displayCheckoutSummary(cart);
@@ -598,16 +671,14 @@ async function processPayment() {
 
 // Final step: Save order to Firestore after (simulated) successful payment
 async function placeOrderInFirestore(orderId, customerData, paymentId, totalAmount) {
-    const cart = JSON.parse(localStorage.getItem('cart')) || [];
+    const cart = await getCartFromFirestore(); // <<< MODIFIED: Read from Firestore
     
     if (cart.length === 0) {
         window.firebaseHelpers.showAlert('Cart is empty, cannot place order.', 'danger');
         return;
     }
     
-    // Extract a representative item name and seller details from the first item in the cart
-    // This simplifies the order document for dashboard views
-    const primaryItem = cart[0];
+    // Extract a representative item name and seller details from the cart
     const itemNames = cart.map(item => item.name).join(', ');
     const sellerIds = [...new Set(cart.map(item => item.sellerId))].join(', ');
     const businessNames = [...new Set(cart.map(item => item.businessName))].join(', ');
@@ -641,11 +712,14 @@ async function placeOrderInFirestore(orderId, customerData, paymentId, totalAmou
 
         // Orders are placed as separate documents for each seller in a real escrow setup, 
         // but here we simplify to one main order document.
-        await window.FirebaseDB.collection('orders').doc(orderId).set(orderData);
+        // We use the full path to ensure it goes into the app's artifact collection.
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
+
+        await ordersCollectionRef.doc(orderId).set(orderData);
         
-        // Clear cart
-        localStorage.removeItem('cart');
-        updateCartCount();
+        // Clear cart from Firestore
+        await updateCartInFirestore([]); // <<< MODIFIED: Clear cart in Firestore
 
         window.firebaseHelpers.showAlert(`Order #${orderId.substring(0, 8)} placed successfully! Payment confirmed.`, 'success');
         
@@ -671,6 +745,8 @@ function initializeAuth() {
                     if (doc.exists) {
                         window.currentUser = { uid: user.uid, ...doc.data() };
                         updateNavbarForLoggedInUser(window.currentUser);
+                        // Ensure cart count is updated immediately after user is set
+                        updateCartCount(); 
                     }
                 })
                 .catch((error) => {
@@ -680,6 +756,8 @@ function initializeAuth() {
             // User is signed out
             window.currentUser = null; // Ensure global is cleared
             updateNavbarForLoggedOutUser();
+            // Update cart count for unauthenticated user (will show local storage items)
+            updateCartCount();
         }
     });
 }
@@ -722,7 +800,7 @@ function updateNavbarForLoggedInUser(userData) {
     `;
     
     navbarAuth.innerHTML = dropdownHtml;
-    updateCartCount(); // Ensure count is updated after navbar rebuild
+    // updateCartCount(); // Called in onAuthStateChanged now
 }
 
 // Update navbar for logged out user
@@ -752,7 +830,7 @@ function updateNavbarForLoggedOutUser() {
             </a>
         </li>
     `;
-    updateCartCount(); // Ensure count is updated after navbar rebuild
+    // updateCartCount(); // Called in onAuthStateChanged now
 }
 
 // Logout function
@@ -1162,7 +1240,11 @@ async function subscribeNewsletter() {
     }
     
     try {
-        await window.FirebaseDB.collection('newsletterSubscriptions').add({
+        // We use a public/global collection for newsletter subscriptions
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const newsletterRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('newsletterSubscriptions');
+
+        await newsletterRef.add({
             email: email,
             subscribedAt: firebase.firestore.FieldValue.serverTimestamp(),
             active: true
@@ -1208,8 +1290,8 @@ function initializeEventListeners() {
 }
 
 // Update cart count
-function updateCartCount() {
-    const cart = JSON.parse(localStorage.getItem('cart')) || [];
+async function updateCartCount() { // <<< MODIFIED: Now async
+    const cart = await getCartFromFirestore(); // <<< MODIFIED: Read from Firestore
     const cartCountElement = document.getElementById('cart-count');
     if (cartCountElement) {
         cartCountElement.textContent = cart.length;
@@ -1281,7 +1363,10 @@ async function loadOrdersPage() {
     }
     
     try {
-        const ordersSnapshot = await window.FirebaseDB.collection('orders')
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
+
+        const ordersSnapshot = await ordersCollectionRef
             .where('userId', '==', user.uid)
             .orderBy('createdAt', 'desc')
             .get();
@@ -1382,7 +1467,10 @@ async function cancelOrder(orderId) {
     if (!confirm('Are you sure you want to cancel this order? Cancellation is subject to seller approval.')) return;
     
     try {
-        await window.FirebaseDB.collection('orders').doc(orderId).update({
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const orderRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders').doc(orderId);
+
+        await orderRef.update({
             status: 'cancelled',
             cancellationRequestedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
