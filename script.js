@@ -5,6 +5,8 @@ let currentUser = null;
 let allEquipmentData = []; // To store all approved equipment for client-side filtering/sorting
 let selectedEquipment = {}; // Holds data for the currently open modal
 let isAuthInitialized = false; // Flag to track if onAuthStateChanged has run
+// NEW: Global variable to cache platform fee rate
+let platformFeeRate = 0.05; 
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', () => {
@@ -25,7 +27,35 @@ document.addEventListener('DOMContentLoaded', () => {
         loadHomepageData();
     }
     initializeEventListeners();
+    // Fetch the platform fee rate early
+    getPlatformFeeRate();
 });
+
+// --- NEW FUNCTION: Fetch Platform Fee Rate ---
+async function getPlatformFeeRate() {
+    try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // Assuming Admin panel saves platform settings in a globally accessible document.
+        // Path: /artifacts/{appId}/public/data/settings/platform
+        const settingsRef = window.FirebaseDB.collection('artifacts').doc(appId)
+            .collection('public').doc('data').collection('settings').doc('platform');
+
+        const doc = await settingsRef.get();
+        if (doc.exists && doc.data().platformFee !== undefined) {
+            // Platform fee is stored as a percentage (e.g., 5). Convert to rate (0.05).
+            platformFeeRate = (doc.data().platformFee / 100) || 0.05;
+            console.log(`Platform fee rate loaded: ${platformFeeRate * 100}%`);
+        } else {
+            console.warn('Platform fee setting not found, using default rate of 5%.');
+        }
+    } catch (error) {
+        console.error('Error fetching platform fee rate:', error);
+        // Fallback to hardcoded rate on error
+        platformFeeRate = 0.05;
+    }
+}
+// --- END NEW FUNCTION ---
+
 
 // --- FIREBASE CART MANAGEMENT HELPERS ---
 
@@ -425,6 +455,7 @@ async function loadCartPage() {
     }
 
     await updateCartCount();
+    await getPlatformFeeRate(); // Ensure rate is loaded
     const cart = await getCartFromFirestore(); // <<< MODIFIED: Read from Firestore
     displayCartItems(cart); // <<< MODIFIED: Pass cart data
 }
@@ -457,7 +488,6 @@ async function displayCartItems(cart) { // <<< MODIFIED: Accepts cart array
     }
 
     let subtotal = 0;
-    const platformFeeRate = 0.05; // 5% platform fee (Simulated)
     
     cart.forEach((item, index) => {
         subtotal += item.price;
@@ -482,7 +512,8 @@ async function displayCartItems(cart) { // <<< MODIFIED: Accepts cart array
         `;
     });
 
-    const fees = subtotal * platformFeeRate;
+    // FIX: Use dynamically fetched platformFeeRate
+    const fees = subtotal * platformFeeRate; 
     const total = subtotal + fees;
 
     updateCartSummary(subtotal, fees, total);
@@ -535,6 +566,9 @@ async function loadCheckoutPage() {
         });
     }
 
+    // Ensure rate is loaded before calculation
+    await getPlatformFeeRate(); 
+    
     // Now safely get user and cart data
     const user = await window.firebaseHelpers.getCurrentUser();
     const cart = await getCartFromFirestore(); 
@@ -593,9 +627,12 @@ function displayCheckoutSummary(cart) {
     // Display total duration
     document.getElementById('rental-dates').value = totalRentalDetails.join(', ');
 
-    const platformFeeRate = 0.05;
+    // FIX: Use dynamically fetched platformFeeRate
     const fees = subtotal * platformFeeRate;
     const total = subtotal + fees;
+    
+    // FIX: Update fee display with dynamic percentage
+    document.getElementById('checkout-fees-label').textContent = `Platform Fee (${(platformFeeRate * 100).toFixed(0)}%):`;
 
     document.getElementById('checkout-subtotal').textContent = window.firebaseHelpers.formatCurrency(subtotal);
     document.getElementById('checkout-fees').textContent = window.firebaseHelpers.formatCurrency(fees);
