@@ -789,6 +789,7 @@ function createEquipmentCard(equipment) {
     const imageUrl = equipment.images && equipment.images[0] ? equipment.images[0] : 'https://via.placeholder.com/300x200/2B5C2B/FFFFFF?text=Equipment';
     const isFeatured = equipment.featured === true;
     
+    // UPDATED: Use pricePerAcre
     return `
         <div class="col-lg-4 col-md-6 mb-4">
             <div class="equipment-card">
@@ -800,7 +801,7 @@ function createEquipmentCard(equipment) {
                     </div>
                     <p class="text-muted small mb-2">${equipment.category || 'Equipment'}</p>
                     <div class="equipment-price mb-3">
-                        ${window.firebaseHelpers.formatCurrency(equipment.pricePerDay || 0)}/day
+                        ${window.firebaseHelpers.formatCurrency(equipment.pricePerAcre || 0)}/acre
                     </div>
                     <div class="d-flex gap-2">
                         <button class="btn btn-sm btn-outline-primary flex-fill" onclick="viewEquipmentDetails('${equipment.id}')">
@@ -834,7 +835,7 @@ function filterEquipment() {
     let filteredEquipment = equipmentData;
     
     if (filterValue !== 'all') {
-        filteredEquipment = equipmentData.filter(item => item.status === filterValue);
+        filteredEquipment = filteredEquipment.filter(item => item.status === filterValue);
     }
     
     displayEquipment(filteredEquipment);
@@ -879,8 +880,9 @@ async function viewEquipmentDetails(equipmentId) {
                         <h4>${equipment.name}</h4>
                         <p class="text-muted">${equipment.category}</p>
                         <div class="mb-3">
-                            <h5 class="text-primary">${window.firebaseHelpers.formatCurrency(equipment.pricePerDay)}/day</h5>
-                            <small class="text-muted">or ${window.firebaseHelpers.formatCurrency(equipment.pricePerHour)}/hour</small>
+                            <!-- UPDATED: Display pricePerAcre/acre and pricePerHour/hour -->
+                            <h5 class="text-primary">${window.firebaseHelpers.formatCurrency(equipment.pricePerAcre || 0)}/acre</h5>
+                            <small class="text-muted">or ${window.firebaseHelpers.formatCurrency(equipment.pricePerHour || 0)}/hour</small>
                         </div>
                         <p>${equipment.description}</p>
                         <div class="mb-2">
@@ -1119,8 +1121,8 @@ async function viewOrderDetails(orderId) {
             
             // Format dates
             const createdAt = window.firebaseHelpers.formatDateTime(order.createdAt);
-            const startDate = window.firebaseHelpers.formatDate(order.startDate);
-            const endDate = window.firebaseHelpers.formatDate(order.endDate);
+            // UPDATED: Check for totalAcres/totalHours, consistent with order creation logic
+            const rentalPeriod = order.totalAcres ? `${order.totalAcres} Acres` : (order.totalHours ? `${order.totalHours} Hours` : 'N/A');
             
             // Create modal content
             const modalBody = `
@@ -1138,9 +1140,8 @@ async function viewOrderDetails(orderId) {
                         <h5>Rental Details</h5>
                         <table class="table table-sm">
                             <tr><th>Equipment:</th><td>${order.equipmentName || 'N/A'}</td></tr>
-                            <tr><th>Rental Period:</th><td>${startDate} to ${endDate}</td></tr>
-                            <tr><th>Total Days:</th><td>${order.totalDays || 0}</td></tr>
-                            <tr><th>Total Hours:</th><td>${order.totalHours || 0}</td></tr>
+                            <tr><th>Rental Period:</th><td>${rentalPeriod}</td></tr>
+                            <!-- Removed redundant Total Days/Hours if using totalAcres/totalHours for period -->
                         </table>
                     </div>
                 </div>
@@ -1233,10 +1234,10 @@ async function calculateReportData(periodDays) {
                 totalRevenue += order.totalAmount || 0;
                 
                 // Add to daily data
-                const dayIndex = Math.floor((endDate - orderDate) / (1000 * 60 * 60 * 24));
-                if (dayIndex >= 0 && dayIndex < periodDays) {
-                    dailyData[periodDays - 1 - dayIndex].orders++;
-                    dailyData[periodDays - 1 - dayIndex].revenue += order.totalAmount || 0;
+                const daysAgo = Math.floor((endDate - orderDate) / (1000 * 60 * 60 * 24));
+                if (daysAgo >= 0 && daysAgo < periodDays) {
+                    dailyData[periodDays - 1 - daysAgo].orders++;
+                    dailyData[periodDays - 1 - daysAgo].revenue += order.totalAmount || 0;
                 }
             }
         });
