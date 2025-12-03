@@ -266,7 +266,8 @@
                                 <div id="login-form" class="form-section active">
                                     <h3 class="form-title">Login to Your Account</h3>
                                     
-                                    <button class="google-btn mb-3" onclick="signInWithGoogle()">
+                                    <!-- Google Sign-In Button (Conditionally hidden by JS for Admin) -->
+                                    <button class="google-btn mb-3" id="google-login-btn" onclick="signInWithGoogle()">
                                         <i class="fab fa-google"></i> Continue with Google
                                     </button>
                                     
@@ -294,7 +295,8 @@
                                 <div id="signup-form" class="form-section">
                                     <h3 class="form-title">Create New Account</h3>
                                     
-                                    <button class="google-btn mb-3" onclick="signInWithGoogle()">
+                                    <!-- Google Sign-In Button (Conditionally hidden by JS for Admin) -->
+                                    <button class="google-btn mb-3" id="google-signup-btn" onclick="signInWithGoogle()">
                                         <i class="fab fa-google"></i> Continue with Google
                                     </button>
                                     
@@ -509,11 +511,20 @@
             // Show/hide role-specific fields
             const sellerFields = document.getElementById('seller-fields');
             const adminFields = document.getElementById('admin-fields');
-            
+            const googleLoginBtn = document.getElementById('google-login-btn');
+            const googleSignupBtn = document.getElementById('google-signup-btn');
+
             if (role === 'seller') {
                 sellerFields.style.display = 'block';
             } else if (role === 'admin') {
                 adminFields.style.display = 'block';
+                // Hide Google Sign-In for Admin role
+                if (googleLoginBtn) googleLoginBtn.style.display = 'none';
+                if (googleSignupBtn) googleSignupBtn.style.display = 'none';
+            } else {
+                 // Ensure Google Sign-In is visible for Customer/Seller (default)
+                if (googleLoginBtn) googleLoginBtn.style.display = 'flex';
+                if (googleSignupBtn) googleSignupBtn.style.display = 'flex';
             }
             
             // Update dynamic benefits
@@ -682,7 +693,9 @@
                     role: role,
                     status: role === 'seller' ? 'pending' : 'active',
                     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    newsletter: userData.newsletter
+                    newsletter: userData.newsletter,
+                    // Check if signed up via Google (used for Google sign-up flow)
+                    signInMethod: 'password', 
                 };
                 
                 // Add role-specific data
@@ -740,6 +753,12 @@
         
         // Google Sign-In
         async function signInWithGoogle() {
+            // Prevent Admin from using Google Sign-In
+            if (role === 'admin') {
+                showAlert('Admin login requires email/password.', 'warning');
+                return;
+            }
+
             try {
                 showLoading();
                 
@@ -765,6 +784,22 @@
                         await auth.signOut();
                         throw new Error('Your seller account is pending approval.');
                     }
+                    
+                    // If Seller logged in via Google but is missing business details, redirect to profile
+                    if (role === 'seller' && (!userData.businessName || !userData.address)) {
+                         // Proceed with local storage update, but set redirect URL
+                        localStorage.setItem('currentUser', JSON.stringify({
+                            uid: user.uid,
+                            email: user.email,
+                            ...userData
+                        }));
+                        showAlert('Login successful! Please complete your seller profile.', 'success');
+                        setTimeout(() => {
+                            window.location.href = 'seller.html#profile'; // Redirect to seller profile section
+                        }, 1500);
+                        return;
+                    }
+
                 } else {
                     // New user - create user document
                     const userData = {
@@ -775,13 +810,14 @@
                         role: role,
                         status: role === 'seller' ? 'pending' : 'active',
                         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                        newsletter: true
+                        newsletter: true,
+                        signInMethod: 'google', // Track sign-in method
                     };
                     
                     if (role === 'seller') {
-                        userData.businessName = '';
+                        userData.businessName = ''; // Must be completed later
                         userData.gstNumber = '';
-                        userData.address = '';
+                        userData.address = ''; // Must be completed later
                     }
                     
                     await db.collection('users').doc(user.uid).set(userData);
@@ -849,6 +885,9 @@
                 const user = JSON.parse(localStorage.getItem('currentUser'));
                 if (user.status === 'pending') {
                     window.location.href = 'seller-pending.html';
+                } else if (user.signInMethod === 'google' && (!user.businessName || !user.address)) {
+                    // Redirect to profile for profile completion if signed up via Google and missing required seller fields
+                    window.location.href = 'seller.html#profile'; 
                 } else {
                     window.location.href = 'seller.html';
                 }
