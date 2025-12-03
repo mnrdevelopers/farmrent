@@ -558,25 +558,11 @@ async function loadCheckoutPage() {
 
     displayCheckoutSummary(cart);
 
-    // Add event listener for pickup option toggle
-    document.getElementById('pickup-checkbox').addEventListener('change', toggleDeliveryAddress);
-    toggleDeliveryAddress(); // Initial check
+    // REMOVED: Listener for pickup-checkbox and toggleDeliveryAddress call
+    // The pickup checkbox is now checked and disabled in HTML.
 }
 
-// Toggle delivery address visibility based on pickup option
-function toggleDeliveryAddress() {
-    const isPickup = document.getElementById('pickup-checkbox').checked;
-    const addressGroup = document.getElementById('delivery-address-group');
-    const addressInput = document.getElementById('delivery-address');
-
-    if (isPickup) {
-        addressGroup.style.display = 'none';
-        addressInput.removeAttribute('required');
-    } else {
-        addressGroup.style.display = 'block';
-        addressInput.setAttribute('required', 'required');
-    }
-}
+// REMOVED: toggleDeliveryAddress function
 
 // Display items and calculate total on the checkout page
 function displayCheckoutSummary(cart) {
@@ -628,13 +614,11 @@ async function processPayment() {
         return;
     }
     
-    const isPickup = document.getElementById('pickup-checkbox').checked;
-    
-    if (!isPickup && !document.getElementById('delivery-address').value.trim()) {
-         window.firebaseHelpers.showAlert('Please provide a delivery address or select self-pickup.', 'warning');
-         return;
-    }
+    // ASSUMPTION: Delivery is always false, pickup is always true.
+    const isPickup = true; 
 
+    // REMOVED CHECK FOR DELIVERY ADDRESS since pickup is mandatory
+    
     const keyId = await window.firebaseHelpers.getRazorpayKeyId();
     if (!keyId) {
         window.firebaseHelpers.showAlert('Payment gateway key missing. Cannot proceed.', 'danger');
@@ -648,7 +632,7 @@ async function processPayment() {
         name: document.getElementById('customer-name').value,
         email: document.getElementById('customer-email').value,
         phone: document.getElementById('customer-phone').value,
-        address: isPickup ? 'Self-Pickup' : document.getElementById('delivery-address').value,
+        address: 'Self-Pickup Confirmed', // Hardcoded address for pickup only
         notes: document.getElementById('additional-notes').value,
         isPickup: isPickup, // Include pickup preference
     };
@@ -718,9 +702,9 @@ async function placeOrderInFirestore(orderId, customerData, paymentId, totalAmou
             customerName: customerData.name,
             customerEmail: customerData.email,
             customerPhone: customerData.phone,
-            deliveryAddress: customerData.address,
+            deliveryAddress: customerData.address, // Will be "Self-Pickup Confirmed"
             notes: customerData.notes,
-            isPickup: customerData.isPickup, // New field
+            isPickup: true, // Always true now
             
             // Added consolidated fields for easier querying/display
             equipmentNames: itemNames,
@@ -1087,7 +1071,7 @@ async function loadStats() {
     }
 }
 
-// Load how-it-works steps
+// Load how-it-works steps - UPDATED to reflect PICKUP only
 function loadHowItWorks() {
     const container = document.getElementById('how-it-works-container');
     if (!container) return; // Guard for pages without this container
@@ -1104,9 +1088,9 @@ function loadHowItWorks() {
             description: 'Select rental dates, add to cart, and confirm your booking with easy payment options.'
         },
         {
-            icon: 'fas fa-truck',
-            title: 'Deliver & Use',
-            description: 'We deliver equipment to your farm. Fully serviced and ready for your farming needs.'
+            icon: 'fas fa-hand-paper', // Changed icon from truck to hand-paper for pickup
+            title: 'Pickup & Use', // Changed title
+            description: 'Self-pickup the equipment from the seller\'s location. Fully serviced and ready for your farming needs.' // Changed description
         }
     ];
     
@@ -1121,6 +1105,16 @@ function loadHowItWorks() {
             </div>
         </div>
     `).join('');
+    
+    // Note: Re-initializing the how-it-works styles if they were based on nth-child or re-applying the third step's style
+    const processSteps = container.querySelectorAll('.process-step');
+    if (processSteps.length >= 3) {
+        const thirdStepIcon = processSteps[2].querySelector('.step-icon');
+        if (thirdStepIcon) {
+            // Apply the style that used to be for the delivery icon
+            thirdStepIcon.style.background = 'linear-gradient(135deg, #1e4a1e, var(--farm-green))';
+        }
+    }
 }
 
 // Load testimonials
@@ -1180,11 +1174,12 @@ function createTestimonialCard(testimonial) {
 
 // Get default testimonials
 function getDefaultTestimonials() {
+    // UPDATED default testimonial to reflect pickup model
     return `
         <div class="col-md-4">
             <div class="testimonial-card">
                 <div class="testimonial-text">
-                    "Rented a tractor and cultivator for my 10-acre farm. The equipment was in excellent condition and the service was prompt. Saved me from big investment!"
+                    "Rented a tractor and cultivator for my 10-acre farm. The equipment was in excellent condition and the seller's pickup location was convenient. Saved me from big investment!"
                 </div>
                 <div class="client-info">
                     <div class="client-avatar">SP</div>
@@ -1198,7 +1193,7 @@ function getDefaultTestimonials() {
         <div class="col-md-4">
             <div class="testimonial-card">
                 <div class="testimonial-text">
-                    "The agricultural drone service helped me monitor my crop health and spray pesticides efficiently. Modern technology at affordable rental rates!"
+                    "The agricultural drone service helped me monitor my crop health and spray pesticides efficiently. Easy pickup and modern technology at affordable rental rates!"
                 </div>
                 <div class="client-info">
                     <div class="client-avatar">RM</div>
@@ -1212,7 +1207,7 @@ function getDefaultTestimonials() {
         <div class="col-md-4">
             <div class="testimonial-card">
                 <div class="testimonial-text">
-                    "As a small farmer, I can't afford to buy a harvester. FarmRent made harvesting season stress-free with their reliable equipment rental service."
+                    "As a small farmer, I can't afford to buy a harvester. FarmRent made harvesting season stress-free with their reliable equipment rental and simple pickup process."
                 </div>
                 <div class="client-info">
                     <div class="client-avatar">PK</div>
@@ -1440,7 +1435,8 @@ function createOrderCard(order) {
     const statusClass = `order-status-${order.status || 'pending'}`;
     const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
     const date = window.firebaseHelpers.formatDate(order.createdAt);
-    const deliveryType = order.isPickup ? '<span class="badge bg-warning text-dark me-2"><i class="fas fa-hand-paper me-1"></i>Self-Pickup</span>' : '<span class="badge bg-success me-2"><i class="fas fa-truck me-1"></i>Delivery</span>';
+    // Updated to always reflect Pickup
+    const deliveryType = '<span class="badge bg-warning text-dark me-2"><i class="fas fa-hand-paper me-1"></i>Self-Pickup</span>';
     
     return `
         <div class="col-lg-12 mb-4">
@@ -1473,7 +1469,7 @@ function createOrderCard(order) {
                             <strong>Total Amount:</strong> <span class="text-primary">${window.firebaseHelpers.formatCurrency(order.totalAmount)}</span>
                         </div>
                         <div class="col-md-6 text-md-end">
-                            <strong>Location:</strong> ${order.isPickup ? order.sellerBusinessNames.split(',')[0] + ' (Pickup)' : order.deliveryAddress}
+                            <strong>Location:</strong> ${order.sellerBusinessNames.split(',')[0]} (Pickup)
                         </div>
                     </div>
                 </div>
