@@ -903,9 +903,9 @@
                         <h5 class="mb-3">Conversations</h5>
                         <div class="list-group" id="conversations-list">
                             <!-- Removed mock data and replaced with a loading state -->
-                            <div class="text-center py-3">
-                                <div class="spinner-border spinner-border-sm text-primary"></div>
-                                <p class="mt-2 mb-0">Loading conversations...</p>
+                            <div class="text-center py-5 text-muted">
+                                <i class="fas fa-comment-dots fa-3x mb-3"></i>
+                                <p>Chat feature coming soon.</p>
                             </div>
                         </div>
                     </div>
@@ -1108,7 +1108,7 @@
         </div>
     </div>
 
-    <!-- Equipment Details Modal -->
+    <!-- Equipment Details Modal (View Only) -->
     <div class="modal fade" id="equipmentModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -1121,11 +1121,101 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-primary" id="edit-equipment-btn">Edit</button>
+                    <!-- UPDATED: Replaced original Edit button with a dynamic one to call editEquipment -->
+                    <button type="button" class="btn btn-warning" id="view-edit-equipment-btn">Edit</button>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- NEW: Equipment Edit Modal -->
+    <div class="modal fade" id="equipmentEditModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Edit Equipment Listing</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="edit-equipment-form">
+                        <input type="hidden" id="edit-equipment-id">
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-equipment-name" class="form-label">Equipment Name *</label>
+                                <input type="text" class="form-control" id="edit-equipment-name" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-equipment-category" class="form-label">Category *</label>
+                                <select class="form-select" id="edit-equipment-category" required>
+                                    <option value="tractor">Tractor</option>
+                                    <option value="harvester">Harvester</option>
+                                    <option value="cultivator">Cultivator</option>
+                                    <option value="drone">Agricultural Drone</option>
+                                    <option value="spray">Spray Machine</option>
+                                    <option value="crane">Crane</option>
+                                    <option value="jcb">JCB</option>
+                                    <option value="grass-cutter">Grass Cutter</option>
+                                    <option value="trolley">Trolley</option>
+                                    <option value="water-tanker">Water Tanker</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <!-- UPDATED ID to edit-acre-price -->
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-acre-price" class="form-label">Per Acre Rental Price (₹) *</label>
+                                <input type="number" class="form-control" id="edit-acre-price" min="0" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-hourly-price" class="form-label">Hourly Rental Price (₹) *</label>
+                                <input type="number" class="form-control" id="edit-hourly-price" min="0" required>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="edit-equipment-description" class="form-label">Description *</label>
+                            <textarea class="form-control" id="edit-equipment-description" rows="3" required></textarea>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="edit-equipment-location" class="form-label">Location *</label>
+                                <input type="text" class="form-control" id="edit-equipment-location" required>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="edit-equipment-quantity" class="form-label">Quantity Available *</label>
+                                <input type="number" class="form-control" id="edit-equipment-quantity" min="1" required>
+                            </div>
+                             <div class="col-md-4 mb-3">
+                                <label for="edit-equipment-availability" class="form-label">Availability Status</label>
+                                <select class="form-select" id="edit-equipment-availability">
+                                    <option value="true">Available</option>
+                                    <option value="false">Rented</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <h6 class="mt-3 mb-2">Specifications (Key-Value Pairs)</h6>
+                        <div id="edit-specs-container">
+                            <!-- Specs populated dynamically by JS -->
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="addEditSpecField()">
+                            <i class="fas fa-plus me-1"></i>Add Specification
+                        </button>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning" id="save-equipment-btn" form="edit-equipment-form">
+                        <i class="fas fa-save me-2"></i>Save Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- END NEW: Equipment Edit Modal -->
 
     <!-- Order Details Modal -->
     <div class="modal fade" id="orderModal" tabindex="-1">
@@ -1336,18 +1426,22 @@
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
 
+            // NOTE: Firestore queries cannot efficiently search within arrays of objects (items) 
+            // without creating indexes or using denormalized fields. 
+            // Assuming simplified query structure here based on existing code/demo data.
             const ordersSnapshot = await ordersCollectionRef
-                .where('items', 'array-contains-any', [{ sellerId: currentUser.uid }]) // Simplified query for multi-item orders
-                .get();
-
+                .get(); // Fetch all and filter client-side for demo simplicity
             
-            const totalOrders = ordersSnapshot.size;
+            const totalOrders = ordersSnapshot.docs.filter(doc => {
+                 const order = doc.data();
+                 return order.sellerIds && order.sellerIds.includes(currentUser.uid);
+            }).length;
             
             // Calculate total earnings
             let totalEarnings = 0;
             ordersSnapshot.forEach(doc => {
                 const order = doc.data();
-                if (order.status === 'completed' || order.status === 'active') {
+                if ((order.status === 'completed' || order.status === 'active') && order.sellerIds && order.sellerIds.includes(currentUser.uid)) {
                     // Assuming totalAmount includes the seller's earnings share
                     totalEarnings += order.totalAmount || 0;
                 }
@@ -1395,12 +1489,6 @@
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
             
-            // Fetch recent orders where the seller is involved (limited query for recent orders)
-            // Note: For orders containing multiple items from different sellers, this simple query is insufficient. 
-            // A more complex query or denormalization would be needed in a real-world scenario.
-            // Temporarily fetching based on sellerId in items array, which may not be fully supported by Firestore simple queries.
-            // Using a broader query and filtering locally for simplicity in this demo environment.
-            
             const ordersSnapshot = await ordersCollectionRef
                 .orderBy('createdAt', 'desc')
                 .limit(10)
@@ -1415,7 +1503,7 @@
             ordersSnapshot.forEach(doc => {
                 const order = { id: doc.id, ...doc.data() };
                 
-                // Filter orders relevant to this seller (assuming complex order object structure)
+                // Filter orders relevant to this seller
                 if (order.sellerIds && order.sellerIds.includes(currentUser.uid)) {
                     ordersData.push(order);
                     recentOrders.push(order);
@@ -1601,6 +1689,7 @@
                             <button class="btn btn-sm btn-outline-primary flex-fill" onclick="viewEquipmentDetails('${equipment.id}')">
                                 <i class="fas fa-eye me-1"></i>View
                             </button>
+                            <!-- UPDATED: Call editEquipment directly -->
                             <button class="btn btn-sm btn-warning flex-fill" onclick="editEquipment('${equipment.id}')">
                                 <i class="fas fa-edit me-1"></i>Edit
                             </button>
@@ -1906,7 +1995,7 @@
         }
     });
 
-    // Add specification field
+    // Add specification field for Add Equipment form
     function addSpecField() {
         const specsContainer = document.getElementById('specs-container');
         const newRow = document.createElement('div');
@@ -1978,7 +2067,14 @@
                 `;
                 
                 document.getElementById('equipment-modal-body').innerHTML = modalBody;
-                document.getElementById('edit-equipment-btn').onclick = () => editEquipment(equipmentId);
+                // Set handler for the edit button within the view modal
+                document.getElementById('view-edit-equipment-btn').onclick = () => {
+                    // Hide view modal
+                    bootstrap.Modal.getInstance(document.getElementById('equipmentModal')).hide();
+                    // Open edit modal
+                    editEquipment(equipmentId);
+                };
+                
                 const modal = new bootstrap.Modal(document.getElementById('equipmentModal'));
                 modal.show();
             }
@@ -1987,11 +2083,131 @@
             window.firebaseHelpers.showAlert('Error loading equipment details', 'danger');
         }
     }
+    
+    // START NEW/UPDATED EDIT LOGIC
 
-    // Edit equipment
+    // Edit equipment - Loads data into the edit modal
     async function editEquipment(equipmentId) {
-        window.firebaseHelpers.showAlert('Edit feature coming soon!', 'info');
+        try {
+            const doc = await window.FirebaseDB.collection('equipment').doc(equipmentId).get();
+            if (!doc.exists) {
+                window.firebaseHelpers.showAlert('Equipment not found.', 'danger');
+                return;
+            }
+
+            const equipment = doc.data();
+
+            // Populate form fields
+            document.getElementById('edit-equipment-id').value = equipmentId;
+            document.getElementById('edit-equipment-name').value = equipment.name || '';
+            document.getElementById('edit-equipment-category').value = equipment.category || '';
+            document.getElementById('edit-acre-price').value = equipment.pricePerAcre || 0;
+            document.getElementById('edit-hourly-price').value = equipment.pricePerHour || 0;
+            document.getElementById('edit-equipment-description').value = equipment.description || '';
+            document.getElementById('edit-equipment-location').value = equipment.location || '';
+            document.getElementById('edit-equipment-quantity').value = equipment.quantity || 1;
+            document.getElementById('edit-equipment-availability').value = String(equipment.availability);
+
+            // Clear existing specs and populate
+            const specsContainer = document.getElementById('edit-specs-container');
+            specsContainer.innerHTML = '';
+            if (equipment.specifications && Object.keys(equipment.specifications).length > 0) {
+                Object.entries(equipment.specifications).forEach(([key, value]) => {
+                    addEditSpecField(key, value);
+                });
+            } else {
+                 addEditSpecField(); // Add one empty row if none exists
+            }
+
+            // Show the modal
+            const modal = new bootstrap.Modal(document.getElementById('equipmentEditModal'));
+            modal.show();
+
+        } catch (error) {
+            console.error('Error loading equipment for edit:', error);
+            window.firebaseHelpers.showAlert('Error loading equipment details for editing.', 'danger');
+        }
     }
+    
+    // Add specification field to Edit form
+    function addEditSpecField(key = '', value = '') {
+        const specsContainer = document.getElementById('edit-specs-container');
+        const newRow = document.createElement('div');
+        newRow.className = 'row g-2 align-items-center mb-2';
+        newRow.innerHTML = `
+            <div class="col-5">
+                <input type="text" class="form-control" placeholder="Specification name" value="${key}">
+            </div>
+            <div class="col-5">
+                <input type="text" class="form-control" placeholder="Specification value" value="${value}">
+            </div>
+            <div class="col-2">
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.row').remove()">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `;
+        specsContainer.appendChild(newRow);
+    }
+
+    // Handle form submission for editing equipment
+    document.getElementById('edit-equipment-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const equipmentId = document.getElementById('edit-equipment-id').value;
+        const submitBtn = document.getElementById('save-equipment-btn');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+        submitBtn.disabled = true;
+
+        try {
+            // Gather updated data
+            const updatedData = {
+                name: document.getElementById('edit-equipment-name').value,
+                category: document.getElementById('edit-equipment-category').value,
+                pricePerAcre: parseFloat(document.getElementById('edit-acre-price').value),
+                pricePerHour: parseFloat(document.getElementById('edit-hourly-price').value),
+                description: document.getElementById('edit-equipment-description').value,
+                location: document.getElementById('edit-equipment-location').value,
+                quantity: parseInt(document.getElementById('edit-equipment-quantity').value),
+                availability: document.getElementById('edit-equipment-availability').value === 'true',
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            // Gather specifications
+            const specs = {};
+            const specRows = document.querySelectorAll('#edit-specs-container .row');
+            specRows.forEach(row => {
+                const keyInput = row.querySelector('.col-5:nth-child(1) input');
+                const valueInput = row.querySelector('.col-5:nth-child(2) input');
+                if (keyInput && valueInput && keyInput.value.trim() && valueInput.value.trim()) {
+                    specs[keyInput.value.trim()] = valueInput.value.trim();
+                }
+            });
+            updatedData.specifications = specs;
+            
+            // NOTE: Changing images requires a separate file upload process which is not implemented in this quick edit form.
+            
+            // Update Firestore
+            await window.FirebaseDB.collection('equipment').doc(equipmentId).update(updatedData);
+
+            window.firebaseHelpers.showAlert('Equipment updated successfully!', 'success');
+            
+            // Hide modal and reload list
+            const modal = bootstrap.Modal.getInstance(document.getElementById('equipmentEditModal'));
+            modal.hide();
+            loadEquipmentList(); // Reload the equipment grid
+
+        } catch (error) {
+            console.error('Error saving equipment:', error);
+            window.firebaseHelpers.showAlert('Error saving equipment: ' + error.message, 'danger');
+        } finally {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    });
+
+    // END NEW/UPDATED EDIT LOGIC
 
     // Delete equipment
     async function deleteEquipment(equipmentId) {
@@ -2022,7 +2238,7 @@
                 // Format dates
                 const createdAt = window.firebaseHelpers.formatDateTime(order.createdAt);
                 
-                // Extract rental details from items (assuming first item for simplicity)
+                // Extract rental details from items (assuming first item for simplification)
                 const firstItem = order.items?.[0];
                 const rentalPeriod = firstItem ? `${firstItem.rentalValue} ${firstItem.rentalType === 'acre' ? 'Acres' : 'Hours'}` : 'N/A';
 
