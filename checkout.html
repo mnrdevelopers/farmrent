@@ -56,10 +56,10 @@
         <div class="container">
             <h1 class="section-title">Finalize Your Rental</h1>
             <div class="row">
-                <!-- Customer Details -->
+                <!-- Customer Details & Pickup Location -->
                 <div class="col-lg-7 mb-4">
                     <div class="card p-4 shadow-sm">
-                        <h4 class="mb-4 text-primary"><i class="fas fa-user-check me-2"></i>Customer Details & Logistics</h4>
+                        <h4 class="mb-4 text-primary"><i class="fas fa-user-check me-2"></i>Customer Details & Pickup</h4>
                         <form id="checkout-form">
                             <div class="row">
                                 <div class="col-md-6 mb-3">
@@ -78,28 +78,26 @@
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label for="rental-dates" class="form-label">Rental Duration *</label>
-                                    <input type="text" class="form-control" id="rental-dates" placeholder="e.g., 3 Days, 10 Hours" readonly required>
+                                    <input type="text" class="form-control" id="rental-dates" placeholder="e.g., 5 Acres, 10 Hours" readonly required>
                                 </div>
                             </div>
                             
-                            <!-- Pickup Option -->
-                            <div class="mb-3 form-check">
-                                <input class="form-check-input" type="checkbox" id="pickup-checkbox">
-                                <label class="form-check-label" for="pickup-checkbox">
-                                    <i class="fas fa-hand-paper me-1"></i> I will **Self-Pickup** the equipment from the seller's location. (No delivery required)
-                                </label>
+                            <!-- Pickup Confirmation (Now mandatory/default) -->
+                            <div class="alert alert-info">
+                                <i class="fas fa-warehouse me-1"></i> 
+                                This is a **Pickup Only** rental. You must pick up the equipment from the seller's location.
                             </div>
 
-                            <!-- Delivery Address -->
-                            <div class="mb-3" id="delivery-address-group">
-                                <label for="delivery-address" class="form-label">Delivery Address *</label>
-                                <textarea class="form-control" id="delivery-address" rows="3" placeholder="Full address for equipment delivery" required></textarea>
-                                <small class="text-muted">Required if Self-Pickup is not selected.</small>
+                            <!-- Display Seller Pickup Location (Placeholder) -->
+                            <div class="mb-3" id="pickup-address-group">
+                                <label for="pickup-address" class="form-label">Seller Pickup Location(s)</label>
+                                <textarea class="form-control" id="pickup-address" rows="3" readonly placeholder="Will be displayed based on cart items"></textarea>
+                                <small class="text-muted">You will receive the exact pickup address(es) upon order confirmation.</small>
                             </div>
                             
                             <div class="mb-3">
                                 <label for="additional-notes" class="form-label">Additional Notes (Optional)</label>
-                                <textarea class="form-control" id="additional-notes" rows="2" placeholder="e.g., specific delivery time, field conditions"></textarea>
+                                <textarea class="form-control" id="additional-notes" rows="2" placeholder="e.g., preferred pickup time"></textarea>
                             </div>
                         </form>
                     </div>
