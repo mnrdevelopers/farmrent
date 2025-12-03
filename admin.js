@@ -174,28 +174,38 @@ async function calculatePlatformStats() {
     try {
         // --- 1. User & Seller Counts ---
         const usersSnapshot = await window.FirebaseDB.collection('users').get();
-        const totalUsers = usersSnapshot.size;
+        // FIX: Ensure all local variables are declared with 'const'
+        const totalUsers = usersSnapshot.size; 
         
-        const pendingSellersSnapshot = await window.FirebaseDB.collection('users')
+        const sellersSnapshot = await window.FirebaseDB.collection('users')
             .where('role', '==', 'seller')
-            .where('status', '==', 'pending')
             .get();
-        const pendingSellers = pendingSellersSnapshot.size;
+        
+        const totalSellers = sellersSnapshot.size; // FIX: Declared locally
         
         const activeSellersSnapshot = await window.FirebaseDB.collection('users')
             .where('role', '==', 'seller')
             .where('status', '==', 'approved')
             .get();
-        const activeSellers = activeSellersSnapshot.size;
+        
+        const activeSellers = activeSellersSnapshot.size; // FIX: Declared locally
+        
+        const pendingSellersSnapshot = await window.FirebaseDB.collection('users')
+            .where('role', '==', 'seller')
+            .where('status', '==', 'pending')
+            .get();
+        
+        const pendingSellers = pendingSellersSnapshot.size; // FIX: Declared locally
         
         // --- 2. Equipment Counts ---
         const equipmentSnapshot = await window.FirebaseDB.collection('equipment').get();
-        const totalEquipment = equipmentSnapshot.size;
+        const totalEquipment = equipmentSnapshot.size; // FIX: Declared locally
         
         const pendingEquipmentSnapshot = await window.FirebaseDB.collection('equipment')
             .where('status', '==', 'pending')
             .get();
-        const pendingEquipment = pendingEquipmentSnapshot.size;
+        
+        const pendingEquipment = pendingEquipmentSnapshot.size; // FIX: Declared locally
         
         // --- 3. Revenue Data (Already fixed in last iteration) ---
         const today = new Date();
@@ -220,7 +230,6 @@ async function calculatePlatformStats() {
         });
 
         // --- 4. Notifications (NEW LOGIC) ---
-        // For simplicity, we define notifications as the combined list of pending sellers and pending equipment.
         let notifications = [];
 
         pendingSellersSnapshot.forEach(doc => {
@@ -265,12 +274,13 @@ async function calculatePlatformStats() {
             pendingEquipment,
             todayRevenue,
             revenueData,
-            unreadNotifications, // NEW
-            recentNotifications // NEW
+            unreadNotifications,
+            recentNotifications
         };
         
     } catch (error) {
         console.error('Error calculating stats:', error);
+        // Ensure failure returns initialized values for all expected fields
         return {
             totalUsers: 0,
             totalSellers: 0,
@@ -388,79 +398,6 @@ async function loadRecentActivity() {
         console.error('Error loading recent activity:', error);
     }
 }
-
-// ... (Rest of the file remains the same until loadNotifications)
-
-// NEW: Load Notifications Section
-async function loadNotifications() {
-    // Recalculate stats to ensure 'allNotifications' is up-to-date
-    const stats = await calculatePlatformStats();
-    const notifications = stats.recentNotifications; // Use all notifications found
-
-    const listContainer = document.getElementById('notifications-list');
-    const loading = document.getElementById('notifications-loading');
-    const countElement = document.getElementById('notifications-count');
-
-    loading.style.display = 'none';
-    listContainer.innerHTML = '';
-    
-    countElement.textContent = notifications.length;
-
-    if (notifications.length === 0) {
-        listContainer.innerHTML = `
-            <div class="text-center py-5">
-                <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
-                <h4>All clear!</h4>
-                <p class="text-muted">No pending system alerts or approval requests.</p>
-            </div>
-        `;
-        return;
-    }
-
-    notifications.forEach(notification => {
-        const timeAgo = notification.date ? window.firebaseHelpers.formatDateTime(notification.date) : 'N/A';
-        const typeIcon = notification.type.includes('seller') ? 'fas fa-store' : 'fas fa-tractor';
-        const badgeColor = notification.type.includes('seller') ? 'bg-warning' : 'bg-info';
-        const actionText = notification.type.includes('seller') ? 'Review Seller' : 'Review Equipment';
-
-        listContainer.innerHTML += `
-            <div class="list-group-item d-flex justify-content-between align-items-center p-3">
-                <div class="d-flex align-items-center">
-                    <i class="${typeIcon} fa-2x me-3 text-primary"></i>
-                    <div>
-                        <h6 class="mb-1">${notification.message}</h6>
-                        <small class="text-muted">Type: <span class="badge ${badgeColor}">${notification.type.replace('_', ' ')}</span> | Received: ${timeAgo}</small>
-                    </div>
-                </div>
-                <div>
-                    <button class="btn btn-sm btn-outline-primary" onclick="handleNotificationAction('${notification.relatedId}', '${notification.type}')">
-                        <i class="fas fa-arrow-right me-1"></i> ${actionText}
-                    </button>
-                </div>
-            </div>
-        `;
-    });
-}
-
-// NEW: Handle action button click in Notifications section
-function handleNotificationAction(relatedId, type) {
-    if (type === 'seller_approval') {
-        showSection('sellers');
-        // Optionally highlight the seller row (requires additional logic)
-    } else if (type === 'equipment_approval') {
-        showSection('equipment');
-        // Optionally highlight the equipment item (requires additional logic)
-    } else {
-        window.firebaseHelpers.showAlert('Unknown notification type.', 'warning');
-    }
-}
-
-// NEW: Mark all notifications as read (simulated/cleared upon action)
-function markAllNotificationsRead() {
-    window.firebaseHelpers.showAlert('All pending approvals must be actioned through their respective sections.', 'info');
-}
-
-// ... (The rest of the `admin.js` file content)
 
 // Create dashboard order row
 function createDashboardOrderRow(order, orderId) {
@@ -1196,7 +1133,6 @@ async function markEquipmentAsFeatured(equipmentId, isFeatured, closeAndReload =
 // Load orders
 async function loadOrders() {
     try {
-        // BUG FIX: Use scoped public collection for orders
         const ordersSnapshot = await getPublicCollectionRef('orders')
             .orderBy('createdAt', 'desc')
             .get();
@@ -1387,7 +1323,6 @@ async function calculateReportData(periodDays) {
         startDate.setDate(startDate.getDate() - periodDays);
         
         // Get orders in period
-        // BUG FIX: Use scoped public collection for orders
         const ordersSnapshot = await getPublicCollectionRef('orders').get();
         let totalOrders = 0;
         let totalRevenue = 0;
@@ -1686,8 +1621,6 @@ function initializeReportCharts(reportData) {
 // Load categories
 async function loadCategories() {
     try {
-        // In a real app, fetch from Firestore categories collection
-        // For now, extract from existing equipment
         const equipmentSnapshot = await window.FirebaseDB.collection('equipment').get();
         const categoryMap = {};
         
@@ -1847,6 +1780,75 @@ function deleteCategory(categoryId) {
     displayCategories(categoriesData);
     
     window.firebaseHelpers.showAlert('Category deleted', 'success');
+}
+
+// NEW: Load Notifications Section
+async function loadNotifications() {
+    // Recalculate stats to ensure 'allNotifications' is up-to-date
+    const stats = await calculatePlatformStats();
+    const notifications = stats.recentNotifications; // Use all notifications found
+
+    const listContainer = document.getElementById('notifications-list');
+    const loading = document.getElementById('notifications-loading');
+    const countElement = document.getElementById('notifications-count');
+
+    loading.style.display = 'none';
+    listContainer.innerHTML = '';
+    
+    countElement.textContent = notifications.length;
+
+    if (notifications.length === 0) {
+        listContainer.innerHTML = `
+            <div class="text-center py-5">
+                <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
+                <h4>All clear!</h4>
+                <p class="text-muted">No pending system alerts or approval requests.</p>
+            </div>
+        `;
+        return;
+    }
+
+    notifications.forEach(notification => {
+        const timeAgo = notification.date ? window.firebaseHelpers.formatDateTime(notification.date) : 'N/A';
+        const typeIcon = notification.type.includes('seller') ? 'fas fa-store' : 'fas fa-tractor';
+        const badgeColor = notification.type.includes('seller') ? 'bg-warning' : 'bg-info';
+        const actionText = notification.type.includes('seller') ? 'Review Seller' : 'Review Equipment';
+
+        listContainer.innerHTML += `
+            <div class="list-group-item d-flex justify-content-between align-items-center p-3">
+                <div class="d-flex align-items-center">
+                    <i class="${typeIcon} fa-2x me-3 text-primary"></i>
+                    <div>
+                        <h6 class="mb-1">${notification.message}</h6>
+                        <small class="text-muted">Type: <span class="badge ${badgeColor}">${notification.type.replace('_', ' ')}</span> | Received: ${timeAgo}</small>
+                    </div>
+                </div>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary" onclick="handleNotificationAction('${notification.relatedId}', '${notification.type}')">
+                        <i class="fas fa-arrow-right me-1"></i> ${actionText}
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+}
+
+// NEW: Handle action button click in Notifications section
+function handleNotificationAction(relatedId, type) {
+    if (type === 'seller_approval') {
+        showSection('sellers');
+        // Optionally highlight the seller row (requires additional logic)
+    } else if (type === 'equipment_approval') {
+        showSection('equipment');
+        // Optionally highlight the equipment item (requires additional logic)
+    } else {
+        window.firebaseHelpers.showAlert('Unknown notification type.', 'warning');
+    }
+}
+
+// NEW: Mark all notifications as read (simulated/cleared upon action)
+function markAllNotificationsRead() {
+    window.firebaseHelpers.showAlert('All pending approvals must be actioned through their respective sections.', 'info');
 }
 
 // Load settings data
