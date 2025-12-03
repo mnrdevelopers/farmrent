@@ -175,10 +175,12 @@ function filterEquipment() {
     // Sort logic
     switch (sortBy) {
         case 'price_asc':
-            filteredList.sort((a, b) => (a.pricePerDay || 0) - (b.pricePerDay || 0));
+            // Use pricePerAcre instead of pricePerDay
+            filteredList.sort((a, b) => (a.pricePerAcre || 0) - (b.pricePerAcre || 0));
             break;
         case 'price_desc':
-            filteredList.sort((a, b) => (b.pricePerDay || 0) - (a.pricePerDay || 0));
+            // Use pricePerAcre instead of pricePerDay
+            filteredList.sort((a, b) => (b.pricePerAcre || 0) - (a.pricePerAcre || 0));
             break;
         case 'latest':
         default:
@@ -244,11 +246,16 @@ async function showEquipmentDetailsModal(id) {
         const durationType = document.getElementById('rental-duration-type');
         const durationValue = document.getElementById('rental-duration-value');
         
+        // Update label when type changes
+        durationType.onchange = () => {
+            document.getElementById('duration-value-label').textContent = durationType.value === 'acre' ? 'Number of Acres' : 'Number of Hours';
+            updateModalPrice(durationType.value, durationValue.value);
+        };
+        
         // Initial price calculation
         updateModalPrice(durationType.value, durationValue.value);
 
         // Add event listeners for price recalculation
-        durationType.onchange = () => updateModalPrice(durationType.value, durationValue.value);
         durationValue.oninput = () => updateModalPrice(durationType.value, durationValue.value);
 
         const modal = new bootstrap.Modal(document.getElementById('equipmentDetailsModal'));
@@ -284,12 +291,12 @@ function buildModalContent(equipment) {
                     <span class="text-muted small">Listed by: <strong>${equipment.businessName || 'Seller'}</strong></span>
                 </div>
                 
-                <h3 class="text-primary mb-3">${window.firebaseHelpers.formatCurrency(equipment.pricePerDay)}/Day | ${window.firebaseHelpers.formatCurrency(equipment.pricePerHour)}/Hour</h3>
+                <h3 class="text-primary mb-3">${window.firebaseHelpers.formatCurrency(equipment.pricePerAcre)}/Acre | ${window.firebaseHelpers.formatCurrency(equipment.pricePerHour)}/Hour</h3>
                 
                 <p>${equipment.description}</p>
                 
                 <ul class="list-unstyled">
-                    <li><i class="fas fa-map-marker-alt me-2 text-warning"></i> <strong>Location:</strong> ${equipment.location}</li>
+                    <li><i class="fas fa-map-marker-alt me-2 text-warning"></i> <strong>Pickup Location:</strong> ${equipment.location}</li>
                     <li><i class="fas fa-tags me-2 text-warning"></i> <strong>Category:</strong> ${equipment.category}</li>
                     <li><i class="fas fa-list-ol me-2 text-warning"></i> <strong>Quantity:</strong> ${equipment.quantity}</li>
                 </ul>
@@ -318,9 +325,9 @@ function updateModalPrice(type, value) {
     }
 
     let price = 0;
-    if (type === 'day') {
-        price = (selectedEquipment.pricePerDay || 0) * duration;
-    } else {
+    if (type === 'acre') {
+        price = (selectedEquipment.pricePerAcre || 0) * duration;
+    } else { // 'hour'
         price = (selectedEquipment.pricePerHour || 0) * duration;
     }
 
@@ -352,9 +359,9 @@ async function addToCartModal() {
         sellerId: item.sellerId,
         businessName: item.businessName,
         price: calculatedPrice,
-        pricePerDay: item.pricePerDay,
+        pricePerAcre: item.pricePerAcre, // Updated field name
         pricePerHour: item.pricePerHour,
-        rentalType: durationType,
+        rentalType: durationType, // 'acre' or 'hour'
         rentalValue: durationValue,
         imageUrl: item.images && item.images[0]
     };
@@ -392,7 +399,7 @@ async function rentNowModal() {
             sellerId: item.sellerId,
             businessName: item.businessName,
             price: calculatedPrice,
-            pricePerDay: item.pricePerDay,
+            pricePerAcre: item.pricePerAcre, // Updated field name
             pricePerHour: item.pricePerHour,
             rentalType: item.rentalDetails.durationType,
             rentalValue: item.rentalDetails.durationValue,
@@ -460,6 +467,9 @@ async function displayCartItems(cart) { // <<< MODIFIED: Accepts cart array
     
     cart.forEach((item, index) => {
         subtotal += item.price;
+        const durationUnit = item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)';
+        const priceUnit = item.rentalType === 'acre' ? item.pricePerAcre : item.pricePerHour;
+        
         container.innerHTML += `
             <div class="d-flex align-items-center py-3 border-bottom">
                 <img src="${item.imageUrl || 'https://placehold.co/80x80'}" class="rounded me-3" style="width: 80px; height: 80px; object-fit: cover;">
@@ -467,8 +477,8 @@ async function displayCartItems(cart) { // <<< MODIFIED: Accepts cart array
                     <h5 class="mb-0">${item.name}</h5>
                     <p class="mb-0 small text-muted">Seller: ${item.businessName}</p>
                     <p class="mb-0 small text-primary">
-                        ${item.rentalValue} ${item.rentalType === 'day' ? 'Day(s)' : 'Hour(s)'}
-                        (@ ${window.firebaseHelpers.formatCurrency(item.rentalType === 'day' ? item.pricePerDay : item.pricePerHour)}/${item.rentalType})
+                        ${item.rentalValue} ${durationUnit}
+                        (@ ${window.firebaseHelpers.formatCurrency(priceUnit)}/${item.rentalType})
                     </p>
                 </div>
                 <div class="text-end">
@@ -556,27 +566,33 @@ async function loadCheckoutPage() {
     document.getElementById('customer-email').value = user.email || '';
     document.getElementById('customer-phone').value = user.mobile || '';
 
+    // Since it's pickup only, we populate the pickup address field based on seller details in the cart
+    const businessNames = [...new Set(cart.map(item => item.businessName))];
+    const sellerIds = [...new Set(cart.map(item => item.sellerId))];
+    
+    let pickupText = '';
+    // Fetch unique seller addresses/locations for display
+    try {
+        const usersSnapshot = await window.FirebaseDB.collection('users').where(firebase.firestore.FieldPath.documentId(), 'in', sellerIds).get();
+        const sellerAddresses = usersSnapshot.docs.map(doc => `${doc.data().businessName || 'Seller'} at ${doc.data().address || doc.data().city || 'Unknown Location'}`);
+        pickupText = sellerAddresses.join('\n');
+    } catch (e) {
+        console.error("Failed to fetch seller addresses:", e);
+        pickupText = 'Multiple Sellers. Addresses available on order confirmation.';
+    }
+    document.getElementById('pickup-address').value = pickupText;
+    
+    // Ensure isPickup is always true in customerData sent to processPayment
+    window.checkoutContext = { isPickup: true };
+
+
     displayCheckoutSummary(cart);
 
-    // Add event listener for pickup option toggle
-    document.getElementById('pickup-checkbox').addEventListener('change', toggleDeliveryAddress);
-    toggleDeliveryAddress(); // Initial check
+    // Delivery/Pickup fields are removed in HTML, removing redundant toggle function calls.
 }
 
 // Toggle delivery address visibility based on pickup option
-function toggleDeliveryAddress() {
-    const isPickup = document.getElementById('pickup-checkbox').checked;
-    const addressGroup = document.getElementById('delivery-address-group');
-    const addressInput = document.getElementById('delivery-address');
-
-    if (isPickup) {
-        addressGroup.style.display = 'none';
-        addressInput.removeAttribute('required');
-    } else {
-        addressGroup.style.display = 'block';
-        addressInput.setAttribute('required', 'required');
-    }
-}
+// function toggleDeliveryAddress() { /* Function removed as delivery is disabled */ } 
 
 // Display items and calculate total on the checkout page
 function displayCheckoutSummary(cart) {
@@ -588,19 +604,20 @@ function displayCheckoutSummary(cart) {
 
     cart.forEach(item => {
         subtotal += item.price;
+        const durationUnit = item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)';
         listContainer.innerHTML += `
             <div class="order-item-card d-flex justify-content-between align-items-center">
                 <div>
                     <strong>${item.name}</strong>
                     <div class="small text-muted">
-                        ${item.rentalValue} ${item.rentalType === 'day' ? 'Day(s)' : 'Hour(s)'} | By: ${item.businessName}
+                        ${item.rentalValue} ${durationUnit} | By: ${item.businessName}
                     </div>
                 </div>
                 <strong class="text-success">${window.firebaseHelpers.formatCurrency(item.price)}</strong>
             </div>
         `;
         
-        totalRentalDetails.push(`${item.rentalValue} ${item.rentalType === 'day' ? 'Day(s)' : 'Hour(s)'}`);
+        totalRentalDetails.push(`${item.rentalValue} ${durationUnit}`);
     });
     
     // Display total duration
@@ -628,13 +645,9 @@ async function processPayment() {
         return;
     }
     
-    const isPickup = document.getElementById('pickup-checkbox').checked;
+    // Since delivery is removed, isPickup is always true
+    const isPickup = true; 
     
-    if (!isPickup && !document.getElementById('delivery-address').value.trim()) {
-         window.firebaseHelpers.showAlert('Please provide a delivery address or select self-pickup.', 'warning');
-         return;
-    }
-
     const keyId = await window.firebaseHelpers.getRazorpayKeyId();
     if (!keyId) {
         window.firebaseHelpers.showAlert('Payment gateway key missing. Cannot proceed.', 'danger');
@@ -648,9 +661,9 @@ async function processPayment() {
         name: document.getElementById('customer-name').value,
         email: document.getElementById('customer-email').value,
         phone: document.getElementById('customer-phone').value,
-        address: isPickup ? 'Self-Pickup' : document.getElementById('delivery-address').value,
+        address: 'Customer Address (Not used for Pickup)',
         notes: document.getElementById('additional-notes').value,
-        isPickup: isPickup, // Include pickup preference
+        isPickup: isPickup, // Always true
     };
     
     // Simulate Order Creation (In a real app, this MUST be a secure server-side call)
@@ -669,10 +682,6 @@ async function processPayment() {
         handler: async function (response) {
             // This handler is called on successful payment
             
-            // In a multi-vendor/escrow setup:
-            // 1. The server would receive the webhook from Razorpay confirming success.
-            // 2. The server would then process the Route/Escrow settlement.
-            
             // SIMULATING SUCCESSFUL PAYMENT & SETTLEMENT
             await placeOrderInFirestore(orderId, customerData, response.razorpay_payment_id, total);
             
@@ -685,7 +694,6 @@ async function processPayment() {
         theme: {
             color: "#2B5C2B" // Farm Green
         }
-        // In a real app, we would add "route" options for multi-vendor split here
     };
 
     const rzp = new window.Razorpay(options);
@@ -706,7 +714,7 @@ async function placeOrderInFirestore(orderId, customerData, paymentId, totalAmou
         return;
     }
     
-    // Extract a representative item name and seller details from the cart
+    // Extract data
     const itemNames = cart.map(item => item.name).join(', ');
     const sellerIds = [...new Set(cart.map(item => item.sellerId))].join(', ');
     const businessNames = [...new Set(cart.map(item => item.businessName))].join(', ');
@@ -718,20 +726,29 @@ async function placeOrderInFirestore(orderId, customerData, paymentId, totalAmou
             customerName: customerData.name,
             customerEmail: customerData.email,
             customerPhone: customerData.phone,
-            deliveryAddress: customerData.address,
+            // Delivery is replaced by Pickup location on the Seller side
+            deliveryAddress: 'Self-Pickup (Customer to collect)', 
             notes: customerData.notes,
-            isPickup: customerData.isPickup, // New field
+            isPickup: true, // Always true
             
-            // Added consolidated fields for easier querying/display
             equipmentNames: itemNames,
             sellerIds: sellerIds,
             sellerBusinessNames: businessNames,
 
-            items: cart, // Detailed breakdown of items
-
+            items: cart, 
             totalAmount: totalAmount,
             platformFee: window.razorpayContext.fees,
+            
+            // New fields for tracking hourly usage and pickup status
             status: 'pending', // Pending seller approval
+            rentalStatus: 'pending_pickup', // New field: pending_pickup, picked_up, returned
+            hourlyTracking: cart.some(item => item.rentalType === 'hour') ? { 
+                startTime: null,
+                stopTime: null,
+                totalTrackedHours: 0,
+                finalAmount: totalAmount // Final amount remains the paid amount until reassessed on return
+            } : null,
+
             paymentStatus: 'paid',
             paymentMethod: 'Razorpay',
             transactionId: paymentId,
@@ -740,7 +757,6 @@ async function placeOrderInFirestore(orderId, customerData, paymentId, totalAmou
 
         // Orders are placed as separate documents for each seller in a real escrow setup, 
         // but here we simplify to one main order document.
-        // We use the full path to ensure it goes into the app's artifact collection.
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
 
@@ -1030,7 +1046,7 @@ function createEquipmentCard(equipment, id, isBrowsePage = false) {
                 <h5 class="card-title">${equipment.name}</h5>
                 <div class="mt-auto">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <div class="price-tag">₹${equipment.pricePerDay || 0}/day</div>
+                        <div class="price-tag">₹${equipment.pricePerAcre || 0}/Acre</div>
                         <small class="text-muted">or ₹${equipment.pricePerHour || 0}/hour</small>
                     </div>
                     ${actionButtonHtml}
@@ -1101,12 +1117,12 @@ function loadHowItWorks() {
         {
             icon: 'fas fa-calendar-check',
             title: 'Book & Confirm',
-            description: 'Select rental dates, add to cart, and confirm your booking with easy payment options.'
+            description: 'Select rental dates/acres, add to cart, and confirm your booking with easy payment options.'
         },
         {
-            icon: 'fas fa-truck',
-            title: 'Deliver & Use',
-            description: 'We deliver equipment to your farm. Fully serviced and ready for your farming needs.'
+            icon: 'fas fa-warehouse', // Changed to warehouse/pickup icon
+            title: 'Pickup & Use',
+            description: 'Pick up equipment from the seller. Start your rental timer for hourly tasks.'
         }
     ];
     
@@ -1440,8 +1456,11 @@ function createOrderCard(order) {
     const statusClass = `order-status-${order.status || 'pending'}`;
     const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
     const date = window.firebaseHelpers.formatDate(order.createdAt);
-    const deliveryType = order.isPickup ? '<span class="badge bg-warning text-dark me-2"><i class="fas fa-hand-paper me-1"></i>Self-Pickup</span>' : '<span class="badge bg-success me-2"><i class="fas fa-truck me-1"></i>Delivery</span>';
     
+    // Delivery is removed, only Pickup exists
+    const pickupStatus = order.rentalStatus === 'picked_up' ? 'Picked Up' : (order.rentalStatus === 'returned' ? 'Returned' : 'Awaiting Pickup');
+    const pickupStatusClass = `badge bg-${order.rentalStatus === 'picked_up' ? 'success' : (order.rentalStatus === 'returned' ? 'primary' : 'warning text-dark')}`;
+
     return `
         <div class="col-lg-12 mb-4">
             <div class="card order-card shadow-sm">
@@ -1451,7 +1470,7 @@ function createOrderCard(order) {
                         <small class="text-muted">Placed on: ${date}</small>
                     </div>
                     <div>
-                        ${deliveryType}
+                        <span class="${pickupStatusClass} me-2"><i class="fas fa-warehouse me-1"></i>${pickupStatus}</span>
                         <span class="status-badge ${statusClass}">${statusText}</span>
                     </div>
                 </div>
@@ -1462,7 +1481,7 @@ function createOrderCard(order) {
                             <li class="d-flex align-items-center mb-1">
                                 <img src="${item.imageUrl || 'https://placehold.co/40x40'}" class="rounded me-2" style="width: 40px; height: 40px; object-fit: cover;">
                                 <div>
-                                    <strong>${item.name}</strong> - ${item.rentalValue} ${item.rentalType === 'day' ? 'Day(s)' : 'Hour(s)'}
+                                    <strong>${item.name}</strong> - ${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'}
                                     <small class="text-muted d-block">Seller: ${item.businessName}</small>
                                 </div>
                             </li>
@@ -1470,10 +1489,13 @@ function createOrderCard(order) {
                     </ul>
                     <div class="row">
                         <div class="col-md-6">
-                            <strong>Total Amount:</strong> <span class="text-primary">${window.firebaseHelpers.formatCurrency(order.totalAmount)}</span>
+                            <strong>Total Paid:</strong> <span class="text-primary">${window.firebaseHelpers.formatCurrency(order.totalAmount)}</span>
+                            ${order.hourlyTracking ? `
+                                <br><small class="text-muted">Final Amount: ${window.firebaseHelpers.formatCurrency(order.hourlyTracking.finalAmount)} (TBD)</small>
+                            ` : ''}
                         </div>
                         <div class="col-md-6 text-md-end">
-                            <strong>Location:</strong> ${order.isPickup ? order.sellerBusinessNames.split(',')[0] + ' (Pickup)' : order.deliveryAddress}
+                            <strong>Status:</strong> ${order.rentalStatus === 'picked_up' && order.hourlyTracking ? `In Use (${order.hourlyTracking.totalTrackedHours} hrs tracked)` : pickupStatus}
                         </div>
                     </div>
                 </div>
