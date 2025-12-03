@@ -31,10 +31,11 @@ try {
         // IMPORTANT: These keys must be configured in the Firebase Console
         remoteConfig.defaultConfig = {
             "imgbb_api_key": "", // Placeholder for the ImgBB key
-            "razorpay_key_id": "" // Placeholder for Razorpay test key
+            "razorpay_key_id": "rzp_test_XXXXXXXXXXXXXXXX" // Placeholder for Razorpay test key
         };
         
         // Fetch and activate the configuration values
+        // We ensure this runs immediately to fetch keys
         remoteConfig.fetchAndActivate()
             .then(activated => {
                 if (activated) {
@@ -45,6 +46,7 @@ try {
             })
             .catch(error => {
                 console.error("Error fetching or activating remote config. Using default values:", error);
+                // Important: If fetch/activate fails, we must rely on defaultConfig values.
             });
     } else {
         console.warn('Firebase Remote Config SDK not detected. API key fetching may fail.');
@@ -136,8 +138,9 @@ window.firebaseHelpers = {
         try {
             // Get the value set in the Firebase console for 'razorpay_key_id'
             const keyId = remoteConfig.getString('razorpay_key_id');
+            // Check if key is empty or still the placeholder value set in defaultConfig
             if (!keyId || keyId === "rzp_test_XXXXXXXXXXXXXXXX") {
-                 window.firebaseHelpers.showAlert('Razorpay Key ID is missing or using placeholder in Remote Config.', 'warning');
+                 window.firebaseHelpers.showAlert('Razorpay Key ID is missing or using placeholder in Remote Config. Check Firebase Console configuration.', 'danger');
             }
             return keyId;
         } catch (error) {
