@@ -31,7 +31,7 @@ try {
         // IMPORTANT: These keys must be configured in the Firebase Console
         remoteConfig.defaultConfig = {
             "imgbb_api_key": "", // Placeholder for the ImgBB key
-            "razorpay_key_id": "rzp_test_XXXXXXXXXXXXXXXX" // Placeholder for Razorpay test key
+            "razorpay_key_id": "" // Placeholder for Razorpay test key
         };
         
         // Fetch and activate the configuration values
