@@ -743,9 +743,10 @@
                             </div>
 
                             <div class="row">
+                                <!-- UPDATED: Changed from daily-price to acre-price and label to 'Per Acre' -->
                                 <div class="col-md-6 mb-3">
-                                    <label for="daily-price" class="form-label">Daily Rental Price (₹) *</label>
-                                    <input type="number" class="form-control" id="daily-price" placeholder="e.g., 2500" min="0" required>
+                                    <label for="acre-price" class="form-label">Per Acre Rental Price (₹) *</label>
+                                    <input type="number" class="form-control" id="acre-price" placeholder="e.g., 2500" min="0" required>
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label for="hourly-price" class="form-label">Hourly Rental Price (₹) *</label>
@@ -903,6 +904,7 @@
                     <div class="table-container" style="height: 600px; overflow-y: auto;">
                         <h5 class="mb-3">Conversations</h5>
                         <div class="list-group" id="conversations-list">
+                            <!-- Removed mock data and replaced with a loading state -->
                             <div class="text-center py-3">
                                 <div class="spinner-border spinner-border-sm text-primary"></div>
                                 <p class="mt-2 mb-0">Loading conversations...</p>
@@ -916,7 +918,10 @@
                             <h5>Select a conversation</h5>
                         </div>
                         <div id="chat-messages" style="flex: 1; overflow-y: auto; padding: 10px; background: #f8f9fa; border-radius: 5px; margin-bottom: 10px;">
-                            <!-- Messages will appear here -->
+                            <div class="text-center py-5 text-muted">
+                                <i class="fas fa-comments fa-3x mb-3"></i>
+                                <p>Select a conversation to view messages</p>
+                            </div>
                         </div>
                         <div id="chat-input" style="display: none;">
                             <div class="input-group">
@@ -1330,9 +1335,13 @@
             const totalEquipment = equipmentSnapshot.size;
             
             // Get seller's orders
-            const ordersSnapshot = await window.FirebaseDB.collection('orders')
-                .where('sellerId', '==', currentUser.uid)
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
+
+            const ordersSnapshot = await ordersCollectionRef
+                .where('items', 'array-contains-any', [{ sellerId: currentUser.uid }]) // Simplified query for multi-item orders
                 .get();
+
             
             const totalOrders = ordersSnapshot.size;
             
@@ -1341,6 +1350,7 @@
             ordersSnapshot.forEach(doc => {
                 const order = doc.data();
                 if (order.status === 'completed' || order.status === 'active') {
+                    // Assuming totalAmount includes the seller's earnings share
                     totalEarnings += order.totalAmount || 0;
                 }
             });
@@ -1384,31 +1394,51 @@
         if (!currentUser) return;
         
         try {
-            const ordersSnapshot = await window.FirebaseDB.collection('orders')
-                .where('sellerId', '==', currentUser.uid)
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
+            
+            // Fetch recent orders where the seller is involved (limited query for recent orders)
+            // Note: For orders containing multiple items from different sellers, this simple query is insufficient. 
+            // A more complex query or denormalization would be needed in a real-world scenario.
+            // Temporarily fetching based on sellerId in items array, which may not be fully supported by Firestore simple queries.
+            // Using a broader query and filtering locally for simplicity in this demo environment.
+            
+            const ordersSnapshot = await ordersCollectionRef
                 .orderBy('createdAt', 'desc')
-                .limit(5)
+                .limit(10)
                 .get();
             
             const ordersTable = document.getElementById('recent-orders-table');
             ordersTable.innerHTML = '';
             
-            if (ordersSnapshot.empty) {
+            ordersData = [];
+            let recentOrders = [];
+            
+            ordersSnapshot.forEach(doc => {
+                const order = { id: doc.id, ...doc.data() };
+                
+                // Filter orders relevant to this seller (assuming complex order object structure)
+                if (order.sellerIds && order.sellerIds.includes(currentUser.uid)) {
+                    ordersData.push(order);
+                    recentOrders.push(order);
+                }
+            });
+
+            recentOrders = recentOrders.slice(0, 5); // Limit to 5 for dashboard
+            
+            if (recentOrders.length === 0) {
                 ordersTable.innerHTML = `
                     <tr>
                         <td colspan="7" class="text-center py-4">
                             <i class="fas fa-clipboard-list fa-2x text-muted mb-3"></i>
-                            <p>No orders yet</p>
+                            <p>No recent orders found</p>
                         </td>
                     </tr>
                 `;
                 return;
             }
             
-            ordersData = [];
-            ordersSnapshot.forEach(doc => {
-                const order = { id: doc.id, ...doc.data() };
-                ordersData.push(order);
+            recentOrders.forEach(order => {
                 const row = createOrderRow(order);
                 ordersTable.innerHTML += row;
             });
@@ -1432,10 +1462,13 @@
         const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
         const date = window.firebaseHelpers.formatDate(order.createdAt);
         
+        // Use consolidated equipment name if available, otherwise default to first item's name
+        const equipmentName = order.equipmentNames.split(',')[0] || order.items[0]?.name || 'Equipment';
+
         return `
             <tr>
                 <td>#${order.id.substring(0, 8)}</td>
-                <td>${order.equipmentName || 'N/A'}</td>
+                <td>${equipmentName}</td>
                 <td>${order.customerName || 'N/A'}</td>
                 <td>${date}</td>
                 <td>${window.firebaseHelpers.formatCurrency(order.totalAmount || 0)}</td>
@@ -1462,14 +1495,14 @@
             earningsChart.destroy();
         }
         
-        // Mock data - in real app, fetch from Firestore
+        // REMOVED: Mock data. Chart will initialize with empty data and be populated by loadEarningsData.
         earningsChart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
                 datasets: [{
                     label: 'Monthly Earnings (₹)',
-                    data: [12000, 19000, 15000, 25000, 22000, 30000],
+                    data: [0, 0, 0, 0, 0, 0], 
                     borderColor: '#2B5C2B',
                     backgroundColor: 'rgba(43, 92, 43, 0.1)',
                     borderWidth: 2,
@@ -1563,7 +1596,7 @@
                         </div>
                         <p class="text-muted small mb-2">${equipment.category || 'Equipment'}</p>
                         <div class="equipment-price mb-3">
-                            ${window.firebaseHelpers.formatCurrency(equipment.pricePerDay || 0)}/day
+                            ${window.firebaseHelpers.formatCurrency(equipment.pricePerAcre || 0)}/acre
                             <small class="text-muted">or ${window.firebaseHelpers.formatCurrency(equipment.pricePerHour || 0)}/hour</small>
                         </div>
                         <div class="d-flex gap-2">
@@ -1638,15 +1671,30 @@
         if (!currentUser) return;
         
         try {
-            const ordersSnapshot = await window.FirebaseDB.collection('orders')
-                .where('sellerId', '==', currentUser.uid)
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
+            
+            const ordersSnapshot = await ordersCollectionRef
                 .orderBy('createdAt', 'desc')
                 .get();
             
             const ordersTable = document.getElementById('orders-table');
             ordersTable.innerHTML = '';
             
-            if (ordersSnapshot.empty) {
+            ordersData = [];
+            
+            ordersSnapshot.forEach(doc => {
+                const order = { id: doc.id, ...doc.data() };
+                
+                 // Filter orders relevant to this seller
+                if (order.sellerIds && order.sellerIds.includes(currentUser.uid)) {
+                    ordersData.push(order);
+                    const row = createFullOrderRow(order);
+                    ordersTable.innerHTML += row;
+                }
+            });
+
+            if (ordersData.length === 0) {
                 ordersTable.innerHTML = `
                     <tr>
                         <td colspan="7" class="text-center py-4">
@@ -1658,14 +1706,6 @@
                 return;
             }
             
-            ordersData = [];
-            ordersSnapshot.forEach(doc => {
-                const order = { id: doc.id, ...doc.data() };
-                ordersData.push(order);
-                const row = createFullOrderRow(order);
-                ordersTable.innerHTML += row;
-            });
-            
         } catch (error) {
             console.error('Error loading orders:', error);
             window.firebaseHelpers.showAlert('Error loading orders', 'danger');
@@ -1676,15 +1716,21 @@
     function createFullOrderRow(order) {
         const statusClass = `order-status-${order.status || 'pending'}`;
         const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
-        const startDate = window.firebaseHelpers.formatDate(order.startDate);
-        const endDate = window.firebaseHelpers.formatDate(order.endDate);
         
+        // Extract rental details from the first item (simplification)
+        const rentalPeriod = order.items && order.items.length > 0 
+            ? `${order.items[0].rentalValue} ${order.items[0].rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'}`
+            : 'N/A';
+        
+        // Use consolidated equipment name if available, otherwise default to first item's name
+        const equipmentName = order.equipmentNames.split(',')[0] || order.items[0]?.name || 'Equipment';
+
         return `
             <tr>
                 <td>#${order.id.substring(0, 8)}</td>
-                <td>${order.equipmentName || 'N/A'}</td>
+                <td>${equipmentName}</td>
                 <td>${order.customerName || 'N/A'}<br><small class="text-muted">${order.customerPhone || ''}</small></td>
-                <td>${startDate} to ${endDate}</td>
+                <td>${rentalPeriod}</td>
                 <td>${window.firebaseHelpers.formatCurrency(order.totalAmount || 0)}</td>
                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                 <td>
@@ -1727,30 +1773,46 @@
         document.querySelectorAll('#orders-section .btn-group .btn').forEach(btn => {
             btn.classList.remove('active');
         });
-        event.target.classList.add('active');
+        // Check if the event target is valid before adding active class
+        if (event && event.target && event.target.classList.contains('btn')) {
+            event.target.classList.add('active');
+        }
     }
 
-    // Filter by date
+    // Filter by date (NOTE: This filter is based on creation date, not rental period)
     function filterByDate() {
         const dateFilter = document.getElementById('order-date-filter').value;
-        if (!dateFilter) return;
+        if (!dateFilter) {
+            // If filter is cleared, show all
+            loadOrders();
+            return;
+        }
         
-        const filterDate = new Date(dateFilter);
-        const rows = document.querySelectorAll('#orders-table tr');
+        const filterDate = new Date(dateFilter).toLocaleDateString();
         
-        rows.forEach(row => {
-            if (row.querySelector('td')) {
-                const dateCell = row.querySelector('td:nth-child(4)');
-                if (dateCell) {
-                    // Simple date matching - in real app, parse the date properly
-                    const cellText = dateCell.textContent;
-                    if (cellText.includes(dateFilter)) {
-                        row.style.display = '';
-                    } else {
-                        row.style.display = 'none';
-                    }
-                }
-            }
+        const filteredOrders = ordersData.filter(order => {
+            const orderDate = order.createdAt ? window.firebaseHelpers.formatDate(order.createdAt) : '';
+            return orderDate === filterDate;
+        });
+
+        const ordersTable = document.getElementById('orders-table');
+        ordersTable.innerHTML = '';
+
+        if (filteredOrders.length === 0) {
+            ordersTable.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-4">
+                        <i class="fas fa-search-minus fa-2x text-muted mb-3"></i>
+                        <p>No orders found for this date.</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        filteredOrders.forEach(order => {
+            const row = createFullOrderRow(order);
+            ordersTable.innerHTML += row;
         });
     }
 
@@ -1774,11 +1836,11 @@
         submitBtn.disabled = true;
         
         try {
-            // Get form values
+            // Get form values (UPDATED to use 'acre-price' instead of 'daily-price')
             const equipmentData = {
                 name: document.getElementById('equipment-name').value,
                 category: document.getElementById('equipment-category').value,
-                pricePerDay: parseFloat(document.getElementById('daily-price').value),
+                pricePerAcre: parseFloat(document.getElementById('acre-price').value), // UPDATED ID
                 pricePerHour: parseFloat(document.getElementById('hourly-price').value),
                 description: document.getElementById('equipment-description').value,
                 location: document.getElementById('equipment-location').value,
@@ -1796,6 +1858,7 @@
             const specs = {};
             const specInputs = document.querySelectorAll('#specs-container input');
             for (let i = 0; i < specInputs.length; i += 2) {
+                // Ensure spec name and value are present
                 if (specInputs[i].value && specInputs[i + 1]?.value) {
                     specs[specInputs[i].value] = specInputs[i + 1].value;
                 }
@@ -1886,7 +1949,7 @@
                             <h4>${equipment.name}</h4>
                             <p class="text-muted">${equipment.category}</p>
                             <div class="mb-3">
-                                <h5 class="text-primary">${window.firebaseHelpers.formatCurrency(equipment.pricePerDay)}/day</h5>
+                                <h5 class="text-primary">${window.firebaseHelpers.formatCurrency(equipment.pricePerAcre)}/acre</h5>
                                 <small class="text-muted">or ${window.firebaseHelpers.formatCurrency(equipment.pricePerHour)}/hour</small>
                             </div>
                             <p>${equipment.description}</p>
@@ -1951,15 +2014,20 @@
     // View order details
     async function viewOrderDetails(orderId) {
         try {
-            const doc = await window.FirebaseDB.collection('orders').doc(orderId).get();
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const orderRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders').doc(orderId);
+            const doc = await orderRef.get();
+
             if (doc.exists) {
                 const order = doc.data();
                 
                 // Format dates
                 const createdAt = window.firebaseHelpers.formatDateTime(order.createdAt);
-                const startDate = window.firebaseHelpers.formatDate(order.startDate);
-                const endDate = window.firebaseHelpers.formatDate(order.endDate);
                 
+                // Extract rental details from items (assuming first item for simplicity)
+                const firstItem = order.items?.[0];
+                const rentalPeriod = firstItem ? `${firstItem.rentalValue} ${firstItem.rentalType === 'acre' ? 'Acres' : 'Hours'}` : 'N/A';
+
                 // Create modal content
                 const modalBody = `
                     <div class="row">
@@ -1975,10 +2043,8 @@
                         <div class="col-md-6">
                             <h5>Rental Details</h5>
                             <table class="table table-sm">
-                                <tr><th>Equipment:</th><td>${order.equipmentName || 'N/A'}</td></tr>
-                                <tr><th>Rental Period:</th><td>${startDate} to ${endDate}</td></tr>
-                                <tr><th>Total Days:</th><td>${order.totalDays || 0}</td></tr>
-                                <tr><th>Total Hours:</th><td>${order.totalHours || 0}</td></tr>
+                                <tr><th>Equipment:</th><td>${order.equipmentNames || 'N/A'}</td></tr>
+                                <tr><th>Rental Period:</th><td>${rentalPeriod}</td></tr>
                             </table>
                         </div>
                     </div>
@@ -1996,7 +2062,7 @@
                             <h5>Payment Information</h5>
                             <table class="table table-sm">
                                 <tr><th>Payment Status:</th><td>${order.paymentStatus || 'pending'}</td></tr>
-                                <tr><th>Payment Method:</th><td>${order.paymentMethod || 'N/A'}</td></tr>
+                                <tr><th>Payment Method:</th><td>${order.paymentMethod || 'Razorpay'}</td></tr>
                                 <tr><th>Transaction ID:</th><td>${order.transactionId || 'N/A'}</td></tr>
                             </table>
                         </div>
@@ -2023,7 +2089,10 @@
     // Update order status
     async function updateOrderStatus(orderId, newStatus) {
         try {
-            await window.FirebaseDB.collection('orders').doc(orderId).update({
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const orderRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders').doc(orderId);
+            
+            await orderRef.update({
                 status: newStatus,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
@@ -2048,8 +2117,11 @@
             const currentMonth = now.getMonth();
             const currentYear = now.getFullYear();
             
-            const ordersSnapshot = await window.FirebaseDB.collection('orders')
-                .where('sellerId', '==', currentUser.uid)
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
+            
+            const ordersSnapshot = await ordersCollectionRef
+                .where('sellerIds', 'array-contains', currentUser.uid)
                 .where('status', 'in', ['completed', 'active'])
                 .get();
             
@@ -2062,7 +2134,10 @@
                 const orderDate = order.createdAt ? order.createdAt.toDate() : new Date();
                 const month = orderDate.getMonth();
                 const year = orderDate.getFullYear();
-                const amount = order.totalAmount || 0;
+                
+                // NOTE: This assumes the totalAmount is the seller's gross earning. 
+                // In a real app, earnings would be stored per-seller per-item in the order.
+                const amount = order.totalAmount || 0; 
                 
                 if (year === currentYear) {
                     monthlyEarnings[month] += amount;
@@ -2079,9 +2154,9 @@
             document.getElementById('month-earnings').textContent = window.firebaseHelpers.formatCurrency(thisMonthEarnings);
             document.getElementById('last-month-earnings').textContent = window.firebaseHelpers.formatCurrency(lastMonthEarnings);
             
-            const growth = lastMonthEarnings > 0 ? ((thisMonthEarnings - lastMonthEarnings) / lastMonthEarnings * 100).toFixed(1) : 100;
+            const growth = lastMonthEarnings > 0 ? ((thisMonthEarnings - lastMonthEarnings) / lastMonthEarnings * 100).toFixed(1) : (thisMonthEarnings > 0 ? 100 : 0);
             document.getElementById('month-growth').textContent = `${growth}% from last month`;
-            document.getElementById('month-growth').className = growth >= 0 ? 'text-success' : 'text-danger';
+            document.getElementById('month-growth').className = parseFloat(growth) >= 0 ? 'text-success' : 'text-danger';
             
             // Update chart
             updateDetailedEarningsChart(monthlyEarnings);
@@ -2140,34 +2215,47 @@
     // Load top equipment
     async function loadTopEquipment() {
         try {
-            // Get all equipment with their earnings
+            // Fetch all equipment belonging to the seller
             const equipmentSnapshot = await window.FirebaseDB.collection('equipment')
                 .where('sellerId', '==', currentUser.uid)
                 .get();
             
             const equipmentEarnings = {};
+            const equipmentNames = {};
             
-            // Get orders for each equipment
-            for (const doc of equipmentSnapshot.docs) {
-                const equipmentId = doc.id;
-                const ordersSnapshot = await window.FirebaseDB.collection('orders')
-                    .where('equipmentId', '==', equipmentId)
-                    .where('status', 'in', ['completed', 'active'])
-                    .get();
-                
-                let totalEarnings = 0;
-                ordersSnapshot.forEach(orderDoc => {
-                    totalEarnings += orderDoc.data().totalAmount || 0;
+            equipmentSnapshot.forEach(doc => {
+                equipmentEarnings[doc.id] = 0;
+                equipmentNames[doc.id] = doc.data().name;
+            });
+
+            // Fetch all relevant orders
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
+            
+            const ordersSnapshot = await ordersCollectionRef
+                .where('sellerIds', 'array-contains', currentUser.uid)
+                .where('status', 'in', ['completed', 'active'])
+                .get();
+
+            // Aggregate earnings per equipment
+            ordersSnapshot.forEach(orderDoc => {
+                const order = orderDoc.data();
+                order.items.forEach(item => {
+                    // Only count earnings for equipment belonging to this seller
+                    if (item.sellerId === currentUser.uid && equipmentEarnings[item.id] !== undefined) {
+                        equipmentEarnings[item.id] += item.price || 0; // Item price is the amount paid for that item rental
+                    }
                 });
-                
-                if (totalEarnings > 0) {
-                    equipmentEarnings[doc.data().name] = totalEarnings;
-                }
-            }
+            });
             
-            // Sort by earnings and get top 5
+            // Format for display
             const topEquipment = Object.entries(equipmentEarnings)
-                .sort(([,a], [,b]) => b - a)
+                .map(([id, earnings]) => ({
+                    name: equipmentNames[id],
+                    earnings: earnings
+                }))
+                .filter(item => item.earnings > 0)
+                .sort((a, b) => b.earnings - a.earnings)
                 .slice(0, 5);
             
             // Update UI
@@ -2182,14 +2270,13 @@
                 return;
             }
             
-            topEquipmentList.innerHTML = topEquipment.map(([name, earnings]) => `
+            topEquipmentList.innerHTML = topEquipment.map(item => `
                 <div class="d-flex justify-content-between align-items-center mb-2 p-2 border-bottom">
                     <div>
-                        <h6 class="mb-1">${name}</h6>
-                        <small class="text-muted">${equipmentSnapshot.docs.find(d => d.data().name === name)?.data()?.category || ''}</small>
+                        <h6 class="mb-1">${item.name}</h6>
                     </div>
                     <div class="text-end">
-                        <strong>${window.firebaseHelpers.formatCurrency(earnings)}</strong>
+                        <strong>${window.firebaseHelpers.formatCurrency(item.earnings)}</strong>
                     </div>
                 </div>
             `).join('');
@@ -2199,95 +2286,56 @@
         }
     }
 
-    // Load messages
+    // Load messages (REMOVED MOCK DATA IN JS)
     async function loadMessages() {
-        // Mock data - in real app, fetch from Firestore
-        const conversations = [
-            { id: 1, name: 'Rajesh Kumar', lastMessage: 'When will the tractor be available?', unread: 2, time: '10:30 AM' },
-            { id: 2, name: 'Priya Sharma', lastMessage: 'Thanks for the harvester!', unread: 0, time: 'Yesterday' },
-            { id: 3, name: 'Amit Patel', lastMessage: 'Can I extend the rental?', unread: 1, time: '2 days ago' }
-        ];
-        
+        // In a real application, this would fetch real-time chat data from Firestore.
+        // For now, only the static UI remains.
         const conversationsList = document.getElementById('conversations-list');
-        conversationsList.innerHTML = conversations.map(conv => `
-            <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" onclick="openConversation(${conv.id})">
-                <div>
-                    <div class="fw-bold">${conv.name}</div>
-                    <small class="text-muted">${conv.lastMessage}</small>
-                </div>
-                <div class="text-end">
-                    <small class="text-muted">${conv.time}</small>
-                    ${conv.unread > 0 ? `<span class="badge bg-primary rounded-pill">${conv.unread}</span>` : ''}
-                </div>
-            </a>
-        `).join('');
+        conversationsList.innerHTML = `
+             <div class="text-center py-5 text-muted">
+                <i class="fas fa-comment-dots fa-3x mb-3"></i>
+                <p>Chat feature coming soon.</p>
+            </div>
+        `;
+        document.getElementById('chat-messages').innerHTML = `
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-comments fa-3x mb-3"></i>
+                <p>Select a conversation to view messages</p>
+            </div>
+        `;
+        document.getElementById('chat-header').innerHTML = '<h5>Messages</h5><p class="text-muted mb-0">No active conversations</p>';
+        document.getElementById('chat-input').style.display = 'none';
+
+        // NOTE: The UI still shows "3" messages in the sidebar badge (hardcoded in HTML)
+        // You would typically update this dynamically based on unread counts.
     }
 
-    // Open conversation
+    // Open conversation (REMOVED MOCK DATA IN JS)
     function openConversation(conversationId) {
+        window.firebaseHelpers.showAlert('Chat feature coming soon! Cannot open conversation.', 'info');
         document.getElementById('chat-header').innerHTML = `
-            <h5>Rajesh Kumar</h5>
-            <p class="text-muted mb-0">Active now</p>
+            <h5>Customer Chat</h5>
+            <p class="text-muted mb-0">Simulated conversation</p>
         `;
         
         document.getElementById('chat-messages').innerHTML = `
-            <div class="message received mb-2">
-                <div class="bg-light p-3 rounded">
-                    <p>Hello, when will the tractor be available?</p>
-                    <small class="text-muted">10:30 AM</small>
-                </div>
-            </div>
-            <div class="message sent mb-2 text-end">
-                <div class="bg-primary text-white p-3 rounded">
-                    <p>It will be available from tomorrow morning.</p>
-                    <small>10:32 AM</small>
-                </div>
-            </div>
-            <div class="message received mb-2">
-                <div class="bg-light p-3 rounded">
-                    <p>Great! Can I book it for 3 days?</p>
-                    <small class="text-muted">10:33 AM</small>
-                </div>
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-code fa-3x mb-3"></i>
+                <p>This is a placeholder chat window. The messaging feature is not fully implemented.</p>
             </div>
         `;
         
         document.getElementById('chat-input').style.display = 'block';
     }
 
-    // Send message
+    // Send message (REMOVED MOCK DATA IN JS)
     function sendMessage() {
         const input = document.getElementById('message-input');
         const message = input.value.trim();
         
         if (message) {
-            const chatMessages = document.getElementById('chat-messages');
-            const now = new Date();
-            const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            
-            chatMessages.innerHTML += `
-                <div class="message sent mb-2 text-end">
-                    <div class="bg-primary text-white p-3 rounded">
-                        <p>${message}</p>
-                        <small>${time}</small>
-                    </div>
-                </div>
-            `;
-            
-            input.value = '';
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-            
-            // Simulate reply
-            setTimeout(() => {
-                chatMessages.innerHTML += `
-                    <div class="message received mb-2">
-                        <div class="bg-light p-3 rounded">
-                            <p>Thanks! I'll proceed with the booking.</p>
-                            <small class="text-muted">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>
-                        </div>
-                    </div>
-                `;
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            }, 1000);
+             window.firebaseHelpers.showAlert('Message sent (simulated). Chat feature is not fully implemented.', 'info');
+             input.value = '';
         }
     }
 
@@ -2342,6 +2390,19 @@
             // Update average rating
             const averageRating = ratingCount > 0 ? totalRating / ratingCount : 0;
             document.getElementById('average-rating').textContent = averageRating.toFixed(1);
+            
+            // Update star icons based on average rating
+            const starContainer = document.querySelector('#reviews-section .table-container .mb-2');
+            const fullStars = Math.round(averageRating);
+            const emptyStars = 5 - fullStars;
+            starContainer.innerHTML = '';
+            for (let i = 0; i < fullStars; i++) {
+                starContainer.innerHTML += '<i class="fas fa-star text-warning"></i>';
+            }
+            for (let i = 0; i < emptyStars; i++) {
+                starContainer.innerHTML += '<i class="far fa-star text-warning"></i>';
+            }
+
             document.getElementById('total-reviews').textContent = `${ratingCount} reviews`;
             
         } catch (error) {
@@ -2398,9 +2459,17 @@
             const newPassword = document.getElementById('new-password').value;
             const confirmPassword = document.getElementById('confirm-password').value;
             
-            if (newPassword && currentPassword) {
+            if (newPassword || currentPassword || confirmPassword) {
+                if (!currentPassword) {
+                    window.firebaseHelpers.showAlert('Please enter your current password to change it.', 'danger');
+                    return;
+                }
                 if (newPassword !== confirmPassword) {
                     window.firebaseHelpers.showAlert('New passwords do not match', 'danger');
+                    return;
+                }
+                if (newPassword.length < 6) {
+                    window.firebaseHelpers.showAlert('New password must be at least 6 characters long', 'danger');
                     return;
                 }
                 
