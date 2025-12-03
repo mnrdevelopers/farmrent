@@ -338,6 +338,19 @@
         .loading.active {
             display: block;
         }
+
+        /* Notification List Styles */
+        .notification-item {
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .notification-item:hover {
+            background-color: #f1f1f1;
+        }
+        .notification-unread {
+            border-left: 5px solid var(--sun-yellow);
+            background-color: #fffdf7;
+        }
         
         /* Mobile Responsive */
         @media (max-width: 768px) {
@@ -381,8 +394,9 @@
             <a class="nav-link" href="#" onclick="showSection('earnings')">
                 <i class="fas fa-rupee-sign"></i> Earnings
             </a>
-            <a class="nav-link" href="#" onclick="showSection('messages')">
-                <i class="fas fa-envelope"></i> Messages
+            <a class="nav-link" href="#" onclick="showSection('notifications')">
+                <i class="fas fa-bell"></i> Notifications / Messages
+                <span class="badge bg-danger ms-auto" id="new-messages-count">0</span>
             </a>
             <a class="nav-link" href="#" onclick="showSection('reviews')">
                 <i class="fas fa-star"></i> Reviews
@@ -438,9 +452,9 @@
                 <a class="nav-link text-white" href="#" onclick="showSection('earnings')" data-bs-dismiss="offcanvas">
                     <i class="fas fa-rupee-sign me-2"></i> Earnings
                 </a>
-                <a class="nav-link text-white" href="#" onclick="showSection('messages')" data-bs-dismiss="offcanvas">
-                    <i class="fas fa-envelope me-2"></i> Messages
-                    <span class="badge bg-warning ms-auto">3</span>
+                <a class="nav-link text-white" href="#" onclick="showSection('notifications')" data-bs-dismiss="offcanvas">
+                    <i class="fas fa-bell me-2"></i> Notifications / Messages
+                    <span class="badge bg-danger ms-auto" id="new-messages-count-mobile">0</span>
                 </a>
                 <a class="nav-link text-white" href="#" onclick="showSection('reviews')" data-bs-dismiss="offcanvas">
                     <i class="fas fa-star me-2"></i> Reviews
@@ -470,13 +484,11 @@
                         <div class="dropdown">
                             <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
                                 <i class="fas fa-bell"></i>
+                                <span class="badge bg-danger" id="notification-count">0</span>
                             </button>
-                            <ul class="dropdown-menu">
+                            <ul class="dropdown-menu" id="top-notifications-list">
                                 <li><h6 class="dropdown-header">Notifications</h6></li>
-                                <li><a class="dropdown-item" href="#">New order received</a></li>
-                                <li><a class="dropdown-item" href="#">Equipment rental request</a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="#">View all notifications</a></li>
+                                <li><a class="dropdown-item" href="#">No new notifications</a></li>
                             </ul>
                         </div>
                         <div class="dropdown">
@@ -568,9 +580,9 @@
                                 <i class="fas fa-clipboard-list fa-2x mb-2"></i>
                                 <div>View Orders</div>
                             </button>
-                            <button class="action-btn" onclick="showSection('messages')">
-                                <i class="fas fa-envelope fa-2x mb-2"></i>
-                                <div>Messages</div>
+                            <button class="action-btn" onclick="showSection('notifications')">
+                                <i class="fas fa-bell fa-2x mb-2"></i>
+                                <div>Alerts (<span id="quick-alert-count">0</span>)</div>
                             </button>
                             <button class="action-btn" onclick="showSection('profile')">
                                 <i class="fas fa-cog fa-2x mb-2"></i>
@@ -890,41 +902,43 @@
             </div>
         </div>
 
-        <!-- Messages Section -->
-        <div class="section" id="messages-section" style="display: none;">
+        <!-- NEW: Notifications / Messages Section -->
+        <div class="section" id="notifications-section" style="display: none;">
             <div class="page-header">
-                <h1>Messages</h1>
-                <p class="text-muted">Communicate with customers</p>
+                <h1>Notifications / Messages</h1>
+                <p class="text-muted">Review pending rental requests and customer communication.</p>
             </div>
             
             <div class="row">
-                <div class="col-md-4">
-                    <div class="table-container" style="height: 600px; overflow-y: auto;">
-                        <h5 class="mb-3">Conversations</h5>
-                        <div class="list-group" id="conversations-list">
-                            <!-- Removed mock data and replaced with a loading state -->
-                            <div class="text-center py-5 text-muted">
-                                <i class="fas fa-comment-dots fa-3x mb-3"></i>
-                                <p>Chat feature coming soon.</p>
+                <!-- Notifications/Alerts -->
+                <div class="col-md-6 mb-4">
+                    <div class="table-container">
+                         <h5 class="mb-3"><i class="fas fa-exclamation-triangle me-2 text-warning"></i>Actionable Alerts</h5>
+                         <div id="seller-alerts-list" class="list-group list-group-flush">
+                            <div class="text-center py-4">
+                                <div class="spinner-border spinner-border-sm text-primary"></div>
+                                <p class="mt-2 mb-0">Loading alerts...</p>
                             </div>
-                        </div>
+                         </div>
+                         <small class="text-muted d-block mt-3">Alerts refresh whenever you load the dashboard or notification page.</small>
                     </div>
                 </div>
-                <div class="col-md-8">
-                    <div class="table-container" style="height: 600px; display: flex; flex-direction: column;">
-                        <div id="chat-header" class="mb-3">
-                            <h5>Select a conversation</h5>
-                        </div>
+
+                <!-- Chat Placeholder -->
+                <div class="col-md-6 mb-4">
+                    <div class="table-container" style="height: 500px; display: flex; flex-direction: column;">
+                        <h5 class="mb-3"><i class="fas fa-comments me-2 text-primary"></i>Customer Messages (Chat)</h5>
+                        
                         <div id="chat-messages" style="flex: 1; overflow-y: auto; padding: 10px; background: #f8f9fa; border-radius: 5px; margin-bottom: 10px;">
                             <div class="text-center py-5 text-muted">
                                 <i class="fas fa-comments fa-3x mb-3"></i>
-                                <p>Select a conversation to view messages</p>
+                                <p>Chat feature coming soon.<br>All customer communication will appear here.</p>
                             </div>
                         </div>
-                        <div id="chat-input" style="display: none;">
+                        <div id="chat-input">
                             <div class="input-group">
-                                <input type="text" class="form-control" placeholder="Type your message..." id="message-input">
-                                <button class="btn btn-primary" type="button" onclick="sendMessage()">
+                                <input type="text" class="form-control" placeholder="Type your message..." id="message-input" disabled>
+                                <button class="btn btn-primary" type="button" onclick="sendMessage()" disabled>
                                     <i class="fas fa-paper-plane"></i>
                                 </button>
                             </div>
@@ -933,6 +947,7 @@
                 </div>
             </div>
         </div>
+        <!-- END NEW: Notifications / Messages Section -->
 
         <!-- Reviews Section -->
         <div class="section" id="reviews-section" style="display: none;">
@@ -1284,6 +1299,14 @@
     let ordersData = [];
     let earningsChart = null;
     let detailedEarningsChart = null;
+    let sellerNotifications = []; // NEW: Global for seller notifications
+
+    // Helper to get the Firestore document reference for public orders
+    function getPublicCollectionRef(collectionName) {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        return window.FirebaseDB.collection('artifacts').doc(appId)
+            .collection('public').doc('data').collection(collectionName);
+    }
 
     // Initialize dashboard
     document.addEventListener('DOMContentLoaded', async () => {
@@ -1364,11 +1387,14 @@
             case 'orders':
                 loadOrders();
                 break;
+            case 'add-equipment':
+                // No specific load function, form is static
+                break;
             case 'earnings':
                 loadEarningsData();
                 break;
-            case 'messages':
-                loadMessages();
+            case 'notifications': // NEW: Load notifications
+                loadNotifications();
                 break;
             case 'reviews':
                 loadReviews();
@@ -1384,14 +1410,25 @@
         try {
             if (!currentUser) return;
             
-            // Load statistics
-            const stats = await calculateSellerStats();
+            // Load notifications and stats simultaneously
+            const [stats, notificationData] = await Promise.all([
+                calculateSellerStats(),
+                calculateSellerNotifications()
+            ]);
             
             // Update stats cards
             document.getElementById('total-earnings').textContent = window.firebaseHelpers.formatCurrency(stats.totalEarnings);
             document.getElementById('total-orders').textContent = stats.totalOrders;
             document.getElementById('total-equipment').textContent = stats.totalEquipment;
             document.getElementById('seller-rating').textContent = stats.rating.toFixed(1);
+            
+            // Update notification badges
+            document.getElementById('new-messages-count').textContent = notificationData.unreadCount;
+            document.getElementById('new-messages-count-mobile').textContent = notificationData.unreadCount;
+            document.getElementById('notification-count').textContent = notificationData.unreadCount;
+            document.getElementById('quick-alert-count').textContent = notificationData.unreadCount;
+
+            displayTopNotifications(notificationData.recentNotifications); // NEW: Display top notifications
             
             // Load recent orders
             await loadRecentOrders();
@@ -1402,6 +1439,113 @@
         } catch (error) {
             console.error('Error loading dashboard data:', error);
             window.firebaseHelpers.showAlert('Error loading dashboard data', 'danger');
+        }
+    }
+
+    // NEW: Calculate Seller Notifications (Pending orders and new reviews)
+    async function calculateSellerNotifications() {
+        if (!currentUser) return { unreadCount: 0, recentNotifications: [] };
+
+        let notifications = [];
+
+        try {
+            // 1. Pending Orders
+            const ordersSnapshot = await getPublicCollectionRef('orders')
+                .where('sellerIds', 'array-contains', currentUser.uid)
+                .where('status', '==', 'pending')
+                .orderBy('createdAt', 'desc')
+                .get();
+
+            ordersSnapshot.forEach(doc => {
+                const order = doc.data();
+                const itemNames = order.equipmentNames.split(',').slice(0, 2).join(', ');
+                notifications.push({
+                    id: doc.id,
+                    type: 'order_request',
+                    message: `New Rental Request! Equipment: ${itemNames}`,
+                    relatedId: doc.id,
+                    date: order.createdAt,
+                    read: false, 
+                    action: () => showSection('orders')
+                });
+            });
+
+            // 2. New Reviews (Simulated: Marking as unread if created within the last 24 hours)
+            const yesterday = firebase.firestore.Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
+            const reviewsSnapshot = await window.FirebaseDB.collection('reviews')
+                .where('sellerId', '==', currentUser.uid)
+                .where('createdAt', '>', yesterday) // Filter for recent reviews
+                .orderBy('createdAt', 'desc')
+                .get();
+
+            reviewsSnapshot.forEach(doc => {
+                const review = doc.data();
+                notifications.push({
+                    id: doc.id,
+                    type: 'new_review',
+                    message: `New Review (${review.rating}★) for ${review.equipmentName || 'Equipment'}`,
+                    relatedId: doc.id,
+                    date: review.createdAt,
+                    read: false,
+                    action: () => showSection('reviews')
+                });
+            });
+
+            // Sort all by date (newest first)
+            notifications.sort((a, b) => (b.date?.toDate() || 0) - (a.date?.toDate() || 0));
+            
+            sellerNotifications = notifications; // Store globally
+            const unreadCount = notifications.length; // All are unread by default (pending action)
+            
+            return {
+                unreadCount,
+                recentNotifications: notifications.slice(0, 5)
+            };
+
+        } catch (error) {
+            console.error('Error calculating seller notifications:', error);
+            return { unreadCount: 0, recentNotifications: [] };
+        }
+    }
+
+    // NEW: Display top navbar notifications (for mobile and desktop dropdown)
+    function displayTopNotifications(notifications) {
+        const list = document.getElementById('top-notifications-list');
+        if (!list) return;
+
+        list.innerHTML = '<li><h6 class="dropdown-header">Notifications</h6></li>';
+
+        if (notifications.length === 0) {
+            list.innerHTML += '<li><a class="dropdown-item" href="#">No pending alerts</a></li>';
+            return;
+        }
+
+        notifications.forEach(notification => {
+            const timeAgo = notification.date ? window.firebaseHelpers.formatTimeAgo(notification.date) : 'N/A';
+            const icon = notification.type === 'order_request' ? 'fas fa-clipboard-list' : 'fas fa-star';
+            
+            list.innerHTML += `
+                <li>
+                    <a class="dropdown-item" href="#" 
+                       onclick="handleNotificationClick('${notification.id}')"
+                       title="${notification.message}">
+                        <i class="${icon} me-2"></i>
+                        ${notification.message.substring(0, 35)}${notification.message.length > 35 ? '...' : ''} 
+                        <small class="float-end text-muted">${timeAgo}</small>
+                    </a>
+                </li>
+            `;
+        });
+
+        list.innerHTML += '<li><hr class="dropdown-divider"></li>';
+        list.innerHTML += '<li><a class="dropdown-item text-center" href="#" onclick="showSection(\'notifications\')">View All Alerts</a></li>';
+    }
+
+    // NEW: Handle click on a top navbar notification
+    function handleNotificationClick(notificationId) {
+        const notification = sellerNotifications.find(n => n.id === notificationId);
+        if (notification && notification.action) {
+            notification.action();
         }
     }
 
@@ -1423,26 +1567,24 @@
             const totalEquipment = equipmentSnapshot.size;
             
             // Get seller's orders
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
+            const ordersCollectionRef = getPublicCollectionRef('orders');
 
-            // NOTE: Firestore queries cannot efficiently search within arrays of objects (items) 
-            // without creating indexes or using denormalized fields. 
-            // Assuming simplified query structure here based on existing code/demo data.
             const ordersSnapshot = await ordersCollectionRef
-                .get(); // Fetch all and filter client-side for demo simplicity
+                .get(); 
             
-            const totalOrders = ordersSnapshot.docs.filter(doc => {
+            const relevantOrders = ordersSnapshot.docs.filter(doc => {
                  const order = doc.data();
                  return order.sellerIds && order.sellerIds.includes(currentUser.uid);
-            }).length;
+            });
+            
+            const totalOrders = relevantOrders.length;
             
             // Calculate total earnings
             let totalEarnings = 0;
-            ordersSnapshot.forEach(doc => {
-                const order = doc.data();
-                if ((order.status === 'completed' || order.status === 'active') && order.sellerIds && order.sellerIds.includes(currentUser.uid)) {
-                    // Assuming totalAmount includes the seller's earnings share
+            relevantOrders.forEach(orderDoc => {
+                const order = orderDoc.data();
+                if ((order.status === 'completed' || order.status === 'active')) {
+                    // This is still a simplification; totalAmount is gross, but we use it as net here.
                     totalEarnings += order.totalAmount || 0;
                 }
             });
@@ -1486,8 +1628,7 @@
         if (!currentUser) return;
         
         try {
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
+            const ordersCollectionRef = getPublicCollectionRef('orders');
             
             const ordersSnapshot = await ordersCollectionRef
                 .orderBy('createdAt', 'desc')
@@ -1758,8 +1899,7 @@
         if (!currentUser) return;
         
         try {
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
+            const ordersCollectionRef = getPublicCollectionRef('orders');
             
             const ordersSnapshot = await ordersCollectionRef
                 .orderBy('createdAt', 'desc')
@@ -1806,7 +1946,7 @@
         
         // Extract rental details from the first item (simplification)
         const rentalPeriod = order.items && order.items.length > 0 
-            ? `${order.items[0].rentalValue} ${order.items[0].rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'}`
+            ? order.items.map(item => `${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'}`).join(', ')
             : 'N/A';
         
         // Use consolidated equipment name if available, otherwise default to first item's name
@@ -1825,7 +1965,7 @@
                         <i class="fas fa-eye"></i>
                     </button>
                     ${order.status === 'pending' ? `
-                        <button class="btn btn-sm btn-success ms-1" onclick="updateOrderStatus('${order.id}', 'approved')">
+                        <button class="btn btn-sm btn-success ms-1" onclick="updateOrderStatus('${order.id}', 'active')">
                             <i class="fas fa-check"></i>
                         </button>
                         <button class="btn btn-sm btn-danger ms-1" onclick="updateOrderStatus('${order.id}', 'cancelled')">
@@ -1844,33 +1984,31 @@
 
     // Filter orders
     function filterOrders(status) {
+        const buttons = document.querySelectorAll('#orders-section .btn-group .btn');
+        buttons.forEach(btn => btn.classList.remove('active'));
+        
+        const activeButton = Array.from(buttons).find(btn => 
+            btn.getAttribute('onclick').includes(`'${status}'`)
+        );
+        if (activeButton) {
+            activeButton.classList.add('active');
+        }
+
         const rows = document.querySelectorAll('#orders-table tr');
         rows.forEach(row => {
-            if (row.querySelector('td')) {
-                const statusBadge = row.querySelector('.status-badge');
-                if (status === 'all' || (statusBadge && statusBadge.textContent.toLowerCase().includes(status))) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
+            const orderStatus = row.querySelector('.status-badge')?.textContent.toLowerCase() || '';
+            if (status === 'all' || orderStatus.includes(status)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
             }
         });
-        
-        // Update active button
-        document.querySelectorAll('#orders-section .btn-group .btn').forEach(btn => {
-            btn.classList.remove('active');
-        });
-        // Check if the event target is valid before adding active class
-        if (event && event.target && event.target.classList.contains('btn')) {
-            event.target.classList.add('active');
-        }
     }
 
     // Filter by date (NOTE: This filter is based on creation date, not rental period)
     function filterByDate() {
         const dateFilter = document.getElementById('order-date-filter').value;
         if (!dateFilter) {
-            // If filter is cleared, show all
             loadOrders();
             return;
         }
@@ -2036,8 +2174,8 @@
                             <h4>${equipment.name}</h4>
                             <p class="text-muted">${equipment.category}</p>
                             <div class="mb-3">
-                                <h5 class="text-primary">${window.firebaseHelpers.formatCurrency(equipment.pricePerAcre)}/acre</h5>
-                                <small class="text-muted">or ${window.firebaseHelpers.formatCurrency(equipment.pricePerHour)}/hour</small>
+                                <h5 class="text-primary">${window.firebaseHelpers.formatCurrency(equipment.pricePerAcre || 0)}/acre</h5>
+                                <small class="text-muted">or ${window.firebaseHelpers.formatCurrency(equipment.pricePerHour || 0)}/hour</small>
                             </div>
                             <p>${equipment.description}</p>
                             <div class="mb-2">
@@ -2228,8 +2366,7 @@
     // View order details
     async function viewOrderDetails(orderId) {
         try {
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const orderRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders').doc(orderId);
+            const orderRef = getPublicCollectionRef('orders').doc(orderId);
             const doc = await orderRef.get();
 
             if (doc.exists) {
@@ -2238,9 +2375,10 @@
                 // Format dates
                 const createdAt = window.firebaseHelpers.formatDateTime(order.createdAt);
                 
-                // Extract rental details from items (assuming first item for simplification)
-                const firstItem = order.items?.[0];
-                const rentalPeriod = firstItem ? `${firstItem.rentalValue} ${firstItem.rentalType === 'acre' ? 'Acres' : 'Hours'}` : 'N/A';
+                // Extract rental details from items (simplification)
+                const rentalPeriod = order.items.map(item => 
+                    `${item.rentalValue} ${item.rentalType === 'acre' ? 'Acres' : 'Hours'}`
+                ).join(', ');
 
                 // Create modal content
                 const modalBody = `
@@ -2303,8 +2441,7 @@
     // Update order status
     async function updateOrderStatus(orderId, newStatus) {
         try {
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const orderRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders').doc(orderId);
+            const orderRef = getPublicCollectionRef('orders').doc(orderId);
             
             await orderRef.update({
                 status: newStatus,
@@ -2312,6 +2449,7 @@
             });
             
             window.firebaseHelpers.showAlert(`Order ${newStatus} successfully!`, 'success');
+            loadDashboardData(); // Reload dashboard for badge/stats update
             loadRecentOrders();
             loadOrders();
             
@@ -2331,9 +2469,9 @@
             const currentMonth = now.getMonth();
             const currentYear = now.getFullYear();
             
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
+            const ordersCollectionRef = getPublicCollectionRef('orders');
             
+            // Get all relevant orders
             const ordersSnapshot = await ordersCollectionRef
                 .where('sellerIds', 'array-contains', currentUser.uid)
                 .where('status', 'in', ['completed', 'active'])
@@ -2350,7 +2488,6 @@
                 const year = orderDate.getFullYear();
                 
                 // NOTE: This assumes the totalAmount is the seller's gross earning. 
-                // In a real app, earnings would be stored per-seller per-item in the order.
                 const amount = order.totalAmount || 0; 
                 
                 if (year === currentYear) {
@@ -2443,8 +2580,7 @@
             });
 
             // Fetch all relevant orders
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
+            const ordersCollectionRef = getPublicCollectionRef('orders');
             
             const ordersSnapshot = await ordersCollectionRef
                 .where('sellerIds', 'array-contains', currentUser.uid)
@@ -2500,49 +2636,70 @@
         }
     }
 
-    // Load messages (REMOVED MOCK DATA IN JS)
-    async function loadMessages() {
-        // In a real application, this would fetch real-time chat data from Firestore.
-        // For now, only the static UI remains.
-        const conversationsList = document.getElementById('conversations-list');
-        conversationsList.innerHTML = `
-             <div class="text-center py-5 text-muted">
-                <i class="fas fa-comment-dots fa-3x mb-3"></i>
-                <p>Chat feature coming soon.</p>
-            </div>
-        `;
-        document.getElementById('chat-messages').innerHTML = `
-            <div class="text-center py-5 text-muted">
-                <i class="fas fa-comments fa-3x mb-3"></i>
-                <p>Select a conversation to view messages</p>
-            </div>
-        `;
-        document.getElementById('chat-header').innerHTML = '<h5>Messages</h5><p class="text-muted mb-0">No active conversations</p>';
-        document.getElementById('chat-input').style.display = 'none';
+    // NEW: Load Notifications Section
+    async function loadNotifications() {
+        if (!currentUser) return;
+        
+        // Recalculate all notifications to ensure data is fresh
+        const notificationData = await calculateSellerNotifications();
+        const notifications = notificationData.recentNotifications;
+        
+        const listContainer = document.getElementById('seller-alerts-list');
+        listContainer.innerHTML = ''; // Clear previous content
 
-        // NOTE: The UI still shows "3" messages in the sidebar badge (hardcoded in HTML)
-        // You would typically update this dynamically based on unread counts.
+        if (notifications.length === 0) {
+            listContainer.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="fas fa-bell fa-3x text-muted mb-3"></i>
+                    <h4>No New Alerts</h4>
+                    <p class="text-muted">You have no pending rental requests or new reviews.</p>
+                </div>
+            `;
+            return;
+        }
+
+        notifications.forEach(notification => {
+            const timeAgo = notification.date ? window.firebaseHelpers.formatTimeAgo(notification.date) : 'N/A';
+            const typeIcon = notification.type === 'order_request' ? 'fas fa-clipboard-list' : 'fas fa-star';
+            const badgeColor = notification.type === 'order_request' ? 'bg-warning' : 'bg-info';
+            const actionText = notification.type === 'order_request' ? 'View Order' : 'View Review';
+
+            listContainer.innerHTML += `
+                <div class="list-group-item notification-item notification-unread d-flex justify-content-between align-items-center p-3 mb-2 rounded shadow-sm"
+                     onclick="handleNotificationAction('${notification.id}', '${notification.type}')">
+                    <div class="d-flex align-items-center">
+                        <i class="${typeIcon} fa-2x me-3" style="color: var(--sun-yellow);"></i>
+                        <div>
+                            <h6 class="mb-1">${notification.message}</h6>
+                            <small class="text-muted">
+                                <span class="badge ${badgeColor}">${notification.type.replace('_', ' ')}</span>
+                                <span class="ms-2">Received: ${timeAgo}</span>
+                            </small>
+                        </div>
+                    </div>
+                    <div>
+                        <button class="btn btn-sm btn-outline-primary">
+                            ${actionText} <i class="fas fa-arrow-right ms-1"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
     }
 
-    // Open conversation (REMOVED MOCK DATA IN JS)
-    function openConversation(conversationId) {
-        window.firebaseHelpers.showAlert('Chat feature coming soon! Cannot open conversation.', 'info');
-        document.getElementById('chat-header').innerHTML = `
-            <h5>Customer Chat</h5>
-            <p class="text-muted mb-0">Simulated conversation</p>
-        `;
-        
-        document.getElementById('chat-messages').innerHTML = `
-            <div class="text-center py-5 text-muted">
-                <i class="fas fa-code fa-3x mb-3"></i>
-                <p>This is a placeholder chat window. The messaging feature is not fully implemented.</p>
-            </div>
-        `;
-        
-        document.getElementById('chat-input').style.display = 'block';
+    // NEW: Handle action button click in Notifications section
+    function handleNotificationAction(relatedId, type) {
+        if (type === 'order_request') {
+            viewOrderDetails(relatedId);
+            showSection('orders');
+        } else if (type === 'new_review') {
+            showSection('reviews');
+        } else {
+            window.firebaseHelpers.showAlert('Unknown alert type.', 'warning');
+        }
     }
-
-    // Send message (REMOVED MOCK DATA IN JS)
+    
+    // Send message (REMOVED MOCK DATA IN JS) - Placeholder function remains
     function sendMessage() {
         const input = document.getElementById('message-input');
         const message = input.value.trim();
