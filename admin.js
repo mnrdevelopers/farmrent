@@ -22,6 +22,11 @@ function getPublicCollectionRef(collectionName) {
         .collection('public').doc('data').collection(collectionName);
 }
 
+// Helper to get the Firestore reference for platform settings
+function getPlatformSettingsRef() {
+    return getPublicCollectionRef('settings').doc('platform');
+}
+
 // Initialize admin dashboard
 document.addEventListener('DOMContentLoaded', async () => {
     // Check authentication
@@ -1854,8 +1859,23 @@ function markAllNotificationsRead() {
 // Load settings data
 async function loadSettingsData() {
     try {
-        // In a real app, load from Firestore
-        document.getElementById('last-updated').textContent = new Date().toLocaleDateString();
+        const settingsDoc = await getPlatformSettingsRef().get();
+        const settings = settingsDoc.exists ? settingsDoc.data() : {};
+        
+        // Populate fields with saved settings or defaults
+        document.getElementById('site-name').value = settings.siteName || 'FarmRent';
+        document.getElementById('site-url').value = settings.siteUrl || 'https://farmrent.com';
+        document.getElementById('seller-commission').value = settings.sellerCommission || 15;
+        document.getElementById('platform-fee').value = settings.platformFee || 5;
+        document.getElementById('email-notifications').checked = settings.emailNotifications !== undefined ? settings.emailNotifications : true;
+        document.getElementById('seller-approval-emails').checked = settings.sellerApprovalEmails !== undefined ? settings.sellerApprovalEmails : true;
+        document.getElementById('require-verification').checked = settings.requireVerification !== undefined ? settings.requireVerification : true;
+
+        if (settings.updatedAt) {
+            document.getElementById('last-updated').textContent = window.firebaseHelpers.formatDateTime(settings.updatedAt);
+        } else {
+            document.getElementById('last-updated').textContent = 'N/A (Using Defaults)';
+        }
         
     } catch (error) {
         console.error('Error loading settings:', error);
@@ -1870,6 +1890,7 @@ document.getElementById('system-settings-form').addEventListener('submit', async
         const settings = {
             siteName: document.getElementById('site-name').value,
             siteUrl: document.getElementById('site-url').value,
+            // Ensure numbers are stored as numbers
             sellerCommission: parseFloat(document.getElementById('seller-commission').value),
             platformFee: parseFloat(document.getElementById('platform-fee').value),
             emailNotifications: document.getElementById('email-notifications').checked,
@@ -1878,9 +1899,14 @@ document.getElementById('system-settings-form').addEventListener('submit', async
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
         
-        // In a real app, save to Firestore
+        // FIX: Save settings to the dedicated public Firestore document
+        await getPlatformSettingsRef().set(settings, { merge: true });
+
         window.firebaseHelpers.showAlert('Settings saved successfully', 'success');
-        document.getElementById('last-updated').textContent = new Date().toLocaleDateString();
+        document.getElementById('last-updated').textContent = window.firebaseHelpers.formatDateTime(settings.updatedAt);
+        
+        // Re-load settings to confirm
+        loadSettingsData();
         
     } catch (error) {
         console.error('Error saving settings:', error);
