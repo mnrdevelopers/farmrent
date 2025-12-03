@@ -175,10 +175,10 @@ function filterEquipment() {
     // Sort logic
     switch (sortBy) {
         case 'price_asc':
-            filteredList.sort((a, b) => (a.pricePerDay || 0) - (b.pricePerDay || 0));
+            filteredList.sort((a, b) => (a.pricePerAcre || 0) - (b.pricePerAcre || 0));
             break;
         case 'price_desc':
-            filteredList.sort((a, b) => (b.pricePerDay || 0) - (a.pricePerDay || 0));
+            filteredList.sort((a, b) => (b.pricePerAcre || 0) - (a.pricePerAcre || 0));
             break;
         case 'latest':
         default:
@@ -284,7 +284,7 @@ function buildModalContent(equipment) {
                     <span class="text-muted small">Listed by: <strong>${equipment.businessName || 'Seller'}</strong></span>
                 </div>
                 
-                <h3 class="text-primary mb-3">${window.firebaseHelpers.formatCurrency(equipment.pricePerDay)}/Day | ${window.firebaseHelpers.formatCurrency(equipment.pricePerHour)}/Hour</h3>
+                <h3 class="text-primary mb-3">${window.firebaseHelpers.formatCurrency(equipment.pricePerAcre)}/Acre | ${window.firebaseHelpers.formatCurrency(equipment.pricePerHour)}/Hour</h3>
                 
                 <p>${equipment.description}</p>
                 
@@ -318,9 +318,10 @@ function updateModalPrice(type, value) {
     }
 
     let price = 0;
-    if (type === 'day') {
-        price = (selectedEquipment.pricePerDay || 0) * duration;
-    } else {
+    // Check if the rental type is 'acre' (formerly 'day')
+    if (type === 'acre') {
+        price = (selectedEquipment.pricePerAcre || 0) * duration;
+    } else { // 'hour'
         price = (selectedEquipment.pricePerHour || 0) * duration;
     }
 
@@ -352,7 +353,7 @@ async function addToCartModal() {
         sellerId: item.sellerId,
         businessName: item.businessName,
         price: calculatedPrice,
-        pricePerDay: item.pricePerDay,
+        pricePerAcre: item.pricePerAcre, // Updated key
         pricePerHour: item.pricePerHour,
         rentalType: durationType,
         rentalValue: durationValue,
@@ -392,7 +393,7 @@ async function rentNowModal() {
             sellerId: item.sellerId,
             businessName: item.businessName,
             price: calculatedPrice,
-            pricePerDay: item.pricePerDay,
+            pricePerAcre: item.pricePerAcre, // Updated key
             pricePerHour: item.pricePerHour,
             rentalType: item.rentalDetails.durationType,
             rentalValue: item.rentalDetails.durationValue,
@@ -467,8 +468,8 @@ async function displayCartItems(cart) { // <<< MODIFIED: Accepts cart array
                     <h5 class="mb-0">${item.name}</h5>
                     <p class="mb-0 small text-muted">Seller: ${item.businessName}</p>
                     <p class="mb-0 small text-primary">
-                        ${item.rentalValue} ${item.rentalType === 'day' ? 'Day(s)' : 'Hour(s)'}
-                        (@ ${window.firebaseHelpers.formatCurrency(item.rentalType === 'day' ? item.pricePerDay : item.pricePerHour)}/${item.rentalType})
+                        ${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'}
+                        (@ ${window.firebaseHelpers.formatCurrency(item.rentalType === 'acre' ? item.pricePerAcre : item.pricePerHour)}/${item.rentalType})
                     </p>
                 </div>
                 <div class="text-end">
@@ -579,14 +580,14 @@ function displayCheckoutSummary(cart) {
                 <div>
                     <strong>${item.name}</strong>
                     <div class="small text-muted">
-                        ${item.rentalValue} ${item.rentalType === 'day' ? 'Day(s)' : 'Hour(s)'} | By: ${item.businessName}
+                        ${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'} | By: ${item.businessName}
                     </div>
                 </div>
                 <strong class="text-success">${window.firebaseHelpers.formatCurrency(item.price)}</strong>
             </div>
         `;
         
-        totalRentalDetails.push(`${item.rentalValue} ${item.rentalType === 'day' ? 'Day(s)' : 'Hour(s)'}`);
+        totalRentalDetails.push(`${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'}`);
     });
     
     // Display total duration
@@ -637,10 +638,12 @@ async function processPayment() {
         isPickup: isPickup, // Include pickup preference
     };
     
-    // Simulate Order Creation (In a real app, this MUST be a secure server-side call)
-    // We simulate a successful order and payment ID here.
-    const orderId = window.firebaseHelpers.generateId(); 
-    const razorpayOrderId = `order_${window.firebaseHelpers.generateId()}`; 
+    // In a real app, the Razorpay Order ID MUST be created server-side.
+    // Since we are simulating, we are removing the client-generated order_id 
+    // from the options to prevent the 400 Bad Request error.
+    
+    const orderId = window.firebaseHelpers.generateId(); // This ID is for Firestore only, not Razorpay API
+    // const razorpayOrderId = `order_${window.firebaseHelpers.generateId()}`; // Removed client-side Order ID generation
 
     // --- Razorpay Options Configuration (Route/Escrow is configured via server) ---
     const options = {
@@ -649,13 +652,10 @@ async function processPayment() {
         currency: "INR",
         name: "FarmRent",
         description: "Rental Equipment Booking",
-        order_id: razorpayOrderId, // Replace with actual Razorpay Order ID from server
+        // REMOVED: order_id parameter to prevent 400 Bad Request on client-side Order creation attempt
+        // order_id: razorpayOrderId, 
         handler: async function (response) {
             // This handler is called on successful payment
-            
-            // In a multi-vendor/escrow setup:
-            // 1. The server would receive the webhook from Razorpay confirming success.
-            // 2. The server would then process the Route/Escrow settlement.
             
             // SIMULATING SUCCESSFUL PAYMENT & SETTLEMENT
             await placeOrderInFirestore(orderId, customerData, response.razorpay_payment_id, total);
@@ -1014,7 +1014,7 @@ function createEquipmentCard(equipment, id, isBrowsePage = false) {
                 <h5 class="card-title">${equipment.name}</h5>
                 <div class="mt-auto">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <div class="price-tag">₹${equipment.pricePerDay || 0}/day</div>
+                        <div class="price-tag">₹${equipment.pricePerAcre || 0}/acre</div>
                         <small class="text-muted">or ₹${equipment.pricePerHour || 0}/hour</small>
                     </div>
                     ${actionButtonHtml}
@@ -1085,7 +1085,7 @@ function loadHowItWorks() {
         {
             icon: 'fas fa-calendar-check',
             title: 'Book & Confirm',
-            description: 'Select rental dates, add to cart, and confirm your booking with easy payment options.'
+            description: 'Select rental acres/hours, add to cart, and confirm your booking with easy payment options.' // Updated text
         },
         {
             icon: 'fas fa-hand-paper', // Changed icon from truck to hand-paper for pickup
@@ -1458,7 +1458,7 @@ function createOrderCard(order) {
                             <li class="d-flex align-items-center mb-1">
                                 <img src="${item.imageUrl || 'https://placehold.co/40x40'}" class="rounded me-2" style="width: 40px; height: 40px; object-fit: cover;">
                                 <div>
-                                    <strong>${item.name}</strong> - ${item.rentalValue} ${item.rentalType === 'day' ? 'Day(s)' : 'Hour(s)'}
+                                    <strong>${item.name}</strong> - ${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'}
                                     <small class="text-muted d-block">Seller: ${item.businessName}</small>
                                 </div>
                             </li>
