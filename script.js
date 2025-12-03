@@ -522,19 +522,29 @@ function startCheckout() {
 
 // Load logic for Checkout page (checkout.html)
 async function loadCheckoutPage() {
-    await updateCartCount();
-    
-    const cart = await getCartFromFirestore(); // <<< MODIFIED: Read from Firestore
-    
-    // --- FIX START: Use getCurrentUser to ensure auth status is resolved ---
+    // Wait for authentication initialization to complete before proceeding
+    if (!isAuthInitialized) {
+        await new Promise(resolve => {
+            const checkAuth = setInterval(() => {
+                if (isAuthInitialized) {
+                    clearInterval(checkAuth);
+                    resolve();
+                }
+            }, 100);
+        });
+    }
+
+    // Now safely get user and cart data
     const user = await window.firebaseHelpers.getCurrentUser();
-    
+    const cart = await getCartFromFirestore(); 
+
     if (!user || cart.length === 0) {
         if (!user) {
             window.firebaseHelpers.showAlert('You must be logged in to checkout.', 'danger');
             setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 2000);
         } else {
-            window.firebaseHelpers.showAlert('Your cart is empty. Redirecting to browse.', 'warning');
+            // This is the error path: User is logged in, but cart is empty/unreadable
+            window.firebaseHelpers.showAlert('Your cart is empty. Please add items to proceed.', 'warning');
             setTimeout(() => { window.location.href = 'browse.html'; }, 2000);
         }
         return;
@@ -545,8 +555,6 @@ async function loadCheckoutPage() {
     document.getElementById('customer-name').value = user.name || '';
     document.getElementById('customer-email').value = user.email || '';
     document.getElementById('customer-phone').value = user.mobile || '';
-
-    // --- FIX END ---
 
     displayCheckoutSummary(cart);
 
