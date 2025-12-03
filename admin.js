@@ -10,6 +10,17 @@ let detailedReportChart = null;
 let orderStatusChart = null;
 let categoryChart = null;
 let userGrowthChart = null;
+let allNotifications = []; // New global variable to hold notifications
+
+// Helper to get the Firestore document reference for public collections
+function getPublicCollectionRef(collectionName) {
+    // Note: __app_id is a global variable provided by the Canvas environment.
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+    // Path: /artifacts/{appId}/public/data/{collectionName}
+    return window.FirebaseDB.collection('artifacts').doc(appId)
+        .collection('public').doc('data').collection(collectionName);
+}
 
 // Initialize admin dashboard
 document.addEventListener('DOMContentLoaded', async () => {
@@ -97,6 +108,9 @@ function showSection(sectionId) {
         case 'categories':
             loadCategories();
             break;
+        case 'notifications': // NEW: Load notifications
+            loadNotifications();
+            break;
         case 'settings':
             loadSettingsData();
             break;
@@ -113,6 +127,7 @@ function updatePageTitle(sectionId) {
         orders: 'Orders Management',
         reports: 'Reports & Analytics',
         categories: 'Categories Management',
+        notifications: 'Notifications Management', // NEW TITLE
         settings: 'System Settings'
     };
     
@@ -132,10 +147,16 @@ async function loadDashboardData() {
         document.getElementById('total-revenue').textContent = window.firebaseHelpers.formatCurrency(stats.todayRevenue);
         
         // Update badge counts
-        document.getElementById('pending-users-count').textContent = stats.totalUsers;
+        document.getElementById('pending-users-count').textContent = 0; 
         document.getElementById('pending-sellers-count').textContent = stats.pendingSellers;
         document.getElementById('pending-equipment-count').textContent = stats.pendingEquipment;
+        // NEW: Update Notification Badge Count
+        document.getElementById('new-notifications-count').textContent = stats.unreadNotifications; 
+        document.getElementById('notification-count').textContent = stats.unreadNotifications; 
         
+        // Load top navbar notifications
+        displayTopNotifications(stats.recentNotifications);
+
         // Load recent activity
         await loadRecentActivity();
         
@@ -151,49 +172,36 @@ async function loadDashboardData() {
 // Calculate platform statistics
 async function calculatePlatformStats() {
     try {
-        // Get all users
+        // --- 1. User & Seller Counts ---
         const usersSnapshot = await window.FirebaseDB.collection('users').get();
         const totalUsers = usersSnapshot.size;
         
-        // Get sellers
-        const sellersSnapshot = await window.FirebaseDB.collection('users')
-            .where('role', '==', 'seller')
-            .get();
-        
-        const totalSellers = sellersSnapshot.size;
-        
-        // Get active sellers
-        const activeSellersSnapshot = await window.FirebaseDB.collection('users')
-            .where('role', '==', 'seller')
-            .where('status', '==', 'approved')
-            .get();
-        
-        const activeSellers = activeSellersSnapshot.size;
-        
-        // Get pending sellers
         const pendingSellersSnapshot = await window.FirebaseDB.collection('users')
             .where('role', '==', 'seller')
             .where('status', '==', 'pending')
             .get();
-        
         const pendingSellers = pendingSellersSnapshot.size;
         
-        // Get equipment
+        const activeSellersSnapshot = await window.FirebaseDB.collection('users')
+            .where('role', '==', 'seller')
+            .where('status', '==', 'approved')
+            .get();
+        const activeSellers = activeSellersSnapshot.size;
+        
+        // --- 2. Equipment Counts ---
         const equipmentSnapshot = await window.FirebaseDB.collection('equipment').get();
         const totalEquipment = equipmentSnapshot.size;
         
-        // Get pending equipment
         const pendingEquipmentSnapshot = await window.FirebaseDB.collection('equipment')
             .where('status', '==', 'pending')
             .get();
-        
         const pendingEquipment = pendingEquipmentSnapshot.size;
         
-        // Calculate today's revenue
+        // --- 3. Revenue Data (Already fixed in last iteration) ---
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
-        const ordersSnapshot = await window.FirebaseDB.collection('orders').get();
+        const ordersSnapshot = await getPublicCollectionRef('orders').get();
         let todayRevenue = 0;
         let revenueData = [0, 0, 0, 0, 0, 0, 0]; // Last 7 days
         
@@ -201,17 +209,52 @@ async function calculatePlatformStats() {
             const order = doc.data();
             const orderDate = order.createdAt ? order.createdAt.toDate() : new Date();
             
-            // Today's revenue
             if (orderDate >= today) {
                 todayRevenue += order.totalAmount || 0;
             }
             
-            // Last 7 days revenue
             const daysAgo = Math.floor((today - orderDate) / (1000 * 60 * 60 * 24));
             if (daysAgo >= 0 && daysAgo < 7) {
                 revenueData[6 - daysAgo] += order.totalAmount || 0;
             }
         });
+
+        // --- 4. Notifications (NEW LOGIC) ---
+        // For simplicity, we define notifications as the combined list of pending sellers and pending equipment.
+        let notifications = [];
+
+        pendingSellersSnapshot.forEach(doc => {
+            const seller = doc.data();
+            notifications.push({
+                id: `seller-${doc.id}`,
+                type: 'seller_approval',
+                message: `New Seller registration: ${seller.name || 'New User'} (${seller.businessName || 'N/A'})`,
+                relatedId: doc.id,
+                date: seller.createdAt,
+                read: false, // Default to unread for pending approvals
+                action: () => showSection('sellers')
+            });
+        });
+
+        pendingEquipmentSnapshot.forEach(doc => {
+            const equipment = doc.data();
+            notifications.push({
+                id: `equipment-${doc.id}`,
+                type: 'equipment_approval',
+                message: `New Equipment listing pending: ${equipment.name || 'N/A'} (Seller: ${equipment.sellerName || 'Unknown'})`,
+                relatedId: doc.id,
+                date: equipment.createdAt,
+                read: false,
+                action: () => showSection('equipment')
+            });
+        });
+        
+        // Sort notifications by date (newest first)
+        notifications.sort((a, b) => (b.date?.toDate() || 0) - (a.date?.toDate() || 0));
+        
+        allNotifications = notifications; // Store globally
+        const unreadNotifications = notifications.filter(n => !n.read).length;
+        const recentNotifications = notifications.slice(0, 5);
         
         return {
             totalUsers,
@@ -221,7 +264,9 @@ async function calculatePlatformStats() {
             totalEquipment,
             pendingEquipment,
             todayRevenue,
-            revenueData
+            revenueData,
+            unreadNotifications, // NEW
+            recentNotifications // NEW
         };
         
     } catch (error) {
@@ -234,8 +279,58 @@ async function calculatePlatformStats() {
             totalEquipment: 0,
             pendingEquipment: 0,
             todayRevenue: 0,
-            revenueData: [0, 0, 0, 0, 0, 0, 0]
+            revenueData: [0, 0, 0, 0, 0, 0, 0],
+            unreadNotifications: 0,
+            recentNotifications: []
         };
+    }
+}
+
+// NEW: Display top navbar notifications
+function displayTopNotifications(notifications) {
+    const list = document.getElementById('top-notifications-list');
+    if (!list) return;
+
+    // Clear previous items except the header
+    list.innerHTML = '<li><h6 class="dropdown-header">Notifications</h6></li>';
+
+    if (notifications.length === 0) {
+        list.innerHTML += '<li><a class="dropdown-item" href="#">No new notifications</a></li>';
+        return;
+    }
+
+    notifications.forEach(notification => {
+        const timeAgo = notification.date ? window.firebaseHelpers.formatTimeAgo(notification.date) : 'Just now';
+        
+        list.innerHTML += `
+            <li>
+                <a class="dropdown-item ${notification.read ? 'text-muted' : 'font-weight-bold'}" href="#" 
+                   onclick="handleNotificationClick('${notification.id}')"
+                   title="${notification.message}">
+                    <i class="fas fa-${notification.type.includes('seller') ? 'store' : 'tractor'} me-2"></i>
+                    ${notification.message.substring(0, 30)}${notification.message.length > 30 ? '...' : ''} 
+                    <small class="float-end text-muted">${timeAgo}</small>
+                </a>
+            </li>
+        `;
+    });
+
+    list.innerHTML += '<li><hr class="dropdown-divider"></li>';
+    list.innerHTML += '<li><a class="dropdown-item text-center" href="#" onclick="showSection(\'notifications\')">View All Notifications</a></li>';
+}
+
+// NEW: Handle click on a top navbar notification
+function handleNotificationClick(notificationId) {
+    // For now, clicking redirects to the relevant section
+    const notification = allNotifications.find(n => n.id === notificationId);
+    if (notification) {
+        // Since these are only pending approvals, clicking should mark them as read 
+        // by fulfilling the action (e.g., viewing the seller list).
+        if (notification.action) {
+            notification.action();
+        }
+        // Since the source data is transient (it disappears upon approval), we don't update Firebase.
+        // We just navigate and the main screen updates will reflect the change.
     }
 }
 
@@ -243,7 +338,7 @@ async function calculatePlatformStats() {
 async function loadRecentActivity() {
     try {
         // Load recent orders
-        const ordersSnapshot = await window.FirebaseDB.collection('orders')
+        const ordersSnapshot = await getPublicCollectionRef('orders')
             .orderBy('createdAt', 'desc')
             .limit(5)
             .get();
@@ -265,7 +360,7 @@ async function loadRecentActivity() {
             });
         }
         
-        // Load pending approvals
+        // Load pending approvals (Sellers)
         const pendingSellersSnapshot = await window.FirebaseDB.collection('users')
             .where('role', '==', 'seller')
             .where('status', '==', 'pending')
@@ -293,6 +388,79 @@ async function loadRecentActivity() {
         console.error('Error loading recent activity:', error);
     }
 }
+
+// ... (Rest of the file remains the same until loadNotifications)
+
+// NEW: Load Notifications Section
+async function loadNotifications() {
+    // Recalculate stats to ensure 'allNotifications' is up-to-date
+    const stats = await calculatePlatformStats();
+    const notifications = stats.recentNotifications; // Use all notifications found
+
+    const listContainer = document.getElementById('notifications-list');
+    const loading = document.getElementById('notifications-loading');
+    const countElement = document.getElementById('notifications-count');
+
+    loading.style.display = 'none';
+    listContainer.innerHTML = '';
+    
+    countElement.textContent = notifications.length;
+
+    if (notifications.length === 0) {
+        listContainer.innerHTML = `
+            <div class="text-center py-5">
+                <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
+                <h4>All clear!</h4>
+                <p class="text-muted">No pending system alerts or approval requests.</p>
+            </div>
+        `;
+        return;
+    }
+
+    notifications.forEach(notification => {
+        const timeAgo = notification.date ? window.firebaseHelpers.formatDateTime(notification.date) : 'N/A';
+        const typeIcon = notification.type.includes('seller') ? 'fas fa-store' : 'fas fa-tractor';
+        const badgeColor = notification.type.includes('seller') ? 'bg-warning' : 'bg-info';
+        const actionText = notification.type.includes('seller') ? 'Review Seller' : 'Review Equipment';
+
+        listContainer.innerHTML += `
+            <div class="list-group-item d-flex justify-content-between align-items-center p-3">
+                <div class="d-flex align-items-center">
+                    <i class="${typeIcon} fa-2x me-3 text-primary"></i>
+                    <div>
+                        <h6 class="mb-1">${notification.message}</h6>
+                        <small class="text-muted">Type: <span class="badge ${badgeColor}">${notification.type.replace('_', ' ')}</span> | Received: ${timeAgo}</small>
+                    </div>
+                </div>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary" onclick="handleNotificationAction('${notification.relatedId}', '${notification.type}')">
+                        <i class="fas fa-arrow-right me-1"></i> ${actionText}
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+}
+
+// NEW: Handle action button click in Notifications section
+function handleNotificationAction(relatedId, type) {
+    if (type === 'seller_approval') {
+        showSection('sellers');
+        // Optionally highlight the seller row (requires additional logic)
+    } else if (type === 'equipment_approval') {
+        showSection('equipment');
+        // Optionally highlight the equipment item (requires additional logic)
+    } else {
+        window.firebaseHelpers.showAlert('Unknown notification type.', 'warning');
+    }
+}
+
+// NEW: Mark all notifications as read (simulated/cleared upon action)
+function markAllNotificationsRead() {
+    window.firebaseHelpers.showAlert('All pending approvals must be actioned through their respective sections.', 'info');
+}
+
+// ... (The rest of the `admin.js` file content)
 
 // Create dashboard order row
 function createDashboardOrderRow(order, orderId) {
@@ -1028,7 +1196,8 @@ async function markEquipmentAsFeatured(equipmentId, isFeatured, closeAndReload =
 // Load orders
 async function loadOrders() {
     try {
-        const ordersSnapshot = await window.FirebaseDB.collection('orders')
+        // BUG FIX: Use scoped public collection for orders
+        const ordersSnapshot = await getPublicCollectionRef('orders')
             .orderBy('createdAt', 'desc')
             .get();
         
@@ -1074,8 +1243,8 @@ function createOrderTableRow(order) {
         <tr>
             <td>#${order.id.substring(0, 8)}</td>
             <td>${order.customerName || 'Customer'}</td>
-            <td>${order.equipmentName || 'Equipment'}</td>
-            <td>${order.sellerName || 'Seller'}</td>
+            <td>${order.equipmentNames || 'Equipment'}</td>
+            <td>${order.sellerBusinessNames || 'Seller'}</td>
             <td>${window.firebaseHelpers.formatCurrency(order.totalAmount || 0)}</td>
             <td><span class="status-badge ${statusClass}">${statusText}</span></td>
             <td>${window.firebaseHelpers.formatDate(order.createdAt)}</td>
@@ -1095,8 +1264,8 @@ function searchOrders() {
     
     let filteredOrders = ordersData.filter(order => 
         order.customerName?.toLowerCase().includes(searchTerm) ||
-        order.equipmentName?.toLowerCase().includes(searchTerm) ||
-        order.sellerName?.toLowerCase().includes(searchTerm) ||
+        order.equipmentNames?.toLowerCase().includes(searchTerm) ||
+        order.sellerBusinessNames?.toLowerCase().includes(searchTerm) ||
         order.id.toLowerCase().includes(searchTerm)
     );
     
@@ -1115,14 +1284,17 @@ function filterOrders() {
 // View order details
 async function viewOrderDetails(orderId) {
     try {
-        const doc = await window.FirebaseDB.collection('orders').doc(orderId).get();
+        // BUG FIX: Use scoped public collection for orders
+        const doc = await getPublicCollectionRef('orders').doc(orderId).get();
         if (doc.exists) {
             const order = doc.data();
             
             // Format dates
             const createdAt = window.firebaseHelpers.formatDateTime(order.createdAt);
-            // UPDATED: Check for totalAcres/totalHours, consistent with order creation logic
-            const rentalPeriod = order.totalAcres ? `${order.totalAcres} Acres` : (order.totalHours ? `${order.totalHours} Hours` : 'N/A');
+            // UPDATED: Use consolidated rental details from order.items for a better description.
+            const rentalPeriod = order.items.map(item => 
+                `${item.rentalValue} ${item.rentalType === 'acre' ? 'Acres' : 'Hours'}`
+            ).join(', ');
             
             // Create modal content
             const modalBody = `
@@ -1139,9 +1311,8 @@ async function viewOrderDetails(orderId) {
                     <div class="col-md-6">
                         <h5>Rental Details</h5>
                         <table class="table table-sm">
-                            <tr><th>Equipment:</th><td>${order.equipmentName || 'N/A'}</td></tr>
-                            <tr><th>Rental Period:</th><td>${rentalPeriod}</td></tr>
-                            <!-- Removed redundant Total Days/Hours if using totalAcres/totalHours for period -->
+                            <tr><th>Equipment:</th><td>${order.equipmentNames || 'N/A'}</td></tr>
+                            <tr><th>Rental Period:</th><td>${rentalPeriod || 'N/A'}</td></tr>
                         </table>
                     </div>
                 </div>
@@ -1158,8 +1329,8 @@ async function viewOrderDetails(orderId) {
                     <div class="col-md-6">
                         <h5>Seller Information</h5>
                         <table class="table table-sm">
-                            <tr><th>Name:</th><td>${order.sellerName || 'N/A'}</td></tr>
-                            <tr><th>Business:</th><td>${order.sellerBusiness || 'N/A'}</td></tr>
+                            <tr><th>Business:</th><td>${order.sellerBusinessNames || 'N/A'}</td></tr>
+                            <tr><th>Seller IDs:</th><td>${order.sellerIds || 'N/A'}</td></tr>
                         </table>
                     </div>
                 </div>
@@ -1216,7 +1387,8 @@ async function calculateReportData(periodDays) {
         startDate.setDate(startDate.getDate() - periodDays);
         
         // Get orders in period
-        const ordersSnapshot = await window.FirebaseDB.collection('orders').get();
+        // BUG FIX: Use scoped public collection for orders
+        const ordersSnapshot = await getPublicCollectionRef('orders').get();
         let totalOrders = 0;
         let totalRevenue = 0;
         const dailyData = [];
