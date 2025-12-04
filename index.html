@@ -43,13 +43,25 @@
                         <a class="nav-link" href="contact.html">Contact</a>
                     </li>
                 </ul>
-                <ul class="navbar-nav" id="navbar-auth">
+                <ul class="navbar-nav align-items-center">
+                    <!-- NEW: Pincode Display in Navbar -->
+                    <li class="nav-item d-none d-lg-block">
+                        <span class="nav-link" id="navbar-pincode-display">
+                            <span class="badge bg-warning text-dark p-2" onclick="showPincodeModal()" style="cursor: pointer;">
+                                <i class="fas fa-map-marker-alt me-1"></i> <strong id="current-pincode-value-nav">All Locations</strong>
+                            </span>
+                        </span>
+                    </li>
+                    <!-- END NEW -->
                     <li class="nav-item">
                         <a class="nav-link" href="cart.html">
                             <i class="fas fa-shopping-cart"></i> Cart
                             <span class="badge bg-warning text-dark" id="cart-count">0</span>
                         </a>
                     </li>
+                    <ul class="navbar-nav" id="navbar-auth">
+                    <!-- Auth links loaded by script.js -->
+                    </ul>
                 </ul>
             </div>
         </div>
@@ -62,13 +74,13 @@
                 <div class="col-lg-6">
                     <h1 class="display-4 fw-bold mb-4">Modern Farming Made Easy</h1>
                     <p class="lead mb-4">India's leading farming equipment rental service. Get modern tools for your farm with easy self-pickup options.</p>
-                    <!-- Display local Pincode filter -->
-                    <div id="homepage-pincode-display" class="mb-3">
-                        <span class="badge bg-warning text-dark p-2">
-                             <i class="fas fa-map-marker-alt me-1"></i> Filtering for: <strong id="current-pincode-value">All Locations</strong>
-                        </span>
-                        <button class="btn btn-sm btn-outline-light ms-2" onclick="showPincodeModal()">Change</button>
+                    
+                    <!-- UPDATED: Pincode display in the hero section (now just a friendly reminder/call to action) -->
+                    <div id="homepage-pincode-display" class="mb-4">
+                        <p class="text-white mb-1"><i class="fas fa-map-marker-alt me-1 text-warning"></i> Showing equipment available for: <strong id="current-pincode-value">All Locations</strong></p>
+                        <button class="btn btn-sm btn-outline-light" onclick="showPincodeModal()">Change Location Filter</button>
                     </div>
+                    <!-- END UPDATED -->
 
                     <div class="d-flex flex-wrap gap-3">
                         <a href="browse.html" class="btn btn-warning btn-lg">Browse Equipment</a>
@@ -220,6 +232,20 @@
                 <form id="pincode-form">
                     <div class="modal-body">
                         <p>To show you the most relevant equipment from local sellers, please enter your 6-digit Pincode.</p>
+                        
+                        <!-- NEW LOCATION ACCESS BUTTON -->
+                        <div class="d-grid mb-3">
+                             <button type="button" class="btn btn-outline-info" id="location-access-btn" onclick="getCurrentLocationPincode()">
+                                <i class="fas fa-location-arrow me-2"></i> Use Current Location
+                            </button>
+                            <small class="text-muted mt-1" id="location-status"></small>
+                        </div>
+                        <!-- END NEW -->
+
+                        <div class="divider text-center mb-3">
+                            <span class="text-muted small">OR ENTER MANUALLY</span>
+                        </div>
+                        
                         <div class="mb-3">
                             <label for="pincode-input" class="form-label">Pincode *</label>
                             <input type="text" class="form-control form-control-lg" id="pincode-input" pattern="[0-9]{6}" maxlength="6" placeholder="Enter 6-digit Pincode" required>
