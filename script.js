@@ -396,7 +396,8 @@ async function checkAndPromptForPincode() {
     }
 
     // Prioritize Firebase data if logged in
-    const finalPincode = window.currentUser?.pincode || storedPincode;
+    // FIX: Ensure if currentUser exists, use its pincode, then fallback to storedPincode, then null
+    const finalPincode = (window.currentUser && window.currentUser.pincode) ? window.currentUser.pincode : storedPincode;
     window.customerPincode = finalPincode;
     
     // Update all displays immediately
@@ -474,6 +475,7 @@ async function savePincode(pincode) {
                 pincode: pincode,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
+            // Update local object to reflect the change
             window.currentUser.pincode = pincode;
         } catch (error) {
             console.warn('Could not save pincode to profile:', error);
@@ -537,7 +539,8 @@ function updateNavbarPincodeDisplay() {
 async function loadBrowsePageData() {
     // Use stored/profile Pincode for filtering on browse page
     const storedPincode = localStorage.getItem('customerPincode');
-    window.customerPincode = window.currentUser?.pincode || storedPincode;
+    // FIX: Prioritize currentUser.pincode if logged in, otherwise use stored
+    window.customerPincode = (window.currentUser && window.currentUser.pincode) ? window.currentUser.pincode : storedPincode;
     
     await updatePincodeDisplay(); // NEW: Display Pincode info/warning
     await loadAllEquipment();
@@ -614,6 +617,9 @@ async function loadAllEquipment() {
         if (window.customerPincode) {
              // We query directly by the Pincode field which was set by the seller in seller.html
              query = query.where('pincode', '==', window.customerPincode);
+        } else {
+             // If no Pincode is set, load all, but warn the user through updatePincodeDisplay()
+             // No 'where' clause needed here, just rely on the approved status.
         }
 
         const snapshot = await query
@@ -702,11 +708,12 @@ function displayEquipmentGrid(equipmentList) {
     const pincode = window.customerPincode || 'N/A';
 
     if (equipmentList.length === 0) {
+        const pincodeText = pincode !== 'N/A' ? ` in your Pincode area (${pincode})` : ' without a location filter applied';
         container.innerHTML = `
             <div class="col-12 text-center py-5">
                 <i class="fas fa-search-minus fa-3x text-muted mb-3"></i>
-                <p class="mt-3">No equipment found ${pincode !== 'N/A' ? `in your area (Pincode: ${pincode}).` : 'without a location filter applied.'}</p>
-                <p class="text-muted small">Try adjusting your Pincode in your profile or clearing the filter.</p>
+                <p class="mt-3">No equipment found${pincodeText}.</p>
+                <p class="text-muted small">Try selecting "All Locations" or changing your Pincode.</p>
                 <a href="#" class="btn btn-primary mt-3" onclick="showPincodeModal()">Set/Change Pincode Now</a>
             </div>
         `;
@@ -795,7 +802,7 @@ function buildModalContent(equipment) {
                 <p>${equipment.description}</p>
                 
                 <ul class="list-unstyled">
-                    <li><i class="fas fa-map-marker-alt me-2 text-warning"></i> <strong>Location:</strong> ${equipment.location} (${equipment.pincode || 'N/A'})</li>
+                    <li><i class="fas fa-map-marker-alt me-2 text-warning"></i> <strong>Pickup Location Pincode:</strong> ${equipment.pincode || 'N/A'}</li>
                     <li><i class="fas fa-tags me-2 text-warning"></i> <strong>Category:</strong> ${equipment.category}</li>
                     <li><i class="fas fa-list-ol me-2 text-warning"></i> <strong>Quantity:</strong> ${equipment.quantity}</li>
                 </ul>
@@ -852,6 +859,22 @@ async function addToCartModal() {
     }
 
     let cart = await getCartFromFirestore(); // <<< MODIFIED: Read from Firestore
+    
+    // NEW LOGIC: Check Pincode consistency (like Swiggy/Zomato)
+    const itemPincode = item.pincode;
+    if (!itemPincode) {
+        window.firebaseHelpers.showAlert('Equipment missing Pincode information. Cannot add to cart.', 'danger');
+        return;
+    }
+    
+    if (cart.length > 0) {
+        const cartPincode = cart[0].pincode;
+        if (cartPincode && cartPincode !== itemPincode) {
+             window.firebaseHelpers.showAlert(`Cannot add equipment from Pincode ${itemPincode}. Your cart contains items from ${cartPincode}. Clear your cart to order from a different Pincode.`, 'danger');
+             return;
+        }
+    }
+    // END NEW LOGIC
 
     const cartItem = {
         id: item.id,
@@ -864,7 +887,7 @@ async function addToCartModal() {
         rentalType: durationType,
         rentalValue: durationValue,
         imageUrl: item.images && item.images[0],
-        pincode: item.pincode // NEW: Add Pincode to cart item for easier order processing
+        pincode: itemPincode // NEW: Add Pincode to cart item for easier order processing
     };
     
     // Check if item is already in cart, if so, update it
@@ -872,11 +895,6 @@ async function addToCartModal() {
     if (existingIndex > -1) {
         cart[existingIndex] = cartItem;
     } else {
-        // NEW: Check if all items in cart share the same pincode. We allow only one Pincode per order.
-        if (cart.length > 0 && cart[0].pincode !== item.pincode) {
-             window.firebaseHelpers.showAlert(`Cannot add equipment from Pincode ${item.pincode}. Your current cart items are from Pincode ${cart[0].pincode}.`, 'danger');
-             return;
-        }
         cart.push(cartItem);
     }
 
@@ -898,6 +916,13 @@ async function rentNowModal() {
         return;
     }
 
+    // NEW LOGIC: Ensure the selected equipment has Pincode
+    const itemPincode = item.pincode;
+    if (!itemPincode) {
+        window.firebaseHelpers.showAlert('Equipment missing Pincode information. Cannot proceed to checkout.', 'danger');
+        return;
+    }
+
     const singleItemCart = [
         {
             id: item.id,
@@ -910,7 +935,7 @@ async function rentNowModal() {
             rentalType: item.rentalDetails.durationType,
             rentalValue: item.rentalDetails.durationValue,
             imageUrl: item.images && item.images[0],
-            pincode: item.pincode // NEW: Add Pincode to cart item
+            pincode: itemPincode // NEW: Add Pincode to cart item
         }
     ];
 
@@ -966,7 +991,7 @@ async function displayCartItems(cart) { // <<< MODIFIED: Accepts cart array
             </div>
         `;
         // Update summary to zero
-        updateCartSummary(0, 0, 0); 
+        updateCartSummary(0, 0, 0, true); // Pass true to disable checkout button
         return;
     }
 
@@ -979,7 +1004,7 @@ async function displayCartItems(cart) { // <<< MODIFIED: Accepts cart array
                 <img src="${item.imageUrl || 'https://placehold.co/80x80'}" class="rounded me-3" style="width: 80px; height: 80px; object-fit: cover;">
                 <div class="flex-grow-1">
                     <h5 class="mb-0">${item.name}</h5>
-                    <p class="mb-0 small text-muted">Seller: ${item.businessName} (${item.pincode || 'N/A'})</p> <!-- UPDATED: Display Pincode -->
+                    <p class="mb-0 small text-muted">Seller: ${item.businessName} (Pincode: ${item.pincode || 'N/A'})</p> <!-- UPDATED: Display Pincode -->
                     <p class="mb-0 small text-primary">
                         ${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'}
                         (@ ${window.firebaseHelpers.formatCurrency(item.rentalType === 'acre' ? item.pricePerAcre : item.pricePerHour)}/${item.rentalType})
@@ -999,7 +1024,7 @@ async function displayCartItems(cart) { // <<< MODIFIED: Accepts cart array
     const fees = subtotal * platformFeeRate; 
     const total = subtotal + fees;
 
-    updateCartSummary(subtotal, fees, total);
+    updateCartSummary(subtotal, fees, total, false);
 }
 
 // Remove item from cart
@@ -1014,30 +1039,43 @@ async function removeItemFromCart(index) {
 }
 
 // Update the summary section on the cart page
-function updateCartSummary(subtotal, fees, total) {
+function updateCartSummary(subtotal, fees, total, isDisabled) {
     document.getElementById('cart-subtotal').textContent = window.firebaseHelpers.formatCurrency(subtotal);
     document.getElementById('cart-discount').textContent = window.firebaseHelpers.formatCurrency(0); // No discount simulation for now
     document.getElementById('cart-fees').textContent = window.firebaseHelpers.formatCurrency(fees);
     document.getElementById('cart-total').textContent = window.firebaseHelpers.formatCurrency(total);
 
     // Enable/disable checkout button
-    document.getElementById('checkout-btn').disabled = total === 0;
+    document.getElementById('checkout-btn').disabled = isDisabled || total === 0;
 }
 
 // Start checkout (redirect to checkout page)
-function startCheckout() {
+async function startCheckout() {
     // Only allow checkout if user is logged in
     if (!window.currentUser) {
         window.firebaseHelpers.showAlert('Please log in before proceeding to checkout.', 'warning');
         setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 1500);
         return;
     }
+    
     // NEW: Final check to ensure Pincode is set for the customer
-    if (!window.customerPincode) {
+    if (!window.currentUser.pincode) {
         window.firebaseHelpers.showAlert('Pincode required! Please update your profile to finalize the rental location.', 'danger');
         setTimeout(() => { window.location.href = 'profile.html'; }, 2000);
         return;
     }
+    
+    // NEW: Check for Pincode consistency between cart and user profile (Cart Pincode must match User Pincode)
+    const cart = await getCartFromFirestore();
+    if (cart.length > 0) {
+        const cartPincode = cart[0].pincode;
+        if (cartPincode !== window.currentUser.pincode) {
+            window.firebaseHelpers.showAlert(`Your cart items are from Pincode ${cartPincode}, but your profile Pincode is ${window.currentUser.pincode}. Please clear your cart or update your profile.`, 'danger');
+            // Optionally clear cart or show an error state
+            return;
+        }
+    }
+    
     window.location.href = 'checkout.html';
 }
 
@@ -1074,9 +1112,17 @@ async function loadCheckoutPage() {
         return;
     }
 
-    // NEW: Check if Pincode is available before proceeding with checkout summary
-    if (!user.pincode) {
-        window.firebaseHelpers.showAlert('Pincode is missing. Please update your profile to continue.', 'danger');
+    // NEW: Check if Pincode is available for both user and cart
+    if (!user.pincode || cart[0].pincode !== user.pincode) {
+        let message = 'Pincode mismatch or missing: ';
+        if (!user.pincode) {
+             message += 'Customer Pincode is not set in your profile.';
+        } else if (cart[0].pincode !== user.pincode) {
+             message += `Cart items (${cart[0].pincode}) do not match your profile Pincode (${user.pincode}).`;
+        }
+        window.firebaseHelpers.showAlert(message + ' Please update your profile/cart to continue.', 'danger');
+        document.getElementById('pay-now-btn').disabled = true; // Disable payment button
+        document.getElementById('pay-button-amount').textContent = 'Error';
         setTimeout(() => { window.location.href = 'profile.html'; }, 2000);
         return;
     }
@@ -1148,6 +1194,13 @@ async function processPayment() {
     if (!form.checkValidity()) {
         form.reportValidity();
         window.firebaseHelpers.showAlert('Please fill all required customer details.', 'warning');
+        return;
+    }
+    
+    // Check Pincode again before payment
+    if (!window.currentUser || !window.currentUser.pincode) {
+        window.firebaseHelpers.showAlert('Critical Error: Customer Pincode is not set. Cannot proceed.', 'danger');
+        document.getElementById('pay-now-btn').disabled = true;
         return;
     }
     
@@ -1315,45 +1368,48 @@ function initializeAuth() {
 function initializeAuthInternal() {
     try {
         // Access Firebase Auth from window global object
-        window.FirebaseAuth.onAuthStateChanged((user) => {
+        window.FirebaseAuth.onAuthStateChanged(async (user) => { // Made async for awaits
             if (user) {
                 // User is signed in
-                window.FirebaseDB.collection('users').doc(user.uid).get()
-                    .then((doc) => {
-                        if (doc.exists) {
-                            window.currentUser = { uid: user.uid, ...doc.data() };
-                            
-                            // NEW: Set global customer Pincode from profile if not set in session/local storage
-                            const storedPincode = localStorage.getItem('customerPincode');
-                            window.customerPincode = window.currentUser.pincode || storedPincode || null;
-                            
-                            updateNavbarForLoggedInUser(window.currentUser);
-                            // Ensure cart count is updated immediately after user is set
-                            updateCartCount(); 
-                            
-                            // NEW: Update Pincode display across all pages
-                            const path = window.location.pathname.split('/').pop();
-                            if (path === 'browse.html') {
-                                updatePincodeDisplay();
-                                loadAllEquipment();
-                            } else if (path === 'index.html' || path === '') {
-                                updateHomepagePincodeDisplay();
-                                loadFeaturedEquipment(); 
-                            }
-                            updateNavbarPincodeDisplay(); // Call for all pages
-                            
+                try {
+                    const doc = await window.FirebaseDB.collection('users').doc(user.uid).get();
+                    if (doc.exists) {
+                        window.currentUser = { uid: user.uid, ...doc.data() };
+                        
+                        // NEW: Set global customer Pincode from profile if not set in session/local storage
+                        const storedPincode = localStorage.getItem('customerPincode');
+                        // FIX: Ensure correct precedence: profile -> local storage -> null
+                        window.customerPincode = window.currentUser.pincode || storedPincode || null;
+                        
+                        updateNavbarForLoggedInUser(window.currentUser);
+                        // Ensure cart count is updated immediately after user is set
+                        updateCartCount(); 
+                        
+                        // NEW: Update Pincode display across all pages
+                        const path = window.location.pathname.split('/').pop();
+                        if (path === 'browse.html') {
+                            updatePincodeDisplay();
+                            loadAllEquipment();
+                        } else if (path === 'index.html' || path === '') {
+                            updateHomepagePincodeDisplay();
+                            loadFeaturedEquipment(); 
                         }
-                    })
-                    .catch((error) => {
-                        console.error("Error getting user data:", error);
-                    })
-                    .finally(() => {
-                        isAuthInitialized = true;
-                    });
+                        updateNavbarPincodeDisplay(); // Call for all pages
+                        
+                    }
+                } catch (error) {
+                    console.error("Error getting user data:", error);
+                } finally {
+                    isAuthInitialized = true;
+                }
             } else {
                 // User is signed out
                 window.currentUser = null; // Ensure global is cleared
                 // window.customerPincode is intentionally NOT cleared here, as it might be stored locally
+                
+                // NEW: Ensure customerPincode is pulled from local storage if not logged in
+                window.customerPincode = localStorage.getItem('customerPincode') || null;
+
                 updateNavbarForLoggedOutUser();
                 // Update cart count for unauthenticated user (will show local storage items)
                 updateCartCount();
@@ -1362,13 +1418,9 @@ function initializeAuthInternal() {
                 // NEW: Apply local Pincode filter logic if applicable
                 const path = window.location.pathname.split('/').pop();
                 if (path === 'browse.html') {
-                    // Ensure customerPincode is pulled from local storage if needed
-                    window.customerPincode = localStorage.getItem('customerPincode');
                     updatePincodeDisplay();
                     loadAllEquipment();
                 } else if (path === 'index.html' || path === '') {
-                    // Ensure customerPincode is pulled from local storage if needed
-                    window.customerPincode = localStorage.getItem('customerPincode');
                     updateHomepagePincodeDisplay();
                     loadFeaturedEquipment(); 
                 }
@@ -1999,6 +2051,7 @@ async function loadProfilePage() {
     if (user.pincode) {
         // Use an IIFE or separate function to handle asynchronous population
         (async () => {
+             // Pass Pincode specific status element
              await populateLocationFields('profile-pincode', 'profile-village', 'profile-city', 'profile-state', 'pincode-status-message');
              // Try to select the saved village if it exists
              const villageSelect = document.getElementById('profile-village');
@@ -2032,6 +2085,7 @@ async function handleProfileUpdate(e) {
         window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
         return;
     }
+    // Only check village value if the select element exists (it should, after a successful pincode entry)
     if (villageSelect && !villageSelect.value) {
         window.firebaseHelpers.showAlert('Please select your Village/Post Office.', 'danger');
         return;
