@@ -986,152 +986,164 @@
         </div>
 
         <!-- Profile Section -->
-        <div class="section" id="profile-section" style="display: none;">
-            <div class="page-header">
-                <h1>Profile Settings</h1>
-                <p class="text-muted">Manage your seller account</p>
-            </div>
-            
-            <div class="row">
-                <div class="col-lg-8">
-                    <div class="table-container">
-                        <form id="profile-form">
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="profile-name" class="form-label">Full Name *</label>
-                                    <input type="text" class="form-control" id="profile-name" required>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="profile-email" class="form-label">Email Address *</label>
-                                    <input type="email" class="form-control" id="profile-email" required readonly>
-                                </div>
-                            </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="profile-phone" class="form-label">Phone Number *</label>
-                                    <input type="tel" class="form-control" id="profile-phone" required>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="profile-business" class="form-label">Business Name *</label>
-                                    <input type="text" class="form-control" id="profile-business" required>
-                                </div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="profile-address" class="form-label">Business Address *</label>
-                                <textarea class="form-control" id="profile-address" rows="3" required></textarea>
-                            </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="profile-gst" class="form-label">GST Number</label>
-                                    <input type="text" class="form-control" id="profile-gst">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="profile-city" class="form-label">City *</label>
-                                    <input type="text" class="form-control" id="profile-city" required>
-                                </div>
-                            </div>
-                            
-                            <!-- UPDATED: Added Pincode Field for Location Filtering -->
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="profile-pincode" class="form-label">Pincode (Primary Operating Area) *</label>
-                                    <input type="text" class="form-control" id="profile-pincode" pattern="[0-9]{6}" maxlength="6" required>
-                                </div>
-                            </div>
-                            <!-- END UPDATED -->
+<div class="section" id="profile-section" style="display: none;">
+    <div class="page-header">
+        <h1>Profile Settings</h1>
+        <p class="text-muted">Manage your seller account</p>
+    </div>
+    
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="table-container">
+                <form id="profile-form">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-name" class="form-label">Full Name *</label>
+                            <input type="text" class="form-control" id="profile-name" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-email" class="form-label">Email Address *</label>
+                            <input type="email" class="form-control" id="profile-email" required readonly>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-phone" class="form-label">Phone Number *</label>
+                            <input type="tel" class="form-control" id="profile-phone" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-business" class="form-label">Business Name *</label>
+                            <input type="text" class="form-control" id="profile-business" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="profile-address" class="form-label">Business Address (Street/House Number) *</label>
+                        <textarea class="form-control" id="profile-address" rows="3" required placeholder="Primary pickup address (must include House/Street details)"></textarea>
+                    </div>
+                    
+                    <!-- UPDATED: Pincode and Location Fields -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-pincode" class="form-label">Pincode (Primary Operating Area) *</label>
+                            <input type="text" class="form-control" id="profile-pincode" pattern="[0-9]{6}" maxlength="6" required placeholder="e.g., 503001">
+                            <small id="pincode-status-message" class="form-text text-muted"></small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-village" class="form-label">Village/Post Office *</label>
+                            <select class="form-select" id="profile-village" required disabled>
+                                <option value="">Enter Pincode Above</option>
+                            </select>
+                        </div>
+                    </div>
 
-                            <div class="mb-3">
-                                <label for="profile-bio" class="form-label">Business Description</label>
-                                <textarea class="form-control" id="profile-bio" rows="2" placeholder="Tell customers about your business"></textarea>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label class="form-label">Profile Picture</label>
-                                <div class="d-flex align-items-center gap-3">
-                                    <img src="https://via.placeholder.com/100" alt="Profile" class="rounded-circle" id="profile-picture" width="100" height="100">
-                                    <div>
-                                        <input type="file" class="form-control d-none" id="profile-picture-upload" accept="image/*">
-                                        <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('profile-picture-upload').click()">
-                                            <i class="fas fa-upload me-2"></i>Upload New Picture
-                                        </button>
-                                        <small class="text-muted d-block mt-1">Recommended: Square image, max 2MB</small>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <hr>
-                            
-                            <h5 class="mb-3">Change Password</h5>
-                            <div class="row">
-                                <div class="col-md-4 mb-3">
-                                    <label for="current-password" class="form-label">Current Password</label>
-                                    <input type="password" class="form-control" id="current-password">
-                                </div>
-                                <div class="col-md-4 mb-3">
-                                    <label for="new-password" class="form-label">New Password</label>
-                                    <input type="password" class="form-control" id="new-password">
-                                </div>
-                                <div class="col-md-4 mb-3">
-                                    <label for="confirm-password" class="form-label">Confirm Password</label>
-                                    <input type="password" class="form-control" id="confirm-password">
-                                </div>
-                            </div>
-                            
-                            <div class="d-flex justify-content-between">
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-save me-2"></i>Save Changes
-                                </button>
-                                <button type="button" class="btn btn-outline-danger" onclick="showDeleteAccountModal()">
-                                    <i class="fas fa-trash me-2"></i>Delete Account
-                                </button>
-                            </div>
-                        </form>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-city" class="form-label">City/District *</label>
+                            <input type="text" class="form-control" id="profile-city" readonly required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-state" class="form-label">State *</label>
+                            <input type="text" class="form-control" id="profile-state" readonly required>
+                        </div>
                     </div>
+                    <!-- END UPDATED -->
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-gst" class="form-label">GST Number (Optional)</label>
+                            <input type="text" class="form-control" id="profile-gst">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-bio" class="form-label">Business Description</label>
+                            <textarea class="form-control" id="profile-bio" rows="2" placeholder="Tell customers about your business"></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Profile Picture</label>
+                        <div class="d-flex align-items-center gap-3">
+                            <img src="https://via.placeholder.com/100" alt="Profile" class="rounded-circle" id="profile-picture" width="100" height="100">
+                            <div>
+                                <input type="file" class="form-control d-none" id="profile-picture-upload" accept="image/*">
+                                <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('profile-picture-upload').click()">
+                                    <i class="fas fa-upload me-2"></i>Upload New Picture
+                                </button>
+                                <small class="text-muted d-block mt-1">Recommended: Square image, max 2MB</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <h5 class="mb-3">Change Password</h5>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="current-password" class="form-label">Current Password</label>
+                            <input type="password" class="form-control" id="current-password">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="new-password" class="form-label">New Password</label>
+                            <input type="password" class="form-control" id="new-password">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="confirm-password" class="form-label">Confirm Password</label>
+                            <input type="password" class="form-control" id="confirm-password">
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>Save Changes
+                        </button>
+                        <button type="button" class="btn btn-outline-danger" onclick="showDeleteAccountModal()">
+                            <i class="fas fa-trash me-2"></i>Delete Account
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="table-container">
+                <h5 class="mb-3">Account Status</h5>
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <strong>Verified Seller</strong>
+                    <p class="mb-0 mt-1">Your account is active and verified</p>
                 </div>
-                <div class="col-lg-4">
-                    <div class="table-container">
-                        <h5 class="mb-3">Account Status</h5>
-                        <div class="alert alert-success">
-                            <i class="fas fa-check-circle me-2"></i>
-                            <strong>Verified Seller</strong>
-                            <p class="mb-0 mt-1">Your account is active and verified</p>
-                        </div>
-                        
-                        <div class="mb-4">
-                            <h6>Seller Since</h6>
-                            <p id="join-date">Loading...</p>
-                        </div>
-                        
-                        <div class="mb-4">
-                            <h6>Account Verification</h6>
-                            <ul class="list-group list-group-flush">
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    Email Verified
-                                    <span class="badge bg-success" id="email-verified">Yes</span>
-                                </li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    Phone Verified
-                                    <span class="badge bg-success" id="phone-verified">Yes</span>
-                                </li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    Business Verified
-                                    <span class="badge bg-success" id="business-verified">Yes</span>
-                                </li>
-                            </ul>
-                        </div>
-                        
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle me-2"></i>
-                            Need help? Contact our seller support team at <strong>support@farmrent.com</strong>
-                        </div>
-                    </div>
+                
+                <div class="mb-4">
+                    <h6>Seller Since</h6>
+                    <p id="join-date">Loading...</p>
+                </div>
+                
+                <div class="mb-4">
+                    <h6>Account Verification</h6>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Email Verified
+                            <span class="badge bg-success" id="email-verified">Yes</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Phone Verified
+                            <span class="badge bg-success" id="phone-verified">Yes</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Business Verified
+                            <span class="badge bg-success" id="business-verified">Yes</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Need help? Contact our seller support team at <strong>support@farmrent.com</strong>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
     <!-- Equipment Details Modal (View Only) -->
     <div class="modal fade" id="equipmentModal" tabindex="-1">
@@ -1307,6 +1319,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-remote-config-compat.js"></script>
     <!-- REMOVED: <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-storage-compat.js"></script> -->
     <script src="firebase-config.js"></script>
+        <script src="script.js"></script>
 <script>
     // Global variables
     let currentUser = null;
@@ -1363,24 +1376,125 @@
         document.getElementById('loading').classList.remove('active');
     });
 
-    // Update seller information in UI
-    function updateSellerInfo() {
-        if (sellerData) {
-            document.getElementById('seller-name').textContent = sellerData.name || 'Seller';
-            document.getElementById('welcome-message').textContent = `Welcome back, ${sellerData.name || 'Seller'}!`;
-            
-            if (sellerData.businessName) {
-                document.getElementById('page-title').textContent = `${sellerData.businessName} - Dashboard`;
-            }
+    // Add Pincode input event listener
+document.addEventListener('DOMContentLoaded', function() {
+    // This will be called after the page loads
+    const pincodeInput = document.getElementById('profile-pincode');
+    if (pincodeInput) {
+        pincodeInput.addEventListener('input', function() {
+            // Clear previous city/state/village on change
+            document.getElementById('profile-city').value = '';
+            document.getElementById('profile-state').value = '';
+            const villageSelect = document.getElementById('profile-village');
+            villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
+            villageSelect.disabled = true;
 
-            // UPDATED: Update Pincode display in Add Equipment and Edit Modal sections
-            const pincodeDisplay = document.getElementById('registered-pincode-display');
-            if (pincodeDisplay) {
-                 pincodeDisplay.textContent = sellerData.pincode || 'N/A (Update Profile)';
+            if (this.value.length === 6) {
+                populateSellerLocationFields();
             }
-            // END UPDATED
+        });
+    }
+});
+
+   // Update seller information in UI
+function updateSellerInfo() {
+    if (sellerData) {
+        document.getElementById('seller-name').textContent = sellerData.name || 'Seller';
+        document.getElementById('welcome-message').textContent = `Welcome back, ${sellerData.name || 'Seller'}!`;
+        
+        if (sellerData.businessName) {
+            document.getElementById('page-title').textContent = `${sellerData.businessName} - Dashboard`;
+        }
+
+        // Update Pincode display in Add Equipment and Edit Modal sections
+        const pincodeDisplay = document.getElementById('registered-pincode-display');
+        if (pincodeDisplay) {
+            pincodeDisplay.textContent = sellerData.pincode || 'N/A (Update Profile)';
+        }
+        
+        // Update location info in UI if elements exist
+        if (document.getElementById('seller-location-info')) {
+            document.getElementById('seller-location-info').textContent = 
+                `${sellerData.city || ''}, ${sellerData.state || ''} - ${sellerData.pincode || ''}`;
         }
     }
+}
+
+    // Pincode location lookup function for seller profile
+async function populateSellerLocationFields() {
+    const pincodeInput = document.getElementById('profile-pincode');
+    const villageSelect = document.getElementById('profile-village');
+    const cityInput = document.getElementById('profile-city');
+    const stateInput = document.getElementById('profile-state');
+    const statusElement = document.getElementById('pincode-status-message');
+    
+    if (!pincodeInput || !villageSelect || !cityInput || !stateInput) return;
+
+    villageSelect.innerHTML = '<option value="">Loading...</option>';
+    villageSelect.disabled = true;
+    cityInput.value = '';
+    stateInput.value = '';
+    if (statusElement) {
+        statusElement.textContent = 'Verifying Pincode...';
+        statusElement.classList.remove('text-danger', 'text-success');
+        statusElement.classList.add('text-muted');
+    }
+
+    const pincode = pincodeInput.value;
+
+    if (!/^[0-9]{6}$/.test(pincode)) {
+        villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
+        if (statusElement) statusElement.textContent = '';
+        return;
+    }
+
+    try {
+        // Use the function from script.js (make sure script.js is loaded before seller.html script)
+        const postOffices = await getPostOfficeData(pincode);
+
+        if (postOffices.length > 0) {
+            const firstOffice = postOffices[0];
+            cityInput.value = firstOffice.District || '';
+            stateInput.value = firstOffice.State || '';
+
+            // Populate village dropdown
+            villageSelect.innerHTML = '<option value="">Select your Village/Post Office *</option>';
+            
+            // Remove duplicates and populate
+            const uniquePostOffices = [...new Set(postOffices.map(office => office.Name))];
+            uniquePostOffices.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name; 
+                option.textContent = name;
+                villageSelect.appendChild(option);
+            });
+
+            villageSelect.disabled = false;
+            if (statusElement) {
+                statusElement.textContent = `Location confirmed: ${cityInput.value}, ${stateInput.value}. Select your village.`;
+                statusElement.classList.remove('text-muted');
+                statusElement.classList.add('text-success');
+            }
+        } else {
+            villageSelect.innerHTML = '<option value="">Pincode not found or no post offices</option>';
+            villageSelect.disabled = true;
+            if (statusElement) {
+                statusElement.textContent = 'Pincode not found. Please check and try again.';
+                statusElement.classList.remove('text-muted');
+                statusElement.classList.add('text-danger');
+            }
+        }
+    } catch (error) {
+        console.error('Error in Pincode lookup:', error);
+        villageSelect.innerHTML = '<option value="">Error fetching location data</option>';
+        villageSelect.disabled = true;
+        if (statusElement) {
+            statusElement.textContent = 'Error fetching location data. Please try again.';
+            statusElement.classList.remove('text-muted');
+            statusElement.classList.add('text-danger');
+        }
+    }
+}
 
     // Show section function
     function showSection(sectionId) {
@@ -2836,110 +2950,139 @@
         }
     }
 
-    // Load profile data
-    async function loadProfileData() {
-        if (!sellerData) return;
-        
-        // Populate form fields
-        document.getElementById('profile-name').value = sellerData.name || '';
-        document.getElementById('profile-email').value = sellerData.email || '';
-        document.getElementById('profile-phone').value = sellerData.mobile || '';
-        document.getElementById('profile-business').value = sellerData.businessName || '';
-        document.getElementById('profile-address').value = sellerData.address || '';
-        document.getElementById('profile-gst').value = sellerData.gstNumber || '';
-        document.getElementById('profile-city').value = sellerData.city || '';
-        document.getElementById('profile-bio').value = sellerData.bio || '';
-        document.getElementById('profile-pincode').value = sellerData.pincode || ''; // UPDATED: Load Pincode
-        
-        // Update profile picture if exists
-        if (sellerData.profilePicture) {
-            document.getElementById('profile-picture').src = sellerData.profilePicture;
-        }
-        
-        // Update join date
-        if (sellerData.createdAt) {
-            const joinDate = window.firebaseHelpers.formatDate(sellerData.createdAt);
-            document.getElementById('join-date').textContent = joinDate;
+   // Load profile data
+async function loadProfileData() {
+    if (!sellerData) return;
+    
+    // Populate form fields
+    document.getElementById('profile-name').value = sellerData.name || '';
+    document.getElementById('profile-email').value = sellerData.email || '';
+    document.getElementById('profile-phone').value = sellerData.mobile || '';
+    document.getElementById('profile-business').value = sellerData.businessName || '';
+    document.getElementById('profile-address').value = sellerData.address || '';
+    document.getElementById('profile-gst').value = sellerData.gstNumber || '';
+    document.getElementById('profile-bio').value = sellerData.bio || '';
+    document.getElementById('profile-pincode').value = sellerData.pincode || '';
+    document.getElementById('profile-city').value = sellerData.city || '';
+    document.getElementById('profile-state').value = sellerData.state || '';
+    
+    // Update profile picture if exists
+    if (sellerData.profilePicture) {
+        document.getElementById('profile-picture').src = sellerData.profilePicture;
+    }
+    
+    // Update join date
+    if (sellerData.createdAt) {
+        const joinDate = window.firebaseHelpers.formatDate(sellerData.createdAt);
+        document.getElementById('join-date').textContent = joinDate;
+    }
+    
+    // If seller has pincode, populate the village dropdown
+    if (sellerData.pincode) {
+        await populateSellerLocationFields();
+        // Select the saved village if it exists
+        const villageSelect = document.getElementById('profile-village');
+        if (villageSelect && sellerData.village) {
+            // Wait a moment for the options to be populated
+            setTimeout(() => {
+                villageSelect.value = sellerData.village;
+            }, 500);
         }
     }
+}
+    
+   // Profile form submission
+document.getElementById('profile-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    if (!currentUser) return;
 
-    // Profile form submission
-    document.getElementById('profile-form').addEventListener('submit', async function(e) {
-        e.preventDefault();
+    // Validate Pincode and location fields
+    const pincodeInput = document.getElementById('profile-pincode').value;
+    const villageSelect = document.getElementById('profile-village');
+    const cityInput = document.getElementById('profile-city').value;
+    const stateInput = document.getElementById('profile-state').value;
+    
+    if (!pincodeInput || !/^[0-9]{6}$/.test(pincodeInput)) {
+        window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
+        return;
+    }
+    
+    if (!villageSelect.value) {
+        window.firebaseHelpers.showAlert('Please select your Village/Post Office.', 'danger');
+        return;
+    }
+    
+    if (!cityInput || !stateInput) {
+        window.firebaseHelpers.showAlert('Please verify your Pincode to load city and state information.', 'danger');
+        return;
+    }
+    
+    try {
+        const updates = {
+            name: document.getElementById('profile-name').value,
+            mobile: document.getElementById('profile-phone').value,
+            businessName: document.getElementById('profile-business').value,
+            address: document.getElementById('profile-address').value,
+            gstNumber: document.getElementById('profile-gst').value,
+            city: cityInput,
+            state: stateInput,
+            village: villageSelect.value,
+            pincode: pincodeInput,
+            bio: document.getElementById('profile-bio').value,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
         
-        if (!currentUser) return;
-
-        // UPDATED: Basic Pincode validation before proceeding
-        const pincodeInput = document.getElementById('profile-pincode').value;
-        if (!pincodeInput || !/^[0-9]{6}$/.test(pincodeInput)) {
-            window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
-            return;
-        }
-        // END UPDATED
+        // Update password if provided
+        const currentPassword = document.getElementById('current-password').value;
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
         
-        try {
-            const updates = {
-                name: document.getElementById('profile-name').value,
-                mobile: document.getElementById('profile-phone').value,
-                businessName: document.getElementById('profile-business').value,
-                address: document.getElementById('profile-address').value,
-                gstNumber: document.getElementById('profile-gst').value,
-                city: document.getElementById('profile-city').value,
-                bio: document.getElementById('profile-bio').value,
-                pincode: pincodeInput, // UPDATED: Add pincode to updates
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            };
-            
-            // Update password if provided
-            const currentPassword = document.getElementById('current-password').value;
-            const newPassword = document.getElementById('new-password').value;
-            const confirmPassword = document.getElementById('confirm-password').value;
-            
-            if (newPassword || currentPassword || confirmPassword) {
-                if (!currentPassword) {
-                    window.firebaseHelpers.showAlert('Please enter your current password to change it.', 'danger');
-                    return;
-                }
-                if (newPassword !== confirmPassword) {
-                    window.firebaseHelpers.showAlert('New passwords do not match', 'danger');
-                    return;
-                }
-                if (newPassword.length < 6) {
-                    window.firebaseHelpers.showAlert('New password must be at least 6 characters long', 'danger');
-                    return;
-                }
-                
-                // Reauthenticate user
-                const credential = firebase.auth.EmailAuthProvider.credential(
-                    currentUser.email,
-                    currentPassword
-                );
-                
-                await currentUser.reauthenticateWithCredential(credential);
-                await currentUser.updatePassword(newPassword);
-                window.firebaseHelpers.showAlert('Password updated successfully', 'success');
-                
-                // Clear password fields
-                document.getElementById('current-password').value = '';
-                document.getElementById('new-password').value = '';
-                document.getElementById('confirm-password').value = '';
+        if (newPassword || currentPassword || confirmPassword) {
+            if (!currentPassword) {
+                window.firebaseHelpers.showAlert('Please enter your current password to change it.', 'danger');
+                return;
+            }
+            if (newPassword !== confirmPassword) {
+                window.firebaseHelpers.showAlert('New passwords do not match', 'danger');
+                return;
+            }
+            if (newPassword.length < 6) {
+                window.firebaseHelpers.showAlert('New password must be at least 6 characters long', 'danger');
+                return;
             }
             
-            // Update Firestore
-            await window.FirebaseDB.collection('users').doc(currentUser.uid).update(updates);
+            // Reauthenticate user
+            const credential = firebase.auth.EmailAuthProvider.credential(
+                currentUser.email,
+                currentPassword
+            );
             
-            // Update local seller data
-            sellerData = { ...sellerData, ...updates };
-            updateSellerInfo(); // Re-render Pincode display everywhere
+            await currentUser.reauthenticateWithCredential(credential);
+            await currentUser.updatePassword(newPassword);
+            window.firebaseHelpers.showAlert('Password updated successfully', 'success');
             
-            window.firebaseHelpers.showAlert('Profile updated successfully', 'success');
-            
-        } catch (error) {
-            console.error('Error updating profile:', error);
-            window.firebaseHelpers.showAlert('Error updating profile: ' + error.message, 'danger');
+            // Clear password fields
+            document.getElementById('current-password').value = '';
+            document.getElementById('new-password').value = '';
+            document.getElementById('confirm-password').value = '';
         }
-    });
-
+        
+        // Update Firestore
+        await window.FirebaseDB.collection('users').doc(currentUser.uid).update(updates);
+        
+        // Update local seller data
+        sellerData = { ...sellerData, ...updates };
+        updateSellerInfo(); // Re-render Pincode display everywhere
+        
+        window.firebaseHelpers.showAlert('Profile updated successfully', 'success');
+        
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        window.firebaseHelpers.showAlert('Error updating profile: ' + error.message, 'danger');
+    }
+});
+    
     // Show delete account modal
     function showDeleteAccountModal() {
         const modal = new bootstrap.Modal(document.getElementById('deleteAccountModal'));
