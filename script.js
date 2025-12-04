@@ -20,12 +20,16 @@ document.addEventListener('DOMContentLoaded', () => {
         loadBrowsePageData();
     } else if (path === 'cart.html') {
         loadCartPage();
+        updateNavbarPincodeDisplay(); // Load Pincode on Cart page
     } else if (path === 'checkout.html') {
         loadCheckoutPage();
+        updateNavbarPincodeDisplay(); // Load Pincode on Checkout page
     } else if (path === 'profile.html') {
         loadProfilePage();
+        updateNavbarPincodeDisplay(); // Load Pincode on Profile page
     } else if (path === 'orders.html') {
         loadOrdersPage();
+        updateNavbarPincodeDisplay(); // Load Pincode on Orders page
     } else if (path === 'index.html' || path === '') { // Handles index.html
         loadHomepageData();
         // NEW: Trigger Pincode prompt after initial load is done/auth is checked
@@ -57,8 +61,9 @@ async function checkAndPromptForPincode() {
     const finalPincode = window.currentUser?.pincode || storedPincode;
     window.customerPincode = finalPincode;
     
-    // Update the display immediately
+    // Update all displays immediately
     updateHomepagePincodeDisplay();
+    updateNavbarPincodeDisplay();
 
     // 2. If Pincode is not set and we are on the homepage, show the modal
     const path = window.location.pathname.split('/').pop();
@@ -77,8 +82,12 @@ function showPincodeModal() {
     const modalElement = document.getElementById('pincodeModal');
     if (!modalElement) return;
 
-    // Pre-fill if there is a known pincode (from localStorage or profile)
+    // Reset status/input when showing the modal
     document.getElementById('pincode-input').value = window.customerPincode || '';
+    const statusElement = document.getElementById('location-status');
+    if (statusElement) statusElement.textContent = '';
+    const buttonElement = document.getElementById('location-access-btn');
+    if (buttonElement) buttonElement.disabled = false;
     
     const modal = new bootstrap.Modal(modalElement, {
         backdrop: 'static', // Prevent closing by clicking outside
@@ -114,7 +123,7 @@ async function savePincode(pincode) {
     localStorage.setItem('customerPincode', pincode);
     window.customerPincode = pincode;
     
-    window.firebaseHelpers.showAlert(` localização definida para Pincode: ${pincode}. Filtering results.`, 'success');
+    window.firebaseHelpers.showAlert(`Location defined for Pincode: ${pincode}. Filtering results.`, 'success');
     
     // If logged in, optionally save to Firestore profile (for persistence)
     if (window.currentUser && window.currentUser.uid) {
@@ -131,6 +140,8 @@ async function savePincode(pincode) {
     
     // Update the UI and reload content
     updateHomepagePincodeDisplay();
+    updateNavbarPincodeDisplay();
+
     // If on browse page, reload all equipment with the new filter
     const path = window.location.pathname.split('/').pop();
     if (path === 'browse.html') {
@@ -150,6 +161,7 @@ function skipPincode() {
     
     window.firebaseHelpers.showAlert('Viewing all equipment (no location filter applied).', 'info');
     updateHomepagePincodeDisplay();
+    updateNavbarPincodeDisplay();
     
     // Reload content to show all equipment
     const path = window.location.pathname.split('/').pop();
@@ -160,13 +172,22 @@ function skipPincode() {
     }
 }
 
-// Update the Pincode UI in index.html
+// Update the Pincode UI in index.html (Hero section)
 function updateHomepagePincodeDisplay() {
     const pincodeValueElement = document.getElementById('current-pincode-value');
     if (pincodeValueElement) {
         pincodeValueElement.textContent = window.customerPincode ? window.customerPincode : 'All Locations';
     }
 }
+
+// NEW FUNCTION: Update the Pincode UI in the Navbar (all pages)
+function updateNavbarPincodeDisplay() {
+    const navPincodeValueElement = document.getElementById('current-pincode-value-nav');
+    if (navPincodeValueElement) {
+        navPincodeValueElement.textContent = window.customerPincode ? window.customerPincode : 'All Locations';
+    }
+}
+
 
 // NEW FUNCTION: Use Geolocation API to find the user's Pincode
 function getCurrentLocationPincode() {
@@ -176,35 +197,43 @@ function getCurrentLocationPincode() {
     
     if (!navigator.geolocation) {
         statusElement.textContent = 'Geolocation is not supported by your browser.';
+        statusElement.classList.remove('text-muted');
         statusElement.classList.add('text-danger');
         window.firebaseHelpers.showAlert('Geolocation not supported.', 'danger');
         return;
     }
 
     statusElement.textContent = 'Fetching location...';
+    statusElement.classList.remove('text-danger', 'text-warning');
+    statusElement.classList.add('text-primary');
     buttonElement.disabled = true;
 
     navigator.geolocation.getCurrentPosition(async (position) => {
         const { latitude, longitude } = position.coords;
-        statusElement.textContent = `Location found: Lat ${latitude.toFixed(4)}, Lon ${longitude.toFixed(4)}`;
+        statusElement.textContent = `Location found: Lat ${latitude.toFixed(4)}, Lon ${longitude.toFixed(4)}. Determining Pincode...`;
         
         // --- SIMULATED REVERSE GEOCODING ---
-        // In a real application, you would use a service like Google Maps Geocoding API 
-        // or OpenCage to convert Lat/Lon to a Pincode (requires an API key and backend call).
-        // For this example, we will simulate a successful result for a common area or 
-        // fallback to a default if the exact mechanism is not built.
-
-        const simulatedPincode = '503001'; // Nizamabad, Telangana (Example Pincode)
+        // Simulating success for a known area (Nizamabad, Telangana)
+        const simulatedPincode = '503001'; 
 
         if (simulatedPincode) {
             statusElement.textContent = `Pincode found: ${simulatedPincode}. Applying filter...`;
+            statusElement.classList.remove('text-primary');
+            statusElement.classList.add('text-success');
             inputElement.value = simulatedPincode;
             buttonElement.disabled = false;
             
             // Automatically submit the form to save and filter
-            await handlePincodeSubmit(new Event('submit')); 
+            // We use setTimeout to allow the status message to flash
+            setTimeout(async () => {
+                await savePincode(simulatedPincode);
+                const modal = bootstrap.Modal.getInstance(document.getElementById('pincodeModal'));
+                if (modal) modal.hide();
+            }, 500);
+
         } else {
             statusElement.textContent = 'Could not determine Pincode from location. Please enter manually.';
+            statusElement.classList.remove('text-primary');
             statusElement.classList.add('text-warning');
             buttonElement.disabled = false;
         }
@@ -220,6 +249,7 @@ function getCurrentLocationPincode() {
             message = 'The request to get user location timed out.';
         }
         statusElement.textContent = message;
+        statusElement.classList.remove('text-primary');
         statusElement.classList.add('text-danger');
         buttonElement.disabled = false;
         window.firebaseHelpers.showAlert(message, 'danger');
@@ -1072,16 +1102,16 @@ function initializeAuth() {
                         // Ensure cart count is updated immediately after user is set
                         updateCartCount(); 
                         
-                        // NEW: If on the browse page, update Pincode display and reload equipment
+                        // NEW: Update Pincode display across all pages
                         const path = window.location.pathname.split('/').pop();
                         if (path === 'browse.html') {
                             updatePincodeDisplay();
                             loadAllEquipment();
                         } else if (path === 'index.html' || path === '') {
-                             // This is redundant if checkAndPromptForPincode runs later, but ensures logged-in UI reflects filter immediately
                             updateHomepagePincodeDisplay();
                             loadFeaturedEquipment(); 
                         }
+                        updateNavbarPincodeDisplay(); // Call for all pages
                         
                     }
                 })
@@ -1113,6 +1143,7 @@ function initializeAuth() {
                 updateHomepagePincodeDisplay();
                 loadFeaturedEquipment(); 
             }
+            updateNavbarPincodeDisplay(); // Call for all pages
         }
     });
 }
@@ -1146,12 +1177,6 @@ function updateNavbarForLoggedInUser(userData) {
                 <li><a class="dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
             </ul>
         </li>
-        <li class="nav-item">
-            <a class="nav-link" href="cart.html">
-                <i class="fas fa-shopping-cart"></i> Cart
-                <span class="badge bg-warning text-dark" id="cart-count">0</span>
-            </a>
-        </li>
     `;
     
     navbarAuth.innerHTML = dropdownHtml;
@@ -1163,12 +1188,6 @@ function updateNavbarForLoggedOutUser() {
     const navbarAuth = document.getElementById('navbar-auth');
     
     navbarAuth.innerHTML = `
-        <li class="nav-item">
-            <a class="nav-link" href="cart.html">
-                <i class="fas fa-shopping-cart"></i> Cart
-                <span class="badge bg-warning text-dark" id="cart-count">0</span>
-            </a>
-        </li>
         <li class="nav-item dropdown" id="role-dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="roleDropdown" role="button" data-bs-toggle="dropdown">
                 <i class="fas fa-user-tag me-1"></i> Sign Up As
