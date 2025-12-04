@@ -53,7 +53,10 @@ try {
     }
     
     // Enable Firestore offline persistence (Wrapped in try/catch to handle Access to storage error)
-    try {
+   // Enable Firestore offline persistence (Wrapped in try/catch to handle Access to storage error)
+try {
+    // Check if we're in a secure context (HTTPS or localhost)
+    if (window.isSecureContext) {
         db.enablePersistence()
             .catch((err) => {
                 if (err.code == 'failed-precondition') {
@@ -64,10 +67,12 @@ try {
                     console.warn('Persistence error:', err.message);
                 }
             });
-    } catch (e) {
-        // Handle sync error, like "Access to storage is not allowed from this context."
-        console.error('Persistence failed during setup:', e.message);
+    } else {
+        console.warn('Cannot enable persistence: not in a secure context (HTTPS required)');
     }
+} catch (e) {
+    console.warn('Persistence setup error:', e.message);
+}
     
     // Export Firebase services
     window.FirebaseAuth = auth;
