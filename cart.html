@@ -33,14 +33,25 @@
                     <li class="nav-item"><a class="nav-link" href="about.html">About Us</a></li>
                     <li class="nav-item"><a class="nav-link" href="contact.html">Contact</a></li>
                 </ul>
-                <ul class="navbar-nav" id="navbar-auth">
+                <ul class="navbar-nav align-items-center">
+                    <!-- NEW: Pincode Display in Navbar -->
+                    <li class="nav-item d-none d-lg-block">
+                        <span class="nav-link" id="navbar-pincode-display">
+                            <span class="badge bg-warning text-dark p-2" onclick="showPincodeModal()" style="cursor: pointer;">
+                                <i class="fas fa-map-marker-alt me-1"></i> <strong id="current-pincode-value-nav">All Locations</strong>
+                            </span>
+                        </span>
+                    </li>
+                    <!-- END NEW -->
                     <li class="nav-item">
                         <a class="nav-link active" href="cart.html">
                             <i class="fas fa-shopping-cart"></i> Cart
                             <span class="badge bg-warning text-dark" id="cart-count">0</span>
                         </a>
                     </li>
+                    <ul class="navbar-nav" id="navbar-auth">
                     <!-- Auth links loaded by script.js -->
+                    </ul>
                 </ul>
             </div>
         </div>
@@ -96,6 +107,51 @@
             <p class="text-center">&copy; 2025 FarmRent. All rights reserved.</p>
         </div>
     </footer>
+    
+    <!-- Pincode Prompt Modal (Needed here too for consistency) -->
+    <div class="modal fade" id="pincodeModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title"><i class="fas fa-map-marker-alt me-2"></i>Select Your Location</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="pincode-form">
+                    <div class="modal-body">
+                        <p>To show you the most relevant equipment from local sellers, please enter your 6-digit Pincode.</p>
+                        
+                        <!-- LOCATION ACCESS BUTTON -->
+                        <div class="d-grid mb-3">
+                             <button type="button" class="btn btn-outline-info" id="location-access-btn" onclick="getCurrentLocationPincode()">
+                                <i class="fas fa-location-arrow me-2"></i> Use Current Location
+                            </button>
+                            <small class="text-muted mt-1" id="location-status"></small>
+                        </div>
+                        <!-- END LOCATION ACCESS BUTTON -->
+
+                        <div class="divider text-center mb-3">
+                            <span class="text-muted small">OR ENTER MANUALLY</span>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="pincode-input" class="form-label">Pincode *</label>
+                            <input type="text" class="form-control form-control-lg" id="pincode-input" pattern="[0-9]{6}" maxlength="6" placeholder="Enter 6-digit Pincode" required>
+                        </div>
+                        <div class="form-text text-danger">
+                            **Mandatory to view localized equipment listings.**
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" onclick="skipPincode()">Skip (View all)</button>
+                        <button type="submit" class="btn btn-primary" id="save-pincode-btn">
+                            <i class="fas fa-check me-2"></i>Apply Filter
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-- End Pincode Prompt Modal -->
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
