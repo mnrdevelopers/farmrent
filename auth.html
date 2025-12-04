@@ -362,6 +362,12 @@
                                                 <label for="businessName" class="form-label">Business/Shop Name *</label>
                                                 <input type="text" class="form-control" id="businessName" placeholder="Enter your business name">
                                             </div>
+                                            <!-- UPDATED: Added Pincode field for location-based filtering -->
+                                            <div class="mb-3">
+                                                <label for="pincode" class="form-label">Pincode (Primary Operating Area) *</label>
+                                                <input type="text" class="form-control" id="pincode" placeholder="e.g., 503001" pattern="[0-9]{6}" maxlength="6" required>
+                                            </div>
+                                            <!-- END UPDATED -->
                                             <div class="mb-3">
                                                 <label for="gstNumber" class="form-label">GST Number (Optional)</label>
                                                 <input type="text" class="form-control" id="gstNumber" placeholder="Enter GST number if available">
@@ -743,6 +749,7 @@
                     userDoc.businessName = userData.businessName || '';
                     userDoc.gstNumber = userData.gstNumber || '';
                     userDoc.address = userData.address || '';
+                    userDoc.pincode = userData.pincode || ''; // UPDATED: Added Pincode
                 }
                 
                 // Save user data to Firestore
@@ -825,8 +832,8 @@
                         throw new Error('Your seller account is pending approval.');
                     }
                     
-                    // If Seller logged in via Google but is missing business details, redirect to profile
-                    if (role === 'seller' && (!userData.businessName || !userData.address)) {
+                    // If Seller logged in via Google but is missing business/pincode details, redirect to profile
+                    if (role === 'seller' && (!userData.businessName || !userData.address || !userData.pincode)) { // UPDATED: Check for pincode
                          // Proceed with local storage update, but set redirect URL
                         localStorage.setItem('currentUser', JSON.stringify({
                             uid: user.uid,
@@ -858,6 +865,7 @@
                         userData.businessName = ''; // Must be completed later
                         userData.gstNumber = '';
                         userData.address = ''; // Must be completed later
+                        userData.pincode = ''; // UPDATED: Must be completed later
                     }
                     
                     await db.collection('users').doc(user.uid).set(userData);
@@ -925,7 +933,7 @@
                 const user = JSON.parse(localStorage.getItem('currentUser'));
                 if (user.status === 'pending') {
                     window.location.href = 'seller-pending.html';
-                } else if (user.signInMethod === 'google' && (!user.businessName || !user.address)) {
+                } else if (user.signInMethod === 'google' && (!user.businessName || !user.address || !user.pincode)) { // UPDATED: Check for pincode
                     // Redirect to profile for profile completion if signed up via Google and missing required seller fields
                     window.location.href = 'seller.html#profile'; 
                 } else {
@@ -990,6 +998,21 @@
                 return;
             }
             
+            // For seller signup, validate business name and PINCODE
+            if (role === 'seller') {
+                const businessName = document.getElementById('businessName').value;
+                const pincode = document.getElementById('pincode').value; // UPDATED: Get pincode
+                if (!businessName) {
+                    showAlert('Business name is required for sellers', 'warning');
+                    return;
+                }
+                // UPDATED: Validate pincode
+                if (!pincode || !/^[0-9]{6}$/.test(pincode)) {
+                    showAlert('A valid 6-digit Pincode is required for the Seller', 'warning');
+                    return;
+                }
+            }
+            
             // For admin signup, check access code
             if (role === 'admin') {
                 const adminCode = document.getElementById('adminCode').value;
@@ -999,14 +1022,6 @@
                 }
             }
             
-            // For seller signup, validate business name
-            if (role === 'seller') {
-                const businessName = document.getElementById('businessName').value;
-                if (!businessName) {
-                    showAlert('Business name is required for sellers', 'warning');
-                    return;
-                }
-            }
             
             // Prepare user data
             const userData = {
@@ -1022,6 +1037,7 @@
                 userData.businessName = document.getElementById('businessName').value;
                 userData.gstNumber = document.getElementById('gstNumber').value;
                 userData.address = document.getElementById('address').value;
+                userData.pincode = document.getElementById('pincode').value; // UPDATED: Add pincode
             }
             
             handleUserRegistration(userData);
