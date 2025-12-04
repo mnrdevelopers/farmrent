@@ -7,6 +7,77 @@ let platformFeeRate = 0.05;
 let customerPincode = null;
 
 
+// --- NEW CART HELPER FUNCTIONS (To resolve ReferenceError: getCartFromFirestore is not defined) ---
+
+// Helper function to get the Firestore document reference for the user's private cart
+function getCartDocRef(userId) {
+    if (!window.FirebaseDB) return null;
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    
+    // Path: /artifacts/{appId}/users/{userId}/cart/currentCart
+    return window.FirebaseDB.collection('artifacts').doc(appId)
+        .collection('users').doc(userId).collection('cart').doc('currentCart');
+}
+
+/**
+ * Retrieves the user's cart data from Firestore or local storage (if logged out).
+ * @returns {Promise<Array>} The cart array.
+ */
+async function getCartFromFirestore() {
+    if (window.currentUser && window.FirebaseDB) {
+        try {
+            const docRef = getCartDocRef(window.currentUser.uid);
+            if (!docRef) return [];
+
+            const doc = await docRef.get();
+            if (doc.exists) {
+                return doc.data().items || [];
+            }
+            return [];
+        } catch (error) {
+            console.error('Error fetching cart from Firestore:', error);
+            // Fallback to local storage if Firestore fails but user is logged in (shouldn't happen often)
+            return JSON.parse(localStorage.getItem('cart') || '[]');
+        }
+    } else {
+        // Fallback to local storage for unauthenticated users
+        return JSON.parse(localStorage.getItem('cart') || '[]');
+    }
+}
+
+/**
+ * Updates the user's cart data in Firestore or local storage.
+ * @param {Array} cart - The new cart array to save.
+ * @returns {Promise<void>}
+ */
+async function updateCartInFirestore(cart) {
+    if (window.currentUser && window.FirebaseDB) {
+        try {
+            const docRef = getCartDocRef(window.currentUser.uid);
+            if (!docRef) return;
+            
+            await docRef.set({
+                items: cart,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+            
+            // Sync up cart count after saving
+            updateCartCount();
+        } catch (error) {
+            console.error('Error updating cart in Firestore:', error);
+            // Fallback to local storage on Firestore error
+            localStorage.setItem('cart', JSON.stringify(cart));
+            updateCartCount();
+        }
+    } else {
+        // Save to local storage for unauthenticated users
+        localStorage.setItem('cart', JSON.stringify(cart));
+        updateCartCount();
+    }
+}
+// --- END NEW CART HELPER FUNCTIONS ---
+
+
 // Initialize page
 document.addEventListener('DOMContentLoaded', () => {
     initializeAuth();
@@ -81,6 +152,11 @@ async function getPostOfficeData(pincode) {
     }
 
     try {
+        // Wait for helper initialization to avoid: TypeError: Cannot read properties of undefined (reading 'getPostOfficeApiUrl')
+        if (!window.firebaseHelpers || !window.firebaseHelpers.getPostOfficeApiUrl) {
+            await new Promise(resolve => setTimeout(resolve, 500)); // Wait for Firebase helpers
+        }
+        
         // Assume window.firebaseHelpers.getPostOfficeApiUrl is available from firebase-config.js
         const apiUrl = await window.firebaseHelpers.getPostOfficeApiUrl(); 
         const response = await fetch(`${apiUrl}${pincode}`);
@@ -343,6 +419,10 @@ async function savePincode(pincode) {
     // If logged in, optionally save to Firestore profile (for persistence)
     if (window.currentUser && window.currentUser.uid) {
         try {
+            // Wait for FirebaseDB to be available
+            if (!window.FirebaseDB) {
+                 await new Promise(resolve => setTimeout(resolve, 500)); 
+            }
             await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update({
                 pincode: pincode,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -811,8 +891,6 @@ async function loadCartPage() {
     }
 
     await updateCartCount();
-    // FIX: The original error was here because getPlatformFeeRate was not defined globally yet.
-    // It is now defined outside the DOMContentLoaded block in script.js.
     await getPlatformFeeRate(); 
     const cart = await getCartFromFirestore(); // <<< MODIFIED: Read from Firestore
     displayCartItems(cart); // <<< MODIFIED: Pass cart data
@@ -931,7 +1009,6 @@ async function loadCheckoutPage() {
     }
 
     // Ensure rate is loaded before calculation
-    // FIX: The original error was here because getPlatformFeeRate was not defined globally yet.
     await getPlatformFeeRate(); 
     
     // Now safely get user and cart data
@@ -1162,67 +1239,86 @@ async function placeOrderInFirestore(orderId, customerData, paymentId, totalAmou
 
 // Initialize authentication
 function initializeAuth() {
-    // Access Firebase Auth from window global object
-    window.FirebaseAuth.onAuthStateChanged((user) => {
-        if (user) {
-            // User is signed in
-            window.FirebaseDB.collection('users').doc(user.uid).get()
-                .then((doc) => {
-                    if (doc.exists) {
-                        window.currentUser = { uid: user.uid, ...doc.data() };
-                        
-                        // NEW: Set global customer Pincode from profile if not set in session/local storage
-                        const storedPincode = localStorage.getItem('customerPincode');
-                        window.customerPincode = window.currentUser.pincode || storedPincode || null;
-                        
-                        updateNavbarForLoggedInUser(window.currentUser);
-                        // Ensure cart count is updated immediately after user is set
-                        updateCartCount(); 
-                        
-                        // NEW: Update Pincode display across all pages
-                        const path = window.location.pathname.split('/').pop();
-                        if (path === 'browse.html') {
-                            updatePincodeDisplay();
-                            loadAllEquipment();
-                        } else if (path === 'index.html' || path === '') {
-                            updateHomepagePincodeDisplay();
-                            loadFeaturedEquipment(); 
+    // FIX: Add a check to ensure window.FirebaseAuth is defined before subscribing
+    if (!window.FirebaseAuth) {
+        console.warn("Firebase Auth not yet initialized. Retrying initialization...");
+        // Use a short delay before trying to subscribe, relying on firebase-config.js
+        // to eventually define window.FirebaseAuth.
+        setTimeout(initializeAuthInternal, 500); 
+    } else {
+        initializeAuthInternal();
+    }
+}
+
+function initializeAuthInternal() {
+    try {
+        // Access Firebase Auth from window global object
+        window.FirebaseAuth.onAuthStateChanged((user) => {
+            if (user) {
+                // User is signed in
+                window.FirebaseDB.collection('users').doc(user.uid).get()
+                    .then((doc) => {
+                        if (doc.exists) {
+                            window.currentUser = { uid: user.uid, ...doc.data() };
+                            
+                            // NEW: Set global customer Pincode from profile if not set in session/local storage
+                            const storedPincode = localStorage.getItem('customerPincode');
+                            window.customerPincode = window.currentUser.pincode || storedPincode || null;
+                            
+                            updateNavbarForLoggedInUser(window.currentUser);
+                            // Ensure cart count is updated immediately after user is set
+                            updateCartCount(); 
+                            
+                            // NEW: Update Pincode display across all pages
+                            const path = window.location.pathname.split('/').pop();
+                            if (path === 'browse.html') {
+                                updatePincodeDisplay();
+                                loadAllEquipment();
+                            } else if (path === 'index.html' || path === '') {
+                                updateHomepagePincodeDisplay();
+                                loadFeaturedEquipment(); 
+                            }
+                            updateNavbarPincodeDisplay(); // Call for all pages
+                            
                         }
-                        updateNavbarPincodeDisplay(); // Call for all pages
-                        
-                    }
-                })
-                .catch((error) => {
-                    console.error("Error getting user data:", error);
-                })
-                .finally(() => {
-                    isAuthInitialized = true;
-                });
-        } else {
-            // User is signed out
-            window.currentUser = null; // Ensure global is cleared
-            // window.customerPincode is intentionally NOT cleared here, as it might be stored locally
-            updateNavbarForLoggedOutUser();
-            // Update cart count for unauthenticated user (will show local storage items)
-            updateCartCount();
-            isAuthInitialized = true;
-            
-            // NEW: Apply local Pincode filter logic if applicable
-            const path = window.location.pathname.split('/').pop();
-            if (path === 'browse.html') {
-                // Ensure customerPincode is pulled from local storage if needed
-                window.customerPincode = localStorage.getItem('customerPincode');
-                updatePincodeDisplay();
-                loadAllEquipment();
-            } else if (path === 'index.html' || path === '') {
-                // Ensure customerPincode is pulled from local storage if needed
-                window.customerPincode = localStorage.getItem('customerPincode');
-                updateHomepagePincodeDisplay();
-                loadFeaturedEquipment(); 
+                    })
+                    .catch((error) => {
+                        console.error("Error getting user data:", error);
+                    })
+                    .finally(() => {
+                        isAuthInitialized = true;
+                    });
+            } else {
+                // User is signed out
+                window.currentUser = null; // Ensure global is cleared
+                // window.customerPincode is intentionally NOT cleared here, as it might be stored locally
+                updateNavbarForLoggedOutUser();
+                // Update cart count for unauthenticated user (will show local storage items)
+                updateCartCount();
+                isAuthInitialized = true;
+                
+                // NEW: Apply local Pincode filter logic if applicable
+                const path = window.location.pathname.split('/').pop();
+                if (path === 'browse.html') {
+                    // Ensure customerPincode is pulled from local storage if needed
+                    window.customerPincode = localStorage.getItem('customerPincode');
+                    updatePincodeDisplay();
+                    loadAllEquipment();
+                } else if (path === 'index.html' || path === '') {
+                    // Ensure customerPincode is pulled from local storage if needed
+                    window.customerPincode = localStorage.getItem('customerPincode');
+                    updateHomepagePincodeDisplay();
+                    loadFeaturedEquipment(); 
+                }
+                updateNavbarPincodeDisplay(); // Call for all pages
             }
-            updateNavbarPincodeDisplay(); // Call for all pages
-        }
-    });
+        });
+    } catch (error) {
+        // This catches the original 'Cannot read properties of undefined (reading 'onAuthStateChanged')' 
+        // if window.FirebaseAuth is truly missing or if an issue occurs inside the onAuthStateChanged callback logic.
+        console.error('Critical Auth Initialization Error:', error);
+        isAuthInitialized = true; // Prevent infinite loading if auth fails completely
+    }
 }
 
 // Update navbar for logged in user
@@ -1291,7 +1387,7 @@ async function logout() {
         localStorage.removeItem('customerPincode'); 
         window.customerPincode = null; 
 
-        await window.FirebaseAuth.signOut();
+        await window.firebaseHelpers.signOut();
         window.location.reload();
     } catch (error) {
         console.error('Logout error:', error);
@@ -1809,7 +1905,8 @@ function initializeEventListeners() {
 
 // Update cart count
 async function updateCartCount() { // <<< MODIFIED: Now async
-    const cart = await getCartFromFirestore(); // <<< MODIFIED: Read from Firestore
+    // FIX: Removed the logic that caused the reference error by using the new helper
+    const cart = await getCartFromFirestore(); 
     const cartCountElement = document.getElementById('cart-count');
     if (cartCountElement) {
         cartCountElement.textContent = cart.length;
