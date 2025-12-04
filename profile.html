@@ -75,27 +75,39 @@
                                     <input type="tel" class="form-control" id="profile-phone" pattern="[0-9]{10}" required>
                                 </div>
                                 <div class="col-md-6 mb-3">
-                                    <label for="profile-city" class="form-label">City/Town</label>
-                                    <input type="text" class="form-control" id="profile-city">
-                                </div>
-                            </div>
-                            
-                            <!-- NEW: Pincode Field for location filtering -->
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
                                     <label for="profile-pincode" class="form-label">Pincode (For Local Equipment Search) *</label>
                                     <input type="text" class="form-control" id="profile-pincode" pattern="[0-9]{6}" maxlength="6" required>
-                                    <div class="form-text text-danger">
+                                    <div class="form-text text-danger" id="pincode-status-message">
                                         <i class="fas fa-map-marker-alt me-1"></i>
-                                        **Crucial for finding local equipment!** Only sellers with this pincode will be shown.
+                                        **Crucial for finding local equipment!**
                                     </div>
                                 </div>
                             </div>
-                            <!-- END NEW -->
+                            
+                            <!-- NEW LOCATION FIELDS -->
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="profile-village" class="form-label">Village/Post Office *</label>
+                                    <select class="form-select" id="profile-village" required disabled>
+                                        <option value="">Enter Pincode Above</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="profile-city" class="form-label">City/District *</label>
+                                    <input type="text" class="form-control" id="profile-city" readonly required>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="profile-state" class="form-label">State *</label>
+                                    <input type="text" class="form-control" id="profile-state" readonly required>
+                                </div>
+                            </div>
+                            <!-- END NEW LOCATION FIELDS -->
 
                             <div class="mb-3">
-                                <label for="profile-address" class="form-label">Default Address</label>
-                                <textarea class="form-control" id="profile-address" rows="3" placeholder="Primary delivery address"></textarea>
+                                <label for="profile-address" class="form-label">Default Address (Street/House Number) *</label>
+                                <textarea class="form-control" id="profile-address" rows="3" placeholder="Primary delivery address details (House/Street)" required></textarea>
                             </div>
                             
                             <button type="submit" class="btn btn-primary btn-lg">
