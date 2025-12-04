@@ -771,8 +771,9 @@
 
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label for="equipment-location" class="form-label">Location *</label>
-                                    <input type="text" class="form-control" id="equipment-location" placeholder="City, State" required>
+                                    <label for="equipment-location" class="form-label">Pickup Location (Descriptive Text)</label>
+                                    <input type="text" class="form-control" id="equipment-location" placeholder="e.g., Near Ganesh Temple, City">
+                                    <small class="text-muted">This listing is tied to your registered Pincode: <strong id="registered-pincode-display">N/A</strong></small>
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label for="equipment-quantity" class="form-label">Quantity Available *</label>
@@ -1033,6 +1034,15 @@
                                 </div>
                             </div>
                             
+                            <!-- UPDATED: Added Pincode Field for Location Filtering -->
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="profile-pincode" class="form-label">Pincode (Primary Operating Area) *</label>
+                                    <input type="text" class="form-control" id="profile-pincode" pattern="[0-9]{6}" maxlength="6" required>
+                                </div>
+                            </div>
+                            <!-- END UPDATED -->
+
                             <div class="mb-3">
                                 <label for="profile-bio" class="form-label">Business Description</label>
                                 <textarea class="form-control" id="profile-bio" rows="2" placeholder="Tell customers about your business"></textarea>
@@ -1196,8 +1206,9 @@
 
                         <div class="row">
                             <div class="col-md-4 mb-3">
-                                <label for="edit-equipment-location" class="form-label">Location *</label>
+                                <label for="edit-equipment-location" class="form-label">Location (Descriptive)</label>
                                 <input type="text" class="form-control" id="edit-equipment-location" required>
+                                <small class="text-muted d-block">Pincode is fixed: <strong id="edit-equipment-pincode-display">N/A</strong></small>
                             </div>
                             <div class="col-md-4 mb-3">
                                 <label for="edit-equipment-quantity" class="form-label">Quantity Available *</label>
@@ -1331,6 +1342,12 @@
             window.location.href = 'seller-pending.html';
             return;
         }
+
+        // UPDATED: Check if essential data like pincode is missing after Google sign-in
+        if (!sellerData.pincode || !sellerData.businessName || !sellerData.address) {
+             window.firebaseHelpers.showAlert('Please complete your profile (Pincode, Business Name, Address) before listing equipment.', 'warning');
+             showSection('profile'); // Force redirect to profile
+        }
         
         // Update UI with seller data
         updateSellerInfo();
@@ -1350,6 +1367,13 @@
             if (sellerData.businessName) {
                 document.getElementById('page-title').textContent = `${sellerData.businessName} - Dashboard`;
             }
+
+            // UPDATED: Update Pincode display in Add Equipment and Edit Modal sections
+            const pincodeDisplay = document.getElementById('registered-pincode-display');
+            if (pincodeDisplay) {
+                 pincodeDisplay.textContent = sellerData.pincode || 'N/A (Update Profile)';
+            }
+            // END UPDATED
         }
     }
 
@@ -1826,6 +1850,7 @@
                             ${window.firebaseHelpers.formatCurrency(equipment.pricePerAcre || 0)}/acre
                             <small class="text-muted">or ${window.firebaseHelpers.formatCurrency(equipment.pricePerHour || 0)}/hour</small>
                         </div>
+                        <small class="text-muted d-block mb-2">Pincode: ${equipment.pincode || 'N/A'}</small> <!-- UPDATED: Display Pincode -->
                         <div class="d-flex gap-2">
                             <button class="btn btn-sm btn-outline-primary flex-fill" onclick="viewEquipmentDetails('${equipment.id}')">
                                 <i class="fas fa-eye me-1"></i>View
@@ -2054,6 +2079,14 @@
             window.firebaseHelpers.showAlert('Please login again', 'danger');
             return;
         }
+
+        // UPDATED: Check for mandatory seller details (especially pincode)
+        if (!sellerData.pincode || !sellerData.businessName || !sellerData.address) {
+            window.firebaseHelpers.showAlert('Please complete your profile details (Pincode, Business Name, Address) before listing equipment.', 'danger');
+            showSection('profile');
+            return;
+        }
+        // END UPDATED
         
         const submitBtn = document.getElementById('submit-equipment-btn');
         const originalText = submitBtn.innerHTML;
@@ -2068,8 +2101,9 @@
                 pricePerAcre: parseFloat(document.getElementById('acre-price').value), // UPDATED ID
                 pricePerHour: parseFloat(document.getElementById('hourly-price').value),
                 description: document.getElementById('equipment-description').value,
-                location: document.getElementById('equipment-location').value,
+                location: document.getElementById('equipment-location').value, // Descriptive location
                 quantity: parseInt(document.getElementById('equipment-quantity').value),
+                pincode: sellerData.pincode, // UPDATED: Automatically use seller's registered Pincode
                 sellerId: currentUser.uid,
                 sellerName: sellerData.name,
                 businessName: sellerData.businessName || '',
@@ -2182,6 +2216,9 @@
                                 <strong>Location:</strong> ${equipment.location}
                             </div>
                             <div class="mb-2">
+                                <strong>Pincode:</strong> ${equipment.pincode || 'N/A'} <!-- UPDATED: Display Pincode -->
+                            </div>
+                            <div class="mb-2">
                                 <strong>Quantity Available:</strong> ${equipment.quantity || 1}
                             </div>
                             <div class="mb-3">
@@ -2245,6 +2282,10 @@
             document.getElementById('edit-equipment-location').value = equipment.location || '';
             document.getElementById('edit-equipment-quantity').value = equipment.quantity || 1;
             document.getElementById('edit-equipment-availability').value = String(equipment.availability);
+            
+            // UPDATED: Set read-only Pincode display in edit modal
+            document.getElementById('edit-equipment-pincode-display').textContent = equipment.pincode || 'N/A';
+
 
             // Clear existing specs and populate
             const specsContainer = document.getElementById('edit-specs-container');
@@ -2309,6 +2350,7 @@
                 location: document.getElementById('edit-equipment-location').value,
                 quantity: parseInt(document.getElementById('edit-equipment-quantity').value),
                 availability: document.getElementById('edit-equipment-availability').value === 'true',
+                // UPDATED: Pincode is kept from original sellerData, no need to update here.
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             };
 
@@ -2484,13 +2526,13 @@
             ordersSnapshot.forEach(doc => {
                 const order = doc.data();
                 const orderDate = order.createdAt ? order.createdAt.toDate() : new Date();
-                const month = orderDate.getMonth();
                 const year = orderDate.getFullYear();
                 
                 // NOTE: This assumes the totalAmount is the seller's gross earning. 
                 const amount = order.totalAmount || 0; 
                 
                 if (year === currentYear) {
+                    const month = orderDate.getMonth();
                     monthlyEarnings[month] += amount;
                     
                     if (month === currentMonth) {
@@ -2650,7 +2692,7 @@
         if (notifications.length === 0) {
             listContainer.innerHTML = `
                 <div class="text-center py-5">
-                    <i class="fas fa-bell fa-3x text-muted mb-3"></i>
+                    <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
                     <h4>No New Alerts</h4>
                     <p class="text-muted">You have no pending rental requests or new reviews.</p>
                 </div>
@@ -2794,6 +2836,7 @@
         document.getElementById('profile-gst').value = sellerData.gstNumber || '';
         document.getElementById('profile-city').value = sellerData.city || '';
         document.getElementById('profile-bio').value = sellerData.bio || '';
+        document.getElementById('profile-pincode').value = sellerData.pincode || ''; // UPDATED: Load Pincode
         
         // Update profile picture if exists
         if (sellerData.profilePicture) {
@@ -2812,6 +2855,14 @@
         e.preventDefault();
         
         if (!currentUser) return;
+
+        // UPDATED: Basic Pincode validation before proceeding
+        const pincodeInput = document.getElementById('profile-pincode').value;
+        if (!pincodeInput || !/^[0-9]{6}$/.test(pincodeInput)) {
+            window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
+            return;
+        }
+        // END UPDATED
         
         try {
             const updates = {
@@ -2822,6 +2873,7 @@
                 gstNumber: document.getElementById('profile-gst').value,
                 city: document.getElementById('profile-city').value,
                 bio: document.getElementById('profile-bio').value,
+                pincode: pincodeInput, // UPDATED: Add pincode to updates
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             };
             
@@ -2865,7 +2917,7 @@
             
             // Update local seller data
             sellerData = { ...sellerData, ...updates };
-            updateSellerInfo();
+            updateSellerInfo(); // Re-render Pincode display everywhere
             
             window.firebaseHelpers.showAlert('Profile updated successfully', 'success');
             
