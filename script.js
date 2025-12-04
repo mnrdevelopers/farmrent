@@ -26,41 +26,138 @@ document.addEventListener('DOMContentLoaded', () => {
         loadProfilePage();
     } else if (path === 'orders.html') {
         loadOrdersPage();
-    } else {
+    } else if (path === 'index.html' || path === '') { // Handles index.html
         loadHomepageData();
+        // NEW: Trigger Pincode prompt after initial load is done/auth is checked
+        checkAndPromptForPincode();
     }
     initializeEventListeners();
     // Fetch the platform fee rate early
     getPlatformFeeRate();
 });
 
-// --- NEW FUNCTION: Fetch Platform Fee Rate ---
-async function getPlatformFeeRate() {
-    try {
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        // Path: /artifacts/{appId}/public/data/settings/platform (Matches Admin Save Path)
-        const settingsRef = window.FirebaseDB.collection('artifacts').doc(appId)
-            .collection('public').doc('data').collection('settings').doc('platform');
+// --- NEW FUNCTION: Check, Prompt, and Save Pincode ---
+async function checkAndPromptForPincode() {
+    // 1. Get Pincode from logged-in user (if available) or localStorage
+    const storedPincode = localStorage.getItem('customerPincode');
+    
+    // Wait for auth to ensure currentUser/Firebase Pincode is set
+    if (!isAuthInitialized) {
+        await new Promise(resolve => {
+            const checkAuth = setInterval(() => {
+                if (isAuthInitialized) {
+                    clearInterval(checkAuth);
+                    resolve();
+                }
+            }, 100);
+        });
+    }
 
-        const doc = await settingsRef.get();
-        if (doc.exists && doc.data().platformFee !== undefined) {
-            // Platform fee is stored as a percentage (e.g., 5). Convert to rate (0.05).
-            platformFeeRate = (doc.data().platformFee / 100) || 0.05;
-            console.log(`Platform fee rate loaded: ${platformFeeRate * 100}%`);
-        } else {
-            console.warn('Platform fee setting not found, using default rate of 5%.');
-            platformFeeRate = 0.05;
-        }
-    } catch (error) {
-        console.error('Error fetching platform fee rate:', error);
-        // Fallback to hardcoded rate on error
-        platformFeeRate = 0.05;
+    // Prioritize Firebase data if logged in
+    const finalPincode = window.currentUser?.pincode || storedPincode;
+    window.customerPincode = finalPincode;
+    
+    // Update the display immediately
+    updateHomepagePincodeDisplay();
+
+    // 2. If Pincode is not set and we are on the homepage, show the modal
+    const path = window.location.pathname.split('/').pop();
+    if (!finalPincode && (path === 'index.html' || path === '')) {
+        showPincodeModal();
+    }
+    
+    // 3. Reload data if we are on index/browse page after setting the Pincode
+    if (finalPincode && (path === 'index.html' || path === '')) {
+        loadFeaturedEquipment(); // Reloads featured equipment with filter
     }
 }
-// --- END NEW FUNCTION ---
+
+// Function to display the Pincode prompt modal
+function showPincodeModal() {
+    const modalElement = document.getElementById('pincodeModal');
+    if (!modalElement) return;
+
+    // Pre-fill if there is a known pincode (from localStorage or profile)
+    document.getElementById('pincode-input').value = window.customerPincode || '';
+    
+    const modal = new bootstrap.Modal(modalElement, {
+        backdrop: 'static', // Prevent closing by clicking outside
+        keyboard: false // Prevent closing with ESC key
+    });
+    modal.show();
+
+    // Add form submission handler (if not already added)
+    const form = document.getElementById('pincode-form');
+    if (form && !form.dataset.listener) {
+        form.addEventListener('submit', handlePincodeSubmit);
+        form.dataset.listener = 'true';
+    }
+}
+
+// Handle form submission inside the modal
+async function handlePincodeSubmit(e) {
+    e.preventDefault();
+    
+    const pincode = document.getElementById('pincode-input').value;
+    if (pincode && /^[0-9]{6}$/.test(pincode)) {
+        await savePincode(pincode);
+        // Close modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('pincodeModal'));
+        if (modal) modal.hide();
+    } else {
+        window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
+    }
+}
+
+// Save the Pincode to localStorage and update global state
+async function savePincode(pincode) {
+    localStorage.setItem('customerPincode', pincode);
+    window.customerPincode = pincode;
+    
+    window.firebaseHelpers.showAlert(`Location set for Pincode: ${pincode}. Filtering results.`, 'info');
+    
+    // If logged in, optionally save to Firestore profile (for persistence)
+    if (window.currentUser && window.currentUser.uid) {
+        try {
+            await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update({
+                pincode: pincode,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            window.currentUser.pincode = pincode;
+        } catch (error) {
+            console.warn('Could not save pincode to profile:', error);
+        }
+    }
+    
+    // Update the UI and reload content
+    updateHomepagePincodeDisplay();
+    loadFeaturedEquipment(); // Reload data immediately on the homepage
+}
+
+// Function to skip Pincode entry
+function skipPincode() {
+    localStorage.removeItem('customerPincode');
+    window.customerPincode = null;
+    
+    const modal = bootstrap.Modal.getInstance(document.getElementById('pincodeModal'));
+    if (modal) modal.hide();
+    
+    window.firebaseHelpers.showAlert('Viewing all equipment (no location filter applied).', 'info');
+    updateHomepagePincodeDisplay();
+    loadFeaturedEquipment(); // Reload data to show all
+}
+
+// Update the Pincode UI in index.html
+function updateHomepagePincodeDisplay() {
+    const pincodeValueElement = document.getElementById('current-pincode-value');
+    if (pincodeValueElement) {
+        pincodeValueElement.textContent = window.customerPincode ? window.customerPincode : 'All Locations';
+    }
+}
+// --- END NEW Pincode Logic ---
 
 
-// --- FIREBASE CART MANAGEMENT HELPERS ---
+// --- EXISTING FUNCTIONS MODIFIED TO USE FIRESTORE CART ---
 
 // Helper to get the Firestore document reference for the current user's cart
 function getCartDocRef(userId) {
@@ -128,10 +225,14 @@ async function updateCartInFirestore(cartItems) {
 }
 
 
-// --- EXISTING FUNCTIONS MODIFIED TO USE FIRESTORE CART ---
+// --- EXISTING FUNCTIONS MODIFIED FOR PINCODE FILTERING ---
 
 // Load data specifically for the Browse page
 async function loadBrowsePageData() {
+    // Use stored/profile Pincode for filtering on browse page
+    const storedPincode = localStorage.getItem('customerPincode');
+    window.customerPincode = window.currentUser?.pincode || storedPincode;
+    
     await updatePincodeDisplay(); // NEW: Display Pincode info/warning
     await loadAllEquipment();
     await loadCategoriesForFilter();
@@ -164,7 +265,7 @@ async function updatePincodeDisplay() {
         });
     }
 
-    // Get customer Pincode (will be set in initializeAuth)
+    // Get customer Pincode 
     const pincode = window.customerPincode;
     
     if (!pincode) {
@@ -175,7 +276,7 @@ async function updatePincodeDisplay() {
                     <i class="fas fa-exclamation-triangle me-2"></i>
                     **Location Filter Missing!** Please set your Pincode to view local equipment.
                 </div>
-                <a href="profile.html" class="btn btn-sm btn-danger text-white">Set Pincode</a>
+                <a href="#" class="btn btn-sm btn-danger text-white" onclick="showPincodeModal()">Set Pincode Now</a>
             </div>
         `;
     } else {
@@ -186,13 +287,13 @@ async function updatePincodeDisplay() {
                     <i class="fas fa-map-marker-alt me-2"></i>
                     **Viewing equipment for Pincode:** <strong>${pincode}</strong> (Listings match seller Pincode)
                 </div>
-                <a href="profile.html" class="btn btn-sm btn-outline-success">Change Pincode</a>
+                <a href="#" class="btn btn-sm btn-outline-success" onclick="showPincodeModal()">Change Pincode</a>
             </div>
         `;
     }
 }
 
-// Load all approved equipment for the browse page
+// Load all approved equipment for the browse page (MODIFIED FOR PINCODE)
 async function loadAllEquipment() {
     try {
         const container = document.getElementById('equipment-grid');
@@ -235,6 +336,9 @@ async function loadCategoriesForFilter() {
             .get();
 
         const filterSelect = document.getElementById('category-filter');
+        // Clear options except the default one
+        filterSelect.innerHTML = '<option value="all">All Categories</option>';
+        
         snapshot.forEach(doc => {
             const category = doc.data();
             const option = document.createElement('option');
@@ -289,13 +393,15 @@ function displayEquipmentGrid(equipmentList) {
     
     container.innerHTML = '';
 
+    const pincode = window.customerPincode || 'N/A';
+
     if (equipmentList.length === 0) {
         container.innerHTML = `
             <div class="col-12 text-center py-5">
                 <i class="fas fa-search-minus fa-3x text-muted mb-3"></i>
-                <p class="mt-3">No equipment found in your area (Pincode: ${window.customerPincode || 'N/A'}).</p>
+                <p class="mt-3">No equipment found ${pincode !== 'N/A' ? `in your area (Pincode: ${pincode}).` : 'without a location filter applied.'}</p>
                 <p class="text-muted small">Try adjusting your Pincode in your profile or clearing the filter.</p>
-                ${!window.customerPincode ? '<a href="profile.html" class="btn btn-primary mt-3">Set Pincode Now</a>' : ''}
+                <a href="#" class="btn btn-primary mt-3" onclick="showPincodeModal()">Set/Change Pincode Now</a>
             </div>
         `;
         return;
@@ -882,8 +988,10 @@ function initializeAuth() {
                 .then((doc) => {
                     if (doc.exists) {
                         window.currentUser = { uid: user.uid, ...doc.data() };
-                        // NEW: Set global customer Pincode
-                        window.customerPincode = window.currentUser.pincode || null;
+                        
+                        // NEW: Set global customer Pincode from profile if not set in session/local storage
+                        const storedPincode = localStorage.getItem('customerPincode');
+                        window.customerPincode = window.currentUser.pincode || storedPincode || null;
                         
                         updateNavbarForLoggedInUser(window.currentUser);
                         // Ensure cart count is updated immediately after user is set
@@ -894,6 +1002,10 @@ function initializeAuth() {
                         if (path === 'browse.html') {
                             updatePincodeDisplay();
                             loadAllEquipment();
+                        } else if (path === 'index.html' || path === '') {
+                             // This is redundant if checkAndPromptForPincode runs later, but ensures logged-in UI reflects filter immediately
+                            updateHomepagePincodeDisplay();
+                            loadFeaturedEquipment(); 
                         }
                         
                     }
@@ -907,17 +1019,24 @@ function initializeAuth() {
         } else {
             // User is signed out
             window.currentUser = null; // Ensure global is cleared
-            window.customerPincode = null; // NEW: Clear Pincode
+            // window.customerPincode is intentionally NOT cleared here, as it might be stored locally
             updateNavbarForLoggedOutUser();
             // Update cart count for unauthenticated user (will show local storage items)
             updateCartCount();
             isAuthInitialized = true;
             
-            // NEW: If on the browse page, update Pincode display and reload equipment
+            // NEW: Apply local Pincode filter logic if applicable
             const path = window.location.pathname.split('/').pop();
             if (path === 'browse.html') {
+                // Ensure customerPincode is pulled from local storage if needed
+                window.customerPincode = localStorage.getItem('customerPincode');
                 updatePincodeDisplay();
                 loadAllEquipment();
+            } else if (path === 'index.html' || path === '') {
+                // Ensure customerPincode is pulled from local storage if needed
+                window.customerPincode = localStorage.getItem('customerPincode');
+                updateHomepagePincodeDisplay();
+                loadFeaturedEquipment(); 
             }
         }
     });
@@ -997,6 +1116,10 @@ function updateNavbarForLoggedOutUser() {
 // Logout function
 async function logout() {
     try {
+        // Clear local storage pincode when logging out
+        localStorage.removeItem('customerPincode'); 
+        window.customerPincode = null; 
+
         await window.FirebaseAuth.signOut();
         window.location.reload();
     } catch (error) {
@@ -1011,7 +1134,7 @@ async function loadHomepageData() {
         // Load categories
         await loadCategories();
         
-        // Load featured equipment
+        // Load featured equipment (will apply filter inside the function)
         await loadFeaturedEquipment();
         
         // Load stats
@@ -1025,6 +1148,9 @@ async function loadHomepageData() {
         
         // Load popular equipment for footer
         await loadPopularEquipmentFooter();
+
+        // Check/update pincode display once all content is loaded
+        updateHomepagePincodeDisplay();
         
     } catch (error) {
         console.error('Error loading homepage data:', error);
@@ -1072,7 +1198,7 @@ async function loadCategories() {
     }
 }
 
-// Load featured equipment (Modified to display approved equipment if no featured exists)
+// Load featured equipment (Modified to display approved equipment if no featured exists) (MODIFIED FOR PINCODE)
 async function loadFeaturedEquipment() {
     try {
         const container = document.getElementById('featured-equipment');
@@ -1080,10 +1206,17 @@ async function loadFeaturedEquipment() {
 
         container.innerHTML = '<div class="col-12 text-center py-5"><div class="spinner-border text-primary loading-spinner"></div><p class="mt-3">Loading popular equipment...</p></div>';
 
-        // 1. Try to load explicitly featured equipment
-        let featuredSnapshot = await window.FirebaseDB.collection('equipment')
+        let query = window.FirebaseDB.collection('equipment')
+            .where('status', '==', 'approved');
+
+        // NEW: Apply Pincode filtering if the customer Pincode is set
+        if (window.customerPincode) {
+            query = query.where('pincode', '==', window.customerPincode);
+        }
+
+        // 1. Try to load featured equipment that matches the query
+        let featuredSnapshot = await query
             .where('featured', '==', true)
-            .where('status', '==', 'approved')
             .limit(6)
             .get();
         
@@ -1092,26 +1225,29 @@ async function loadFeaturedEquipment() {
             equipmentToShow.push({ id: doc.id, ...doc.data() });
         });
         
-        // 2. If fewer than 6 featured items, fill the rest with the newest approved items
+        // 2. If fewer than 6 featured items matching the location, fill with other approved, localized items
         const limit = 6;
         if (equipmentToShow.length < limit) {
-            // Get IDs of items already selected as featured
             const featuredIds = equipmentToShow.map(e => e.id);
-            
             const fillCount = limit - equipmentToShow.length;
 
-            let regularSnapshot = await window.FirebaseDB.collection('equipment')
-                .where('status', '==', 'approved')
-                // Note: We cannot filter by `featured != true` directly in Firestore,
-                // so we rely on sorting by creation time to get the newest, most likely to be added, items.
+            let regularQuery = window.FirebaseDB.collection('equipment')
+                .where('status', '==', 'approved');
+            
+            // Re-apply Pincode filter if set
+            if (window.customerPincode) {
+                regularQuery = regularQuery.where('pincode', '==', window.customerPincode);
+            }
+            
+            let regularSnapshot = await regularQuery
                 .orderBy('createdAt', 'desc')
-                .limit(fillCount * 2) // Fetch more than needed to filter out featured items locally
+                .limit(fillCount * 2) // Fetch more than needed 
                 .get();
             
             regularSnapshot.forEach(doc => {
                 const equipment = { id: doc.id, ...doc.data() };
-                // Only add if it's not already in the featured list and not marked featured
-                if (!featuredIds.includes(equipment.id) && !(equipment.featured === true)) {
+                // Only add if it's not already in the featured list
+                if (!featuredIds.includes(equipment.id) && equipmentToShow.length < limit) {
                     equipmentToShow.push(equipment);
                 }
             });
@@ -1122,7 +1258,8 @@ async function loadFeaturedEquipment() {
         container.innerHTML = '';
         
         if (equipmentToShow.length === 0) {
-            container.innerHTML = '<div class="col-12 text-center py-5"><p>No equipment available to display right now.</p></div>';
+            const pincodeText = window.customerPincode ? ` for Pincode ${window.customerPincode}` : '';
+            container.innerHTML = `<div class="col-12 text-center py-5"><p>No equipment available to display right now${pincodeText}. Try clearing your location filter or checking back later.</p></div>`;
             return;
         }
         
@@ -1528,6 +1665,14 @@ async function handleProfileUpdate(e) {
         // Update local currentUser object and global Pincode variable
         window.currentUser = { ...window.currentUser, ...updates };
         window.customerPincode = updates.pincode;
+        localStorage.setItem('customerPincode', updates.pincode); // Also save to local storage
+
+        // Reload data on relevant pages
+        const path = window.location.pathname.split('/').pop();
+        if (path === 'browse.html') {
+             updatePincodeDisplay();
+             loadAllEquipment();
+        }
 
     } catch (error) {
         console.error('Error updating profile:', error);
@@ -1672,3 +1817,10 @@ async function cancelOrder(orderId) {
 
 // Update cart count when script loads
 updateCartCount();
+
+// Load Razorpay SDK dynamically if not already present
+if (typeof Razorpay === 'undefined') {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    document.head.appendChild(script);
+}
