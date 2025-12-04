@@ -52,15 +52,22 @@ try {
         console.warn('Firebase Remote Config SDK not detected. API key fetching may fail.');
     }
     
-    // Enable Firestore offline persistence
-    db.enablePersistence()
-        .catch((err) => {
-            if (err.code == 'failed-precondition') {
-                console.warn('Multiple tabs open, persistence can only be enabled in one tab at a time.');
-            } else if (err.code == 'unimplemented') {
-                console.warn('The current browser doesn\'t support persistence.');
-            }
-        });
+    // Enable Firestore offline persistence (Wrapped in try/catch to handle Access to storage error)
+    try {
+        db.enablePersistence()
+            .catch((err) => {
+                if (err.code == 'failed-precondition') {
+                    console.warn('Multiple tabs open, persistence can only be enabled in one tab at a time.');
+                } else if (err.code == 'unimplemented') {
+                    console.warn('The current browser doesn\'t support persistence.');
+                } else {
+                    console.warn('Persistence error:', err.message);
+                }
+            });
+    } catch (e) {
+        // Handle sync error, like "Access to storage is not allowed from this context."
+        console.error('Persistence failed during setup:', e.message);
+    }
     
     // Export Firebase services
     window.FirebaseAuth = auth;
@@ -241,11 +248,17 @@ window.firebaseHelpers = {
     // Get current user data
     getCurrentUser: () => {
         return new Promise((resolve, reject) => {
-            const unsubscribe = FirebaseAuth.onAuthStateChanged(user => {
+            // Check if Firebase Auth is initialized
+            if (!window.FirebaseAuth) {
+                reject(new Error("Firebase Auth is not yet initialized (FirebaseAuth is undefined)."));
+                return;
+            }
+
+            const unsubscribe = window.FirebaseAuth.onAuthStateChanged(user => {
                 unsubscribe();
                 if (user) {
                     // Get user data from Firestore
-                    FirebaseDB.collection('users').doc(user.uid).get()
+                    window.FirebaseDB.collection('users').doc(user.uid).get()
                         .then(doc => {
                             if (doc.exists) {
                                 resolve({
@@ -299,7 +312,11 @@ window.firebaseHelpers = {
     // Sign out user
     signOut: async () => {
         try {
-            await FirebaseAuth.signOut();
+            // Check if Firebase Auth is initialized
+            if (!window.FirebaseAuth) {
+                throw new Error("Firebase Auth is not initialized (FirebaseAuth is undefined).");
+            }
+            await window.FirebaseAuth.signOut();
             localStorage.removeItem('currentUser');
             return true;
         } catch (error) {
