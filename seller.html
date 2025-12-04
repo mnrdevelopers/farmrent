@@ -1322,8 +1322,7 @@
         <script src="script.js"></script>
 <script>
     // Global variables
-    let currentUser = null;
-    let sellerData = null;
+    let sellerData = null; // FIX: Removed 'let currentUser = null;' to prevent SyntaxError
     let equipmentData = [];
     let ordersData = [];
     let earningsChart = null;
@@ -1352,7 +1351,7 @@
             return;
         }
         
-        currentUser = authCheck.user;
+        window.currentUser = authCheck.user; // Ensure global currentUser is set
         sellerData = authCheck.user;
         
         // Check if seller is approved
@@ -1551,7 +1550,7 @@ async function populateSellerLocationFields() {
     // Load dashboard data
     async function loadDashboardData() {
         try {
-            if (!currentUser) return;
+            if (!window.currentUser) return;
             
             // Load notifications and stats simultaneously
             const [stats, notificationData] = await Promise.all([
@@ -1587,14 +1586,14 @@ async function populateSellerLocationFields() {
 
     // NEW: Calculate Seller Notifications (Pending orders and new reviews)
     async function calculateSellerNotifications() {
-        if (!currentUser) return { unreadCount: 0, recentNotifications: [] };
+        if (!window.currentUser) return { unreadCount: 0, recentNotifications: [] };
 
         let notifications = [];
 
         try {
             // 1. Pending Orders
             const ordersSnapshot = await getPublicCollectionRef('orders')
-                .where('sellerIds', 'array-contains', currentUser.uid)
+                .where('sellerIds', 'array-contains', window.currentUser.uid)
                 .where('status', '==', 'pending')
                 .orderBy('createdAt', 'desc')
                 .get();
@@ -1616,7 +1615,7 @@ async function populateSellerLocationFields() {
             // 2. New Reviews (Simulated: Marking as unread if created within the last 24 hours)
             const yesterday = firebase.firestore.Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
             const reviewsSnapshot = await window.FirebaseDB.collection('reviews')
-                .where('sellerId', '==', currentUser.uid)
+                .where('sellerId', '==', window.currentUser.uid)
                 .where('createdAt', '>', yesterday) // Filter for recent reviews
                 .orderBy('createdAt', 'desc')
                 .get();
@@ -1694,7 +1693,7 @@ async function populateSellerLocationFields() {
 
     // Calculate seller statistics
     async function calculateSellerStats() {
-        if (!currentUser) return {
+        if (!window.currentUser) return {
             totalEarnings: 0,
             totalOrders: 0,
             totalEquipment: 0,
@@ -1704,7 +1703,7 @@ async function populateSellerLocationFields() {
         try {
             // Get seller's equipment
             const equipmentSnapshot = await window.FirebaseDB.collection('equipment')
-                .where('sellerId', '==', currentUser.uid)
+                .where('sellerId', '==', window.currentUser.uid)
                 .get();
             
             const totalEquipment = equipmentSnapshot.size;
@@ -1717,7 +1716,7 @@ async function populateSellerLocationFields() {
             
             const relevantOrders = ordersSnapshot.docs.filter(doc => {
                  const order = doc.data();
-                 return order.sellerIds && order.sellerIds.includes(currentUser.uid);
+                 return order.sellerIds && order.sellerIds.includes(window.currentUser.uid);
             });
             
             const totalOrders = relevantOrders.length;
@@ -1734,7 +1733,7 @@ async function populateSellerLocationFields() {
             
             // Get average rating from reviews
             const reviewsSnapshot = await window.FirebaseDB.collection('reviews')
-                .where('sellerId', '==', currentUser.uid)
+                .where('sellerId', '==', window.currentUser.uid)
                 .get();
             
             let totalRating = 0;
@@ -1768,7 +1767,7 @@ async function populateSellerLocationFields() {
 
     // Load recent orders
     async function loadRecentOrders() {
-        if (!currentUser) return;
+        if (!window.currentUser) return;
         
         try {
             const ordersCollectionRef = getPublicCollectionRef('orders');
@@ -1788,7 +1787,7 @@ async function populateSellerLocationFields() {
                 const order = { id: doc.id, ...doc.data() };
                 
                 // Filter orders relevant to this seller
-                if (order.sellerIds && order.sellerIds.includes(currentUser.uid)) {
+                if (order.sellerIds && order.sellerIds.includes(window.currentUser.uid)) {
                     ordersData.push(order);
                     recentOrders.push(order);
                 }
@@ -1903,11 +1902,11 @@ async function populateSellerLocationFields() {
 
     // Load equipment list
     async function loadEquipmentList() {
-        if (!currentUser) return;
+        if (!window.currentUser) return;
         
         try {
             const equipmentSnapshot = await window.FirebaseDB.collection('equipment')
-                .where('sellerId', '==', currentUser.uid)
+                .where('sellerId', '==', window.currentUser.uid)
                 .orderBy('createdAt', 'desc')
                 .get();
             
@@ -2040,7 +2039,7 @@ async function populateSellerLocationFields() {
 
     // Load orders
     async function loadOrders() {
-        if (!currentUser) return;
+        if (!window.currentUser) return;
         
         try {
             const ordersCollectionRef = getPublicCollectionRef('orders');
@@ -2058,7 +2057,7 @@ async function populateSellerLocationFields() {
                 const order = { id: doc.id, ...doc.data() };
                 
                  // Filter orders relevant to this seller
-                if (order.sellerIds && order.sellerIds.includes(currentUser.uid)) {
+                if (order.sellerIds && order.sellerIds.includes(window.currentUser.uid)) {
                     ordersData.push(order);
                     const row = createFullOrderRow(order);
                     ordersTable.innerHTML += row;
@@ -2194,7 +2193,7 @@ async function populateSellerLocationFields() {
     document.getElementById('add-equipment-form').addEventListener('submit', async function(e) {
         e.preventDefault();
         
-        if (!currentUser) {
+        if (!window.currentUser) {
             window.firebaseHelpers.showAlert('Please login again', 'danger');
             return;
         }
@@ -2223,7 +2222,7 @@ async function populateSellerLocationFields() {
                 location: document.getElementById('equipment-location').value, // Descriptive location
                 quantity: parseInt(document.getElementById('equipment-quantity').value),
                 pincode: sellerData.pincode, // UPDATED: Automatically use seller's registered Pincode
-                sellerId: currentUser.uid,
+                sellerId: window.currentUser.uid,
                 sellerName: sellerData.name,
                 businessName: sellerData.businessName || '',
                 availability: true,
@@ -2630,7 +2629,7 @@ async function populateSellerLocationFields() {
 
     // Load earnings data
     async function loadEarningsData() {
-        if (!currentUser) return;
+        if (!window.currentUser) return;
         
         try {
             // Calculate monthly earnings
@@ -2642,7 +2641,7 @@ async function populateSellerLocationFields() {
             
             // Get all relevant orders
             const ordersSnapshot = await ordersCollectionRef
-                .where('sellerIds', 'array-contains', currentUser.uid)
+                .where('sellerIds', 'array-contains', window.currentUser.uid)
                 .where('status', 'in', ['completed', 'active'])
                 .get();
             
@@ -2655,7 +2654,7 @@ async function populateSellerLocationFields() {
                 const orderDate = order.createdAt ? order.createdAt.toDate() : new Date();
                 const year = orderDate.getFullYear();
                 
-                // NOTE: This assumes the totalAmount is the seller's gross earning. 
+                // NOTE: This is still a simplification; totalAmount is gross, but we use it as net here. 
                 const amount = order.totalAmount || 0; 
                 
                 if (year === currentYear) {
@@ -2737,7 +2736,7 @@ async function populateSellerLocationFields() {
         try {
             // Fetch all equipment belonging to the seller
             const equipmentSnapshot = await window.FirebaseDB.collection('equipment')
-                .where('sellerId', '==', currentUser.uid)
+                .where('sellerId', '==', window.currentUser.uid)
                 .get();
             
             const equipmentEarnings = {};
@@ -2752,7 +2751,7 @@ async function populateSellerLocationFields() {
             const ordersCollectionRef = getPublicCollectionRef('orders');
             
             const ordersSnapshot = await ordersCollectionRef
-                .where('sellerIds', 'array-contains', currentUser.uid)
+                .where('sellerIds', 'array-contains', window.currentUser.uid)
                 .where('status', 'in', ['completed', 'active'])
                 .get();
 
@@ -2761,7 +2760,7 @@ async function populateSellerLocationFields() {
                 const order = orderDoc.data();
                 order.items.forEach(item => {
                     // Only count earnings for equipment belonging to this seller
-                    if (item.sellerId === currentUser.uid && equipmentEarnings[item.id] !== undefined) {
+                    if (item.sellerId === window.currentUser.uid && equipmentEarnings[item.id] !== undefined) {
                         equipmentEarnings[item.id] += item.price || 0; // Item price is the amount paid for that item rental
                     }
                 });
@@ -2807,11 +2806,11 @@ async function populateSellerLocationFields() {
 
     // NEW: Load Notifications Section
     async function loadNotifications() {
-        if (!currentUser) return;
+        if (!window.currentUser) return;
         
         // Recalculate all notifications to ensure data is fresh
         const notificationData = await calculateSellerNotifications();
-        const notifications = notificationData.recentNotifications;
+        const notifications = notificationData.recentNotifications; // All notifications found
         
         const listContainer = document.getElementById('seller-alerts-list');
         listContainer.innerHTML = ''; // Clear previous content
@@ -2883,7 +2882,7 @@ async function populateSellerLocationFields() {
     async function loadReviews() {
         try {
             const reviewsSnapshot = await window.FirebaseDB.collection('reviews')
-                .where('sellerId', '==', currentUser.uid)
+                .where('sellerId', '==', window.currentUser.uid)
                 .orderBy('createdAt', 'desc')
                 .limit(10)
                 .get();
@@ -2995,7 +2994,7 @@ async function loadProfileData() {
 document.getElementById('profile-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     
-    if (!currentUser) return;
+    if (!window.currentUser) return;
 
     // Validate Pincode and location fields
     const pincodeInput = document.getElementById('profile-pincode').value;
@@ -3054,12 +3053,12 @@ document.getElementById('profile-form').addEventListener('submit', async functio
             
             // Reauthenticate user
             const credential = firebase.auth.EmailAuthProvider.credential(
-                currentUser.email,
+                window.currentUser.email,
                 currentPassword
             );
             
-            await currentUser.reauthenticateWithCredential(credential);
-            await currentUser.updatePassword(newPassword);
+            await window.currentUser.reauthenticateWithCredential(credential);
+            await window.currentUser.updatePassword(newPassword);
             window.firebaseHelpers.showAlert('Password updated successfully', 'success');
             
             // Clear password fields
@@ -3069,7 +3068,7 @@ document.getElementById('profile-form').addEventListener('submit', async functio
         }
         
         // Update Firestore
-        await window.FirebaseDB.collection('users').doc(currentUser.uid).update(updates);
+        await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(updates);
         
         // Update local seller data
         sellerData = { ...sellerData, ...updates };
@@ -3097,22 +3096,22 @@ document.getElementById('profile-form').addEventListener('submit', async functio
 
     // Delete account
     async function deleteAccount() {
-        if (!currentUser) return;
+        if (!window.currentUser) return;
         
         try {
             // Delete user data from Firestore
-            await window.FirebaseDB.collection('users').doc(currentUser.uid).delete();
+            await window.FirebaseDB.collection('users').doc(window.currentUser.uid).delete();
             
             // Delete user's equipment
             const equipmentSnapshot = await window.FirebaseDB.collection('equipment')
-                .where('sellerId', '==', currentUser.uid)
+                .where('sellerId', '==', window.currentUser.uid)
                 .get();
             
             const deletePromises = equipmentSnapshot.docs.map(doc => doc.ref.delete());
             await Promise.all(deletePromises);
             
             // Delete user from Firebase Auth
-            await currentUser.delete();
+            await window.currentUser.delete();
             
             // Clear local storage
             localStorage.removeItem('currentUser');
@@ -3176,12 +3175,12 @@ document.getElementById('profile-form').addEventListener('submit', async functio
                 
                 // Use the new ImgBB helper
                 const downloadURL = await window.firebaseHelpers.uploadFile(
-                    `profile_pictures/${currentUser.uid}`, // Path is passed but ignored by the new helper
+                    `profile_pictures/${window.currentUser.uid}`, // Path is passed but ignored by the new helper
                     file
                 );
                 
                 // Update profile picture in Firestore
-                await window.FirebaseDB.collection('users').doc(currentUser.uid).update({
+                await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update({
                     profilePicture: downloadURL,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
@@ -3197,7 +3196,7 @@ document.getElementById('profile-form').addEventListener('submit', async functio
                 window.firebaseHelpers.showAlert('Error uploading profile picture. ' + error.message, 'danger');
                 
                 // Restore original picture or default placeholder on failure
-                const currentSellerData = await window.FirebaseDB.collection('users').doc(currentUser.uid).get();
+                const currentSellerData = await window.FirebaseDB.collection('users').doc(window.currentUser.uid).get();
                 const restoredSrc = currentSellerData.data()?.profilePicture || 'https://via.placeholder.com/100';
                 document.getElementById('profile-picture').src = restoredSrc;
             }
