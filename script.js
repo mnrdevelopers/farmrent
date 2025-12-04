@@ -1,13 +1,9 @@
 // Main application JavaScript
-
-// Global variables
 let currentUser = null;
-let allEquipmentData = []; // To store all approved equipment for client-side filtering/sorting
-let selectedEquipment = {}; // Holds data for the currently open modal
-let isAuthInitialized = false; // Flag to track if onAuthStateChanged has run
-// NEW: Global variable to cache platform fee rate
+let allEquipmentData = [];
+let selectedEquipment = {};
+let isAuthInitialized = false;
 let platformFeeRate = 0.05; 
-// NEW: Global variable to store customer Pincode
 let customerPincode = null;
 
 
@@ -20,25 +16,56 @@ document.addEventListener('DOMContentLoaded', () => {
         loadBrowsePageData();
     } else if (path === 'cart.html') {
         loadCartPage();
-        updateNavbarPincodeDisplay(); // Load Pincode on Cart page
+        updateNavbarPincodeDisplay();
     } else if (path === 'checkout.html') {
         loadCheckoutPage();
-        updateNavbarPincodeDisplay(); // Load Pincode on Checkout page
+        updateNavbarPincodeDisplay();
     } else if (path === 'profile.html') {
         loadProfilePage();
-        updateNavbarPincodeDisplay(); // Load Pincode on Profile page
+        updateNavbarPincodeDisplay();
     } else if (path === 'orders.html') {
         loadOrdersPage();
-        updateNavbarPincodeDisplay(); // Load Pincode on Orders page
+        updateNavbarPincodeDisplay();
     } else if (path === 'index.html' || path === '') { // Handles index.html
         loadHomepageData();
-        // NEW: Trigger Pincode prompt after initial load is done/auth is checked
         checkAndPromptForPincode();
     }
     initializeEventListeners();
-    // Fetch the platform fee rate early
-    getPlatformFeeRate();
+    // CALL FIX: Call the async function and rely on the global variable being set later.
+    // The previous error was likely due to this call being synchronous and executed 
+    // before the definition was available in the global scope.
+    getPlatformFeeRate(); 
 });
+
+// --- NEW FUNCTION: Fetch Platform Fee Rate ---
+async function getPlatformFeeRate() {
+    try {
+        // Wait for Firebase services to be initialized by firebase-config.js
+        if (!window.FirebaseDB) {
+             await new Promise(resolve => setTimeout(resolve, 500)); // Wait a bit
+        }
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // Path: /artifacts/{appId}/public/data/settings/platform (Matches Admin Save Path)
+        const settingsRef = window.FirebaseDB.collection('artifacts').doc(appId)
+            .collection('public').doc('data').collection('settings').doc('platform');
+
+        const doc = await settingsRef.get();
+        if (doc.exists && doc.data().platformFee !== undefined) {
+            // Platform fee is stored as a percentage (e.g., 5). Convert to rate (0.05).
+            platformFeeRate = (doc.data().platformFee / 100) || 0.05;
+            console.log(`Platform fee rate loaded: ${platformFeeRate * 100}%`);
+        } else {
+            console.warn('Platform fee setting not found, using default rate of 5%.');
+            platformFeeRate = 0.05;
+        }
+    } catch (error) {
+        console.error('Error fetching platform fee rate:', error);
+        // Fallback to hardcoded rate on error
+        platformFeeRate = 0.05;
+    }
+}
+// --- END NEW FUNCTION ---
 
 // --- NEW FUNCTION: Check, Prompt, and Save Pincode ---
 async function checkAndPromptForPincode() {
@@ -737,7 +764,9 @@ async function loadCartPage() {
     }
 
     await updateCartCount();
-    await getPlatformFeeRate(); // Ensure rate is loaded
+    // FIX: The original error was here because getPlatformFeeRate was not defined globally yet.
+    // It is now defined outside the DOMContentLoaded block in script.js.
+    await getPlatformFeeRate(); 
     const cart = await getCartFromFirestore(); // <<< MODIFIED: Read from Firestore
     displayCartItems(cart); // <<< MODIFIED: Pass cart data
 }
@@ -855,6 +884,7 @@ async function loadCheckoutPage() {
     }
 
     // Ensure rate is loaded before calculation
+    // FIX: The original error was here because getPlatformFeeRate was not defined globally yet.
     await getPlatformFeeRate(); 
     
     // Now safely get user and cart data
