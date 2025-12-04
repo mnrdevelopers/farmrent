@@ -1208,8 +1208,13 @@
                             <div class="col-md-4 mb-3">
                                 <label for="edit-equipment-location" class="form-label">Location (Descriptive)</label>
                                 <input type="text" class="form-control" id="edit-equipment-location" required>
-                                <small class="text-muted d-block">Pincode is fixed: <strong id="edit-equipment-pincode-display">N/A</strong></small>
                             </div>
+                            <!-- START FIX: Added Pincode input field -->
+                            <div class="col-md-4 mb-3">
+                                <label for="edit-equipment-pincode" class="form-label">Pincode *</label>
+                                <input type="text" class="form-control" id="edit-equipment-pincode" pattern="[0-9]{6}" maxlength="6" required>
+                            </div>
+                            <!-- END FIX -->
                             <div class="col-md-4 mb-3">
                                 <label for="edit-equipment-quantity" class="form-label">Quantity Available *</label>
                                 <input type="number" class="form-control" id="edit-equipment-quantity" min="1" required>
@@ -2283,8 +2288,8 @@
             document.getElementById('edit-equipment-quantity').value = equipment.quantity || 1;
             document.getElementById('edit-equipment-availability').value = String(equipment.availability);
             
-            // UPDATED: Set read-only Pincode display in edit modal
-            document.getElementById('edit-equipment-pincode-display').textContent = equipment.pincode || 'N/A';
+            // FIX: Set the value of the new Pincode input field
+            document.getElementById('edit-equipment-pincode').value = equipment.pincode || '';
 
 
             // Clear existing specs and populate
@@ -2341,6 +2346,14 @@
 
         try {
             // Gather updated data
+            const pincodeInput = document.getElementById('edit-equipment-pincode').value; // FIX: Get Pincode
+            if (!pincodeInput || !/^[0-9]{6}$/.test(pincodeInput)) {
+                window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+                return;
+            }
+
             const updatedData = {
                 name: document.getElementById('edit-equipment-name').value,
                 category: document.getElementById('edit-equipment-category').value,
@@ -2350,7 +2363,7 @@
                 location: document.getElementById('edit-equipment-location').value,
                 quantity: parseInt(document.getElementById('edit-equipment-quantity').value),
                 availability: document.getElementById('edit-equipment-availability').value === 'true',
-                // UPDATED: Pincode is kept from original sellerData, no need to update here.
+                pincode: pincodeInput, // FIX: Save the updated Pincode
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             };
 
