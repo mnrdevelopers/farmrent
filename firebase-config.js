@@ -37,7 +37,6 @@ try {
         };
         
         // Fetch and activate the configuration values
-        // We ensure this runs immediately to fetch keys
         remoteConfig.fetchAndActivate()
             .then(activated => {
                 if (activated) {
@@ -48,7 +47,6 @@ try {
             })
             .catch(error => {
                 console.error("Error fetching or activating remote config. Using default values:", error);
-                // Important: If fetch/activate fails, we must rely on defaultConfig values.
             });
     } else {
         console.warn('Firebase Remote Config SDK not detected. API key fetching may fail.');
