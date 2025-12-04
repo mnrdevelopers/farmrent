@@ -31,7 +31,9 @@ try {
         // IMPORTANT: These keys must be configured in the Firebase Console
         remoteConfig.defaultConfig = {
             "imgbb_api_key": "", // Placeholder for the ImgBB key
-            "razorpay_key_id": "rzp_test_RYqQhRehAtLv0Z" // Placeholder for Razorpay test key
+            "razorpay_key_id": "rzp_test_RYqQhRehAtLv0Z", // Placeholder for Razorpay test key
+            // NEW: Default Post Office API URL
+            "post_office_api_url": "https://api.postalpincode.in/pincode/" 
         };
         
         // Fetch and activate the configuration values
@@ -171,6 +173,21 @@ window.firebaseHelpers = {
             console.error("Error retrieving Razorpay Key ID:", error);
             window.firebaseHelpers.showAlert('Failed to retrieve Razorpay Key ID from Remote Config.', 'danger');
             return ""; 
+        }
+    },
+
+    /**
+     * NEW: Fetches the India Post Office API URL from Firebase Remote Config.
+     * @returns {Promise<string>} The Post Office API URL.
+     */
+    getPostOfficeApiUrl: async () => {
+        if (!remoteConfig) return "https://api.postalpincode.in/pincode/"; 
+        try {
+            const url = remoteConfig.getString('post_office_api_url');
+            return url || "https://api.postalpincode.in/pincode/";
+        } catch (error) {
+            console.error("Error retrieving Post Office API URL:", error);
+            return "https://api.postalpincode.in/pincode/";
         }
     },
 
