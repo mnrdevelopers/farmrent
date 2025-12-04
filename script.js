@@ -111,19 +111,36 @@ document.addEventListener('DOMContentLoaded', () => {
 // --- NEW FUNCTION: Fetch Platform Fee Rate ---
 async function getPlatformFeeRate() {
     try {
-        // Wait for Firebase services to be initialized by firebase-config.js
+        // Wait for Firebase services to be initialized
         if (!window.FirebaseDB) {
-             await new Promise(resolve => setTimeout(resolve, 500)); // Wait a bit
+            console.log("Waiting for FirebaseDB before fetching platform fee...");
+            await new Promise((resolve) => {
+                const check = setInterval(() => {
+                    if (window.FirebaseDB) {
+                        clearInterval(check);
+                        resolve();
+                    }
+                }, 100);
+                
+                setTimeout(() => {
+                    clearInterval(check);
+                    resolve();
+                }, 5000);
+            });
+        }
+
+        if (!window.FirebaseDB) {
+            console.warn('FirebaseDB not available, using default platform fee rate');
+            platformFeeRate = 0.05;
+            return;
         }
 
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        // Path: /artifacts/{appId}/public/data/settings/platform (Matches Admin Save Path)
         const settingsRef = window.FirebaseDB.collection('artifacts').doc(appId)
             .collection('public').doc('data').collection('settings').doc('platform');
 
         const doc = await settingsRef.get();
         if (doc.exists && doc.data().platformFee !== undefined) {
-            // Platform fee is stored as a percentage (e.g., 5). Convert to rate (0.05).
             platformFeeRate = (doc.data().platformFee / 100) || 0.05;
             console.log(`Platform fee rate loaded: ${platformFeeRate * 100}%`);
         } else {
@@ -132,7 +149,6 @@ async function getPlatformFeeRate() {
         }
     } catch (error) {
         console.error('Error fetching platform fee rate:', error);
-        // Fallback to hardcoded rate on error
         platformFeeRate = 0.05;
     }
 }
@@ -152,12 +168,43 @@ async function getPostOfficeData(pincode) {
     }
 
     try {
-        // Wait for helper initialization to avoid: TypeError: Cannot read properties of undefined (reading 'getPostOfficeApiUrl')
-        if (!window.firebaseHelpers || !window.firebaseHelpers.getPostOfficeApiUrl) {
-            await new Promise(resolve => setTimeout(resolve, 500)); // Wait for Firebase helpers
+        // Wait for firebaseHelpers to be initialized
+        if (!window.firebaseHelpers) {
+            await new Promise((resolve) => {
+                const check = setInterval(() => {
+                    if (window.firebaseHelpers) {
+                        clearInterval(check);
+                        resolve();
+                    }
+                }, 100);
+                
+                setTimeout(() => {
+                    clearInterval(check);
+                    resolve();
+                }, 3000);
+            });
         }
         
-        // Assume window.firebaseHelpers.getPostOfficeApiUrl is available from firebase-config.js
+        if (!window.firebaseHelpers || !window.firebaseHelpers.getPostOfficeApiUrl) {
+            console.warn("firebaseHelpers not available, using default API URL");
+            const apiUrl = "https://api.postalpincode.in/pincode/";
+            const response = await fetch(`${apiUrl}${pincode}`);
+            
+            if (!response.ok) {
+                throw new Error(`API returned status ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data && data.length > 0 && data[0].Status === 'Success') {
+                return data[0].PostOffice;
+            } else {
+                console.log(`Post Office API lookup failed for Pincode ${pincode}: ${data[0]?.Message || 'No Data'}`);
+                return [];
+            }
+        }
+        
+        // Use the helper function from firebaseHelpers
         const apiUrl = await window.firebaseHelpers.getPostOfficeApiUrl(); 
         const response = await fetch(`${apiUrl}${pincode}`);
 
@@ -1238,13 +1285,28 @@ async function placeOrderInFirestore(orderId, customerData, paymentId, totalAmou
 }
 
 // Initialize authentication
+// Initialize authentication
 function initializeAuth() {
-    // FIX: Add a check to ensure window.FirebaseAuth is defined before subscribing
-    if (!window.FirebaseAuth) {
-        console.warn("Firebase Auth not yet initialized. Retrying initialization...");
-        // Use a short delay before trying to subscribe, relying on firebase-config.js
-        // to eventually define window.FirebaseAuth.
-        setTimeout(initializeAuthInternal, 500); 
+    // Check if Firebase services are available
+    if (!window.firebaseHelpers || !window.FirebaseDB) {
+        console.log("Waiting for Firebase initialization...");
+        
+        // Wait for Firebase to be initialized (check every 100ms)
+        const checkFirebase = setInterval(() => {
+            if (window.firebaseHelpers && window.FirebaseDB) {
+                clearInterval(checkFirebase);
+                console.log("Firebase initialized, proceeding with auth setup");
+                initializeAuthInternal();
+            }
+        }, 100);
+        
+        // Timeout after 10 seconds
+        setTimeout(() => {
+            clearInterval(checkFirebase);
+            if (!window.firebaseHelpers) {
+                console.error("Firebase failed to initialize after 10 seconds");
+            }
+        }, 10000);
     } else {
         initializeAuthInternal();
     }
