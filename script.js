@@ -114,7 +114,7 @@ async function savePincode(pincode) {
     localStorage.setItem('customerPincode', pincode);
     window.customerPincode = pincode;
     
-    window.firebaseHelpers.showAlert(`Location set for Pincode: ${pincode}. Filtering results.`, 'info');
+    window.firebaseHelpers.showAlert(` localização definida para Pincode: ${pincode}. Filtering results.`, 'success');
     
     // If logged in, optionally save to Firestore profile (for persistence)
     if (window.currentUser && window.currentUser.uid) {
@@ -131,7 +131,13 @@ async function savePincode(pincode) {
     
     // Update the UI and reload content
     updateHomepagePincodeDisplay();
-    loadFeaturedEquipment(); // Reload data immediately on the homepage
+    // If on browse page, reload all equipment with the new filter
+    const path = window.location.pathname.split('/').pop();
+    if (path === 'browse.html') {
+        loadAllEquipment(); 
+    } else {
+        loadFeaturedEquipment(); // Reload data immediately on the homepage
+    }
 }
 
 // Function to skip Pincode entry
@@ -144,7 +150,14 @@ function skipPincode() {
     
     window.firebaseHelpers.showAlert('Viewing all equipment (no location filter applied).', 'info');
     updateHomepagePincodeDisplay();
-    loadFeaturedEquipment(); // Reload data to show all
+    
+    // Reload content to show all equipment
+    const path = window.location.pathname.split('/').pop();
+    if (path === 'browse.html') {
+        loadAllEquipment();
+    } else {
+        loadFeaturedEquipment();
+    }
 }
 
 // Update the Pincode UI in index.html
@@ -153,6 +166,68 @@ function updateHomepagePincodeDisplay() {
     if (pincodeValueElement) {
         pincodeValueElement.textContent = window.customerPincode ? window.customerPincode : 'All Locations';
     }
+}
+
+// NEW FUNCTION: Use Geolocation API to find the user's Pincode
+function getCurrentLocationPincode() {
+    const statusElement = document.getElementById('location-status');
+    const inputElement = document.getElementById('pincode-input');
+    const buttonElement = document.getElementById('location-access-btn');
+    
+    if (!navigator.geolocation) {
+        statusElement.textContent = 'Geolocation is not supported by your browser.';
+        statusElement.classList.add('text-danger');
+        window.firebaseHelpers.showAlert('Geolocation not supported.', 'danger');
+        return;
+    }
+
+    statusElement.textContent = 'Fetching location...';
+    buttonElement.disabled = true;
+
+    navigator.geolocation.getCurrentPosition(async (position) => {
+        const { latitude, longitude } = position.coords;
+        statusElement.textContent = `Location found: Lat ${latitude.toFixed(4)}, Lon ${longitude.toFixed(4)}`;
+        
+        // --- SIMULATED REVERSE GEOCODING ---
+        // In a real application, you would use a service like Google Maps Geocoding API 
+        // or OpenCage to convert Lat/Lon to a Pincode (requires an API key and backend call).
+        // For this example, we will simulate a successful result for a common area or 
+        // fallback to a default if the exact mechanism is not built.
+
+        const simulatedPincode = '503001'; // Nizamabad, Telangana (Example Pincode)
+
+        if (simulatedPincode) {
+            statusElement.textContent = `Pincode found: ${simulatedPincode}. Applying filter...`;
+            inputElement.value = simulatedPincode;
+            buttonElement.disabled = false;
+            
+            // Automatically submit the form to save and filter
+            await handlePincodeSubmit(new Event('submit')); 
+        } else {
+            statusElement.textContent = 'Could not determine Pincode from location. Please enter manually.';
+            statusElement.classList.add('text-warning');
+            buttonElement.disabled = false;
+        }
+        // --- END SIMULATED REVERSE GEOCODING ---
+
+    }, (error) => {
+        let message = 'Error getting location.';
+        if (error.code === error.PERMISSION_DENIED) {
+            message = 'Geolocation denied. Please enable location access or enter Pincode manually.';
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+            message = 'Location information is unavailable.';
+        } else if (error.code === error.TIMEOUT) {
+            message = 'The request to get user location timed out.';
+        }
+        statusElement.textContent = message;
+        statusElement.classList.add('text-danger');
+        buttonElement.disabled = false;
+        window.firebaseHelpers.showAlert(message, 'danger');
+    }, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+    });
 }
 // --- END NEW Pincode Logic ---
 
