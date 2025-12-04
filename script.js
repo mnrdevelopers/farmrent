@@ -67,157 +67,105 @@ async function getPlatformFeeRate() {
 }
 // --- END NEW FUNCTION ---
 
-// --- NEW FUNCTION: Check, Prompt, and Save Pincode ---
-async function checkAndPromptForPincode() {
-    // 1. Get Pincode from logged-in user (if available) or localStorage
-    const storedPincode = localStorage.getItem('customerPincode');
-    
-    // Wait for auth to ensure currentUser/Firebase Pincode is set
-    if (!isAuthInitialized) {
-        await new Promise(resolve => {
-            const checkAuth = setInterval(() => {
-                if (isAuthInitialized) {
-                    clearInterval(checkAuth);
-                    resolve();
-                }
-            }, 100);
-        });
+// --- LOCATION LOOKUP FUNCTIONS (Post Office API Integration) ---
+
+/**
+ * Fetches location data (Post Offices, District, State) for a given Pincode using the India Post API.
+ * @param {string} pincode 
+ * @returns {Promise<Array<Object>>} Array of Post Office objects, or empty array on failure.
+ */
+async function getPostOfficeData(pincode) {
+    if (!/^[0-9]{6}$/.test(pincode)) {
+        console.warn("Invalid Pincode format provided.");
+        return [];
     }
 
-    // Prioritize Firebase data if logged in
-    const finalPincode = window.currentUser?.pincode || storedPincode;
-    window.customerPincode = finalPincode;
-    
-    // Update all displays immediately
-    updateHomepagePincodeDisplay();
-    updateNavbarPincodeDisplay();
+    try {
+        const apiUrl = await window.firebaseHelpers.getPostOfficeApiUrl(); // Fetched from Remote Config
+        const response = await fetch(`${apiUrl}${pincode}`);
 
-    // 2. If Pincode is not set and we are on the homepage, show the modal
-    const path = window.location.pathname.split('/').pop();
-    if (!finalPincode && (path === 'index.html' || path === '')) {
-        showPincodeModal();
-    }
-    
-    // 3. Reload data if we are on index/browse page after setting the Pincode
-    if (finalPincode && (path === 'index.html' || path === '')) {
-        loadFeaturedEquipment(); // Reloads featured equipment with filter
-    }
-}
-
-// Function to display the Pincode prompt modal
-function showPincodeModal() {
-    const modalElement = document.getElementById('pincodeModal');
-    if (!modalElement) return;
-
-    // Reset status/input when showing the modal
-    document.getElementById('pincode-input').value = window.customerPincode || '';
-    const statusElement = document.getElementById('location-status');
-    if (statusElement) statusElement.textContent = '';
-    const buttonElement = document.getElementById('location-access-btn');
-    if (buttonElement) buttonElement.disabled = false;
-    
-    const modal = new bootstrap.Modal(modalElement, {
-        backdrop: 'static', // Prevent closing by clicking outside
-        keyboard: false // Prevent closing with ESC key
-    });
-    modal.show();
-
-    // Add form submission handler (if not already added)
-    const form = document.getElementById('pincode-form');
-    if (form && !form.dataset.listener) {
-        form.addEventListener('submit', handlePincodeSubmit);
-        form.dataset.listener = 'true';
-    }
-}
-
-// Handle form submission inside the modal
-async function handlePincodeSubmit(e) {
-    e.preventDefault();
-    
-    const pincode = document.getElementById('pincode-input').value;
-    if (pincode && /^[0-9]{6}$/.test(pincode)) {
-        await savePincode(pincode);
-        // Close modal
-        const modal = bootstrap.Modal.getInstance(document.getElementById('pincodeModal'));
-        if (modal) modal.hide();
-    } else {
-        window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
-    }
-}
-
-// Save the Pincode to localStorage and update global state
-async function savePincode(pincode) {
-    localStorage.setItem('customerPincode', pincode);
-    window.customerPincode = pincode;
-    
-    window.firebaseHelpers.showAlert(`Location defined for Pincode: ${pincode}. Filtering results.`, 'success');
-    
-    // If logged in, optionally save to Firestore profile (for persistence)
-    if (window.currentUser && window.currentUser.uid) {
-        try {
-            await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update({
-                pincode: pincode,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            window.currentUser.pincode = pincode;
-        } catch (error) {
-            console.warn('Could not save pincode to profile:', error);
+        if (!response.ok) {
+            throw new Error(`API returned status ${response.status}`);
         }
+        
+        const data = await response.json();
+        
+        if (data && data.length > 0 && data[0].Status === 'Success') {
+            return data[0].PostOffice;
+        } else {
+            console.log(`Post Office API lookup failed for Pincode ${pincode}: ${data[0]?.Message || 'No Data'}`);
+            return [];
+        }
+    } catch (error) {
+        console.error("Error fetching Post Office data:", error);
+        return [];
     }
-    
-    // Update the UI and reload content
-    updateHomepagePincodeDisplay();
-    updateNavbarPincodeDisplay();
+}
 
-    // If on browse page, reload all equipment with the new filter
-    const path = window.location.pathname.split('/').pop();
-    if (path === 'browse.html') {
-        loadAllEquipment(); 
+/**
+ * Automatically populates City, State, and a Village/Post Office dropdown based on Pincode input.
+ * @param {string} pincodeInputId ID of the Pincode input field.
+ * @param {string} villageSelectId ID of the select element for Villages/Post Offices.
+ * @param {string} cityInputId ID of the City input field.
+ * @param {string} stateInputId ID of the State input field.
+ * @param {string} statusElementId ID of an element to show status/loading text.
+ */
+async function populateLocationFields(pincodeInputId, villageSelectId, cityInputId, stateInputId, statusElementId) {
+    const pincodeInput = document.getElementById(pincodeInputId);
+    const villageSelect = document.getElementById(villageSelectId);
+    const cityInput = document.getElementById(cityInputId);
+    const stateInput = document.getElementById(stateInputId);
+    const statusElement = document.getElementById(statusElementId);
+    
+    if (!pincodeInput || !villageSelect || !cityInput || !stateInput) return;
+
+    villageSelect.innerHTML = '<option value="">Loading...</option>';
+    villageSelect.disabled = true;
+    cityInput.value = '';
+    stateInput.value = '';
+    if (statusElement) statusElement.textContent = 'Verifying Pincode...';
+
+    const pincode = pincodeInput.value;
+
+    if (!/^[0-9]{6}$/.test(pincode)) {
+        villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
+        if (statusElement) statusElement.textContent = '';
+        return;
+    }
+
+    const postOffices = await getPostOfficeData(pincode);
+
+    if (postOffices.length > 0) {
+        const firstOffice = postOffices[0];
+        cityInput.value = firstOffice.District || '';
+        stateInput.value = firstOffice.State || '';
+
+        // Populate village dropdown
+        villageSelect.innerHTML = '<option value="">Select your Village/Post Office *</option>';
+        
+        postOffices.forEach(office => {
+            const option = document.createElement('option');
+            // Store the Post Office Name, but sometimes the Block is more relevant, 
+            // depending on API consistency. We use PostOffice name.
+            option.value = office.Name; 
+            option.textContent = office.Name;
+            villageSelect.appendChild(option);
+        });
+
+        villageSelect.disabled = false;
+        if (statusElement) statusElement.textContent = `Location confirmed: ${cityInput.value}, ${stateInput.value}. Select your village.`;
+        if (statusElement) statusElement.classList.add('text-success');
     } else {
-        loadFeaturedEquipment(); // Reload data immediately on the homepage
+        villageSelect.innerHTML = '<option value="">No villages found for this Pincode</option>';
+        villageSelect.disabled = true;
+        if (statusElement) statusElement.textContent = 'Pincode not found. Please check or enter details manually.';
+        if (statusElement) statusElement.classList.remove('text-success');
+        if (statusElement) statusElement.classList.add('text-danger');
     }
 }
 
-// Function to skip Pincode entry
-function skipPincode() {
-    localStorage.removeItem('customerPincode');
-    window.customerPincode = null;
-    
-    const modal = bootstrap.Modal.getInstance(document.getElementById('pincodeModal'));
-    if (modal) modal.hide();
-    
-    window.firebaseHelpers.showAlert('Viewing all equipment (no location filter applied).', 'info');
-    updateHomepagePincodeDisplay();
-    updateNavbarPincodeDisplay();
-    
-    // Reload content to show all equipment
-    const path = window.location.pathname.split('/').pop();
-    if (path === 'browse.html') {
-        loadAllEquipment();
-    } else {
-        loadFeaturedEquipment();
-    }
-}
-
-// Update the Pincode UI in index.html (Hero section)
-function updateHomepagePincodeDisplay() {
-    const pincodeValueElement = document.getElementById('current-pincode-value');
-    if (pincodeValueElement) {
-        pincodeValueElement.textContent = window.customerPincode ? window.customerPincode : 'All Locations';
-    }
-}
-
-// NEW FUNCTION: Update the Pincode UI in the Navbar (all pages)
-function updateNavbarPincodeDisplay() {
-    const navPincodeValueElement = document.getElementById('current-pincode-value-nav');
-    if (navPincodeValueElement) {
-        navPincodeValueElement.textContent = window.customerPincode ? window.customerPincode : 'All Locations';
-    }
-}
-
-
-// NEW FUNCTION: Use Geolocation API to find the user's Pincode
-function getCurrentLocationPincode() {
+// NEW FUNCTION: Use Geolocation API to find the user's Pincode (UPDATED to use Post Office API)
+async function getCurrentLocationPincode() {
     const statusElement = document.getElementById('location-status');
     const inputElement = document.getElementById('pincode-input');
     const buttonElement = document.getElementById('location-access-btn');
@@ -231,29 +179,38 @@ function getCurrentLocationPincode() {
     }
 
     statusElement.textContent = 'Fetching location...';
-    statusElement.classList.remove('text-danger', 'text-warning');
+    statusElement.classList.remove('text-danger', 'text-warning', 'text-success');
     statusElement.classList.add('text-primary');
     buttonElement.disabled = true;
 
+    // Use a temporary simulated location for demonstration purposes since client-side reverse geocoding APIs usually cost money
+    const simulatedReverseGeocode = async (lat, lon) => {
+        // In a real app, this would be an API call, e.g., to Google Maps
+        // Simulate finding the Pincode using the India Post API structure (we just hardcode a Pincode for now)
+        console.log(`Simulating reverse geocoding for Lat: ${lat}, Lon: ${lon}`);
+
+        // We use a known Pincode for simulation
+        const simulatedPincode = '503001'; 
+        return simulatedPincode;
+    };
+
+
     navigator.geolocation.getCurrentPosition(async (position) => {
         const { latitude, longitude } = position.coords;
-        statusElement.textContent = `Location found: Lat ${latitude.toFixed(4)}, Lon ${longitude.toFixed(4)}. Determining Pincode...`;
+        statusElement.textContent = `Location found. Determining Pincode...`;
         
-        // --- SIMULATED REVERSE GEOCODING ---
-        // Simulating success for a known area (Nizamabad, Telangana)
-        const simulatedPincode = '503001'; 
+        const pincode = await simulatedReverseGeocode(latitude, longitude);
 
-        if (simulatedPincode) {
-            statusElement.textContent = `Pincode found: ${simulatedPincode}. Applying filter...`;
+        if (pincode) {
+            statusElement.textContent = `Pincode found: ${pincode}. Applying filter...`;
             statusElement.classList.remove('text-primary');
             statusElement.classList.add('text-success');
-            inputElement.value = simulatedPincode;
+            inputElement.value = pincode;
             buttonElement.disabled = false;
             
             // Automatically submit the form to save and filter
-            // We use setTimeout to allow the status message to flash
             setTimeout(async () => {
-                await savePincode(simulatedPincode);
+                await savePincode(pincode);
                 const modal = bootstrap.Modal.getInstance(document.getElementById('pincodeModal'));
                 if (modal) modal.hide();
             }, 500);
@@ -264,7 +221,6 @@ function getCurrentLocationPincode() {
             statusElement.classList.add('text-warning');
             buttonElement.disabled = false;
         }
-        // --- END SIMULATED REVERSE GEOCODING ---
 
     }, (error) => {
         let message = 'Error getting location.';
@@ -1721,6 +1677,56 @@ function initializeEventListeners() {
             }
         });
     });
+
+    // NEW: Add Pincode validation event listener to Auth and Profile pages
+    const path = window.location.pathname.split('/').pop();
+    if (path === 'auth.html') {
+        const pincodeInput = document.getElementById('pincode');
+        if (pincodeInput) {
+            pincodeInput.addEventListener('input', () => {
+                // Clear previous city/state/village on change
+                document.getElementById('signupCity').value = '';
+                document.getElementById('signupState').value = '';
+                const villageSelect = document.getElementById('signupVillage');
+                villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
+
+                if (pincodeInput.value.length === 6) {
+                    populateLocationFields('pincode', 'signupVillage', 'signupCity', 'signupState', 'location-lookup-status');
+                }
+            });
+        }
+    } else if (path === 'profile.html') {
+        const pincodeInput = document.getElementById('profile-pincode');
+        if (pincodeInput) {
+            pincodeInput.addEventListener('input', () => {
+                // Clear previous city/state/village on change
+                document.getElementById('profile-city').value = '';
+                document.getElementById('profile-state').value = '';
+                const villageSelect = document.getElementById('profile-village');
+                villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
+                
+                if (pincodeInput.value.length === 6) {
+                    populateLocationFields('profile-pincode', 'profile-village', 'profile-city', 'profile-state', 'pincode-status-message');
+                }
+            });
+        }
+    } else if (path === 'seller.html') {
+        // Event listener for seller profile pincode change
+        // Note: The seller.html profile form already uses handleProfileUpdate but we need an input change handler
+        document.addEventListener('input', (e) => {
+            if (e.target.id === 'profile-pincode' && document.getElementById('profile-section').style.display !== 'none') {
+                 // Clear previous city/state/village on change
+                document.getElementById('profile-city').value = '';
+                document.getElementById('profile-state').value = '';
+                const villageSelect = document.getElementById('profile-village');
+                villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
+
+                if (e.target.value.length === 6) {
+                    populateLocationFields('profile-pincode', 'profile-village', 'profile-city', 'profile-state', 'pincode-status-message-seller');
+                }
+            }
+        });
+    }
 }
 
 // Update cart count
@@ -1749,7 +1755,14 @@ async function loadProfilePage() {
     document.getElementById('profile-phone').value = user.mobile || '';
     document.getElementById('profile-address').value = user.address || '';
     document.getElementById('profile-city').value = user.city || '';
+    document.getElementById('profile-state').value = user.state || ''; // NEW: Load State
     document.getElementById('profile-pincode').value = user.pincode || ''; // NEW: Load Pincode
+    
+    // Load villages if pincode and saved village exist
+    if (user.pincode) {
+        await populateLocationFields('profile-pincode', 'profile-village', 'profile-city', 'profile-state', 'pincode-status-message');
+        document.getElementById('profile-village').value = user.village || ''; // Set saved village
+    }
     
     // Display joined date
     if (user.createdAt && user.createdAt.toDate) {
@@ -1768,8 +1781,14 @@ async function handleProfileUpdate(e) {
     if (!window.currentUser) return;
     
     const pincodeInput = document.getElementById('profile-pincode').value;
+    const villageSelect = document.getElementById('profile-village');
+    
     if (!pincodeInput || !/^[0-9]{6}$/.test(pincodeInput)) {
         window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
+        return;
+    }
+    if (villageSelect && !villageSelect.value) {
+        window.firebaseHelpers.showAlert('Please select your Village/Post Office.', 'danger');
         return;
     }
 
@@ -1778,6 +1797,8 @@ async function handleProfileUpdate(e) {
         mobile: document.getElementById('profile-phone').value,
         address: document.getElementById('profile-address').value,
         city: document.getElementById('profile-city').value,
+        state: document.getElementById('profile-state').value, // NEW: Save State
+        village: villageSelect ? villageSelect.value : '', // NEW: Save Village
         pincode: pincodeInput, // NEW: Save Pincode
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
