@@ -1329,7 +1329,7 @@
     <script src="script.js"></script>
 <script>
     // Global variables
-    let sellerData = null; // FIX: Removed 'let currentUser = null;' to prevent SyntaxError
+    let sellerData = null;
     let equipmentData = [];
     let ordersData = [];
     let earningsChart = null;
@@ -1382,147 +1382,121 @@
         document.getElementById('loading').classList.remove('active');
     });
 
-    // Add Pincode input event listener
-document.addEventListener('DOMContentLoaded', function() {
-    // This will be called after the page loads
-    const pincodeInput = document.getElementById('profile-pincode');
-    if (pincodeInput) {
-        pincodeInput.addEventListener('input', function() {
-            // FIX: Prevent seller from editing if Pincode is already set
-            if (sellerData && sellerData.pincode) return;
-
-            // Clear previous city/state/village on change
-            document.getElementById('profile-city').value = '';
-            document.getElementById('profile-state').value = '';
-            const villageSelect = document.getElementById('profile-village');
-            villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
-            villageSelect.disabled = true;
-
-            if (this.value.length === 6) {
-                populateSellerLocationFields();
-            }
-        });
-    }
-});
-
     // Update seller information in UI
-function updateSellerInfo() {
-    if (sellerData) {
-        document.getElementById('seller-name').textContent = sellerData.name || 'Seller';
-        document.getElementById('welcome-message').textContent = `Welcome back, ${sellerData.name || 'Seller'}!`;
-        
-        if (sellerData.businessName) {
-            document.getElementById('page-title').textContent = `${sellerData.businessName} - Dashboard`;
-        }
-
-        // Update Pincode display in Dashboard header and Add Equipment section
-        document.getElementById('seller-pincode-display').textContent = sellerData.pincode || 'N/A (Update Profile)';
-        const registeredPincodeDisplay = document.getElementById('registered-pincode-display');
-        if (registeredPincodeDisplay) {
-            registeredPincodeDisplay.textContent = sellerData.pincode || 'N/A';
-        }
-        
-        // FIX: Enforce readonly Pincode in profile if set
-        const profilePincodeInput = document.getElementById('profile-pincode');
-        const pincodeGroup = document.getElementById('pincode-input-group');
-        if (profilePincodeInput && sellerData.pincode) {
-            profilePincodeInput.readOnly = true;
-            profilePincodeInput.classList.add('bg-light', 'text-muted');
-            if (pincodeGroup && !pincodeGroup.querySelector('.alert')) {
-                pincodeGroup.innerHTML += `
-                    <div class="alert alert-info p-2 mt-2 small">
-                        <i class="fas fa-lock me-1"></i> Your Seller Pincode is permanent for consistency.
-                    </div>
-                `;
+    function updateSellerInfo() {
+        if (sellerData) {
+            const sellerNameElement = document.getElementById('seller-name');
+            const welcomeMessageElement = document.getElementById('welcome-message');
+            const pageTitleElement = document.getElementById('page-title');
+            const registeredPincodeDisplay = document.getElementById('registered-pincode-display');
+            
+            if (sellerNameElement) sellerNameElement.textContent = sellerData.name || 'Seller';
+            if (welcomeMessageElement) welcomeMessageElement.textContent = `Welcome back, ${sellerData.name || 'Seller'}!`;
+            
+            if (sellerData.businessName && pageTitleElement) {
+                pageTitleElement.textContent = `${sellerData.businessName} - Dashboard`;
             }
-        } else if (profilePincodeInput) {
-             profilePincodeInput.readOnly = false;
-             profilePincodeInput.classList.remove('bg-light', 'text-muted');
-        }
 
-        // Update location info in UI if elements exist
-        if (document.getElementById('seller-location-info')) {
-            document.getElementById('seller-location-info').textContent = 
-                `${sellerData.city || ''}, ${sellerData.state || ''} - ${sellerData.pincode || ''}`;
+            // Update Pincode display in Dashboard header and Add Equipment section
+            if (registeredPincodeDisplay) {
+                registeredPincodeDisplay.textContent = sellerData.pincode || 'N/A (Update Profile)';
+            }
+            
+            // FIX: Enforce readonly Pincode in profile if set
+            const profilePincodeInput = document.getElementById('profile-pincode');
+            const pincodeGroup = document.getElementById('pincode-input-group');
+            if (profilePincodeInput && sellerData.pincode) {
+                profilePincodeInput.readOnly = true;
+                profilePincodeInput.classList.add('bg-light', 'text-muted');
+                if (pincodeGroup && !pincodeGroup.querySelector('.alert')) {
+                    pincodeGroup.innerHTML += `
+                        <div class="alert alert-info p-2 mt-2 small">
+                            <i class="fas fa-lock me-1"></i> Your Seller Pincode is permanent for consistency.
+                        </div>
+                    `;
+                }
+            } else if (profilePincodeInput) {
+                 profilePincodeInput.readOnly = false;
+                 profilePincodeInput.classList.remove('bg-light', 'text-muted');
+            }
         }
     }
-}
 
     // Pincode location lookup function for seller profile
-async function populateSellerLocationFields() {
-    const pincodeInput = document.getElementById('profile-pincode');
-    const villageSelect = document.getElementById('profile-village');
-    const cityInput = document.getElementById('profile-city');
-    const stateInput = document.getElementById('profile-state');
-    const statusElement = document.getElementById('pincode-status-message');
-    
-    if (!pincodeInput || !villageSelect || !cityInput || !stateInput) return;
+    async function populateSellerLocationFields() {
+        const pincodeInput = document.getElementById('profile-pincode');
+        const villageSelect = document.getElementById('profile-village');
+        const cityInput = document.getElementById('profile-city');
+        const stateInput = document.getElementById('profile-state');
+        const statusElement = document.getElementById('pincode-status-message');
+        
+        if (!pincodeInput || !villageSelect || !cityInput || !stateInput) return;
 
-    villageSelect.innerHTML = '<option value="">Loading...</option>';
-    villageSelect.disabled = true;
-    cityInput.value = '';
-    stateInput.value = '';
-    if (statusElement) {
-        statusElement.textContent = 'Verifying Pincode...';
-        statusElement.classList.remove('text-danger', 'text-success');
-        statusElement.classList.add('text-muted');
-    }
+        villageSelect.innerHTML = '<option value="">Loading...</option>';
+        villageSelect.disabled = true;
+        cityInput.value = '';
+        stateInput.value = '';
+        if (statusElement) {
+            statusElement.textContent = 'Verifying Pincode...';
+            statusElement.classList.remove('text-danger', 'text-success');
+            statusElement.classList.add('text-muted');
+        }
 
-    const pincode = pincodeInput.value;
+        const pincode = pincodeInput.value;
 
-    if (!/^[0-9]{6}$/.test(pincode)) {
-        villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
-        if (statusElement) statusElement.textContent = '';
-        return;
-    }
+        if (!/^[0-9]{6}$/.test(pincode)) {
+            villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
+            if (statusElement) statusElement.textContent = '';
+            return;
+        }
 
-    try {
-        // Use the function from script.js (make sure script.js is loaded before seller.html script)
-        const postOffices = await getPostOfficeData(pincode);
+        try {
+            // Use the function from script.js (make sure script.js is loaded before seller.html script)
+            const postOffices = await window.getPostOfficeData(pincode);
 
-        if (postOffices.length > 0) {
-            const firstOffice = postOffices[0];
-            cityInput.value = firstOffice.District || '';
-            stateInput.value = firstOffice.State || '';
+            if (postOffices.length > 0) {
+                const firstOffice = postOffices[0];
+                cityInput.value = firstOffice.District || '';
+                stateInput.value = firstOffice.State || '';
 
-            // Populate village dropdown
-            villageSelect.innerHTML = '<option value="">Select your Village/Post Office *</option>';
-            
-            // Remove duplicates and populate
-            const uniquePostOffices = [...new Set(postOffices.map(office => office.Name))];
-            uniquePostOffices.forEach(name => {
-                const option = document.createElement('option');
-                option.value = name; 
-                option.textContent = name;
-                villageSelect.appendChild(option);
-            });
+                // Populate village dropdown
+                villageSelect.innerHTML = '<option value="">Select your Village/Post Office *</option>';
+                
+                // Remove duplicates and populate
+                const uniquePostOffices = [...new Set(postOffices.map(office => office.Name))];
+                uniquePostOffices.forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name; 
+                    option.textContent = name;
+                    villageSelect.appendChild(option);
+                });
 
-            villageSelect.disabled = false;
-            if (statusElement) {
-                statusElement.textContent = `Location confirmed: ${cityInput.value}, ${stateInput.value}. Select your village.`;
-                statusElement.classList.remove('text-muted');
-                statusElement.classList.add('text-success');
+                villageSelect.disabled = false;
+                if (statusElement) {
+                    statusElement.textContent = `Location confirmed: ${cityInput.value}, ${stateInput.value}. Select your village.`;
+                    statusElement.classList.remove('text-muted');
+                    statusElement.classList.add('text-success');
+                }
+            } else {
+                villageSelect.innerHTML = '<option value="">Pincode not found or no post offices</option>';
+                villageSelect.disabled = true;
+                if (statusElement) {
+                    statusElement.textContent = 'Pincode not found. Please check and try again.';
+                    statusElement.classList.remove('text-muted');
+                    statusElement.classList.add('text-danger');
+                }
             }
-        } else {
-            villageSelect.innerHTML = '<option value="">Pincode not found or no post offices</option>';
+        } catch (error) {
+            console.error('Error in Pincode lookup:', error);
+            villageSelect.innerHTML = '<option value="">Error fetching location data</option>';
             villageSelect.disabled = true;
             if (statusElement) {
-                statusElement.textContent = 'Pincode not found. Please check and try again.';
+                statusElement.textContent = 'Error fetching location data. Please try again.';
                 statusElement.classList.remove('text-muted');
                 statusElement.classList.add('text-danger');
             }
         }
-    } catch (error) {
-        console.error('Error in Pincode lookup:', error);
-        villageSelect.innerHTML = '<option value="">Error fetching location data</option>';
-        villageSelect.disabled = true;
-        if (statusElement) {
-            statusElement.textContent = 'Error fetching location data. Please try again.';
-            statusElement.classList.remove('text-muted');
-            statusElement.classList.add('text-danger');
-        }
     }
-}
 
     // Show section function
     function showSection(sectionId) {
@@ -1537,7 +1511,10 @@ async function populateSellerLocationFields() {
         });
         
         // Show selected section
-        document.getElementById(`${sectionId}-section`).style.display = 'block';
+        const sectionElement = document.getElementById(`${sectionId}-section`);
+        if (sectionElement) {
+            sectionElement.style.display = 'block';
+        }
         
         // Update active nav link
         const navLink = Array.from(document.querySelectorAll('.nav-link')).find(link => 
@@ -1807,6 +1784,8 @@ async function populateSellerLocationFields() {
                 .get();
             
             const ordersTable = document.getElementById('recent-orders-table');
+            if (!ordersTable) return;
+            
             ordersTable.innerHTML = '';
             
             ordersData = [];
@@ -1861,7 +1840,7 @@ async function populateSellerLocationFields() {
         const date = window.firebaseHelpers.formatDate(order.createdAt);
         
         // Use consolidated equipment name if available, otherwise default to first item's name
-        const equipmentName = order.equipmentNames.split(',')[0] || order.items[0]?.name || 'Equipment';
+        const equipmentName = order.equipmentNames ? order.equipmentNames.split(',')[0] : (order.items && order.items[0]?.name) || 'Equipment';
 
         return `
             <tr>
@@ -1887,14 +1866,18 @@ async function populateSellerLocationFields() {
 
     // Initialize earnings chart
     function initializeEarningsChart() {
-        const ctx = document.getElementById('earningsChart').getContext('2d');
+        const ctx = document.getElementById('earningsChart');
+        if (!ctx) return;
+        
+        const ctx2d = ctx.getContext('2d');
+        if (!ctx2d) return;
         
         if (earningsChart) {
             earningsChart.destroy();
         }
         
         // REMOVED: Mock data. Chart will initialize with empty data and be populated by loadEarningsData.
-        earningsChart = new Chart(ctx, {
+        earningsChart = new Chart(ctx2d, {
             type: 'line',
             data: {
                 labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
@@ -1940,6 +1923,8 @@ async function populateSellerLocationFields() {
                 .get();
             
             const equipmentGrid = document.getElementById('equipment-grid');
+            if (!equipmentGrid) return;
+            
             equipmentGrid.innerHTML = '';
             
             if (equipmentSnapshot.empty) {
@@ -1967,13 +1952,16 @@ async function populateSellerLocationFields() {
         } catch (error) {
             console.error('Error loading equipment:', error);
             window.firebaseHelpers.showAlert('Error loading equipment list', 'danger');
-            equipmentGrid.innerHTML = `
-                <div class="col-12 text-center py-5 text-danger">
-                    <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
-                    <h4>Error loading equipment</h4>
-                    <p>Please try again later</p>
-                </div>
-            `;
+            const equipmentGrid = document.getElementById('equipment-grid');
+            if (equipmentGrid) {
+                equipmentGrid.innerHTML = `
+                    <div class="col-12 text-center py-5 text-danger">
+                        <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
+                        <h4>Error loading equipment</h4>
+                        <p>Please try again later</p>
+                    </div>
+                `;
+            }
         }
     }
 
@@ -2018,11 +2006,11 @@ async function populateSellerLocationFields() {
 
     // Search equipment
     function searchEquipment() {
-        const searchTerm = document.getElementById('equipment-search').value.toLowerCase();
+        const searchTerm = document.getElementById('equipment-search')?.value.toLowerCase() || '';
         const filteredEquipment = equipmentData.filter(equipment => 
             equipment.name.toLowerCase().includes(searchTerm) ||
-            equipment.category.toLowerCase().includes(searchTerm) ||
-            equipment.description.toLowerCase().includes(searchTerm)
+            (equipment.category && equipment.category.toLowerCase().includes(searchTerm)) ||
+            (equipment.description && equipment.description.toLowerCase().includes(searchTerm))
         );
         
         displayFilteredEquipment(filteredEquipment);
@@ -2030,7 +2018,7 @@ async function populateSellerLocationFields() {
 
     // Filter equipment
     function filterEquipment() {
-        const filterValue = document.getElementById('equipment-filter').value;
+        const filterValue = document.getElementById('equipment-filter')?.value || 'all';
         let filteredEquipment = equipmentData;
         
         if (filterValue === 'available') {
@@ -2047,6 +2035,8 @@ async function populateSellerLocationFields() {
     // Display filtered equipment
     function displayFilteredEquipment(equipmentList) {
         const equipmentGrid = document.getElementById('equipment-grid');
+        if (!equipmentGrid) return;
+        
         equipmentGrid.innerHTML = '';
         
         if (equipmentList.length === 0) {
@@ -2078,6 +2068,8 @@ async function populateSellerLocationFields() {
                 .get();
             
             const ordersTable = document.getElementById('orders-table');
+            if (!ordersTable) return;
+            
             ordersTable.innerHTML = '';
             
             ordersData = [];
@@ -2122,7 +2114,7 @@ async function populateSellerLocationFields() {
             : 'N/A';
         
         // Use consolidated equipment name if available, otherwise default to first item's name
-        const equipmentName = order.equipmentNames.split(',')[0] || order.items[0]?.name || 'Equipment';
+        const equipmentName = order.equipmentNames ? order.equipmentNames.split(',')[0] : (order.items && order.items[0]?.name) || 'Equipment';
 
         return `
             <tr>
@@ -2160,7 +2152,7 @@ async function populateSellerLocationFields() {
         buttons.forEach(btn => btn.classList.remove('active'));
         
         const activeButton = Array.from(buttons).find(btn => 
-            btn.getAttribute('onclick').includes(`'${status}'`)
+            btn.getAttribute('onclick')?.includes(`'${status}'`)
         );
         if (activeButton) {
             activeButton.classList.add('active');
@@ -2179,7 +2171,7 @@ async function populateSellerLocationFields() {
 
     // Filter by date (NOTE: This filter is based on creation date, not rental period)
     function filterByDate() {
-        const dateFilter = document.getElementById('order-date-filter').value;
+        const dateFilter = document.getElementById('order-date-filter')?.value;
         if (!dateFilter) {
             loadOrders();
             return;
@@ -2193,6 +2185,8 @@ async function populateSellerLocationFields() {
         });
 
         const ordersTable = document.getElementById('orders-table');
+        if (!ordersTable) return;
+        
         ordersTable.innerHTML = '';
 
         if (filteredOrders.length === 0) {
@@ -2219,104 +2213,110 @@ async function populateSellerLocationFields() {
     }
 
     // Add equipment form submission
-    document.getElementById('add-equipment-form').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        if (!window.currentUser) {
-            window.firebaseHelpers.showAlert('Please login again', 'danger');
-            return;
-        }
-
-        // UPDATED: Check for mandatory seller details (especially pincode)
-        if (!sellerData.pincode || !sellerData.businessName || !sellerData.address) {
-            window.firebaseHelpers.showAlert('Please complete your profile details (Pincode, Business Name, Address) before listing equipment.', 'danger');
-            showSection('profile');
-            return;
-        }
-        // END UPDATED
-        
-        const submitBtn = document.getElementById('submit-equipment-btn');
-        const originalText = submitBtn.innerHTML;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
-        submitBtn.disabled = true;
-        
-        try {
-            // Get form values (UPDATED to use 'acre-price' instead of 'daily-price')
-            const equipmentData = {
-                name: document.getElementById('equipment-name').value,
-                category: document.getElementById('equipment-category').value,
-                pricePerAcre: parseFloat(document.getElementById('acre-price').value), // UPDATED ID
-                pricePerHour: parseFloat(document.getElementById('hourly-price').value),
-                description: document.getElementById('equipment-description').value,
-                location: document.getElementById('equipment-location').value, // Descriptive location
-                quantity: parseInt(document.getElementById('equipment-quantity').value),
-                pincode: sellerData.pincode, // UPDATED: Automatically use seller's registered Pincode
-                sellerId: window.currentUser.uid,
-                sellerName: sellerData.name,
-                businessName: sellerData.businessName || '',
-                availability: true,
-                status: 'pending', // Needs admin approval
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                images: []
-            };
+    const addEquipmentForm = document.getElementById('add-equipment-form');
+    if (addEquipmentForm) {
+        addEquipmentForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
             
-            // Add specifications
-            const specs = {};
-            const specInputs = document.querySelectorAll('#specs-container input');
-            for (let i = 0; i < specInputs.length; i += 2) {
-                // Ensure spec name and value are present
-                if (specInputs[i].value && specInputs[i + 1]?.value) {
-                    specs[specInputs[i].value] = specInputs[i + 1].value;
-                }
+            if (!window.currentUser) {
+                window.firebaseHelpers.showAlert('Please login again', 'danger');
+                return;
             }
-            equipmentData.specifications = specs;
+
+            // UPDATED: Check for mandatory seller details (especially pincode)
+            if (!sellerData.pincode || !sellerData.businessName || !sellerData.address) {
+                window.firebaseHelpers.showAlert('Please complete your profile details (Pincode, Business Name, Address) before listing equipment.', 'danger');
+                showSection('profile');
+                return;
+            }
+            // END UPDATED
             
-            // Save initial document to Firestore
-            const docRef = await window.FirebaseDB.collection('equipment').add(equipmentData);
+            const submitBtn = document.getElementById('submit-equipment-btn');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+            submitBtn.disabled = true;
             
-            // Upload images using the new ImgBB helper
-            const imageFiles = document.getElementById('image-upload').files;
-            if (imageFiles.length > 0) {
-                const imageUrls = [];
-                for (let i = 0; i < imageFiles.length; i++) {
-                    const file = imageFiles[i];
-                    // The path argument is still passed but ignored in the new helper
-                    const downloadURL = await window.firebaseHelpers.uploadFile(
-                        `equipment/${docRef.id}`, // Path is ignored by new helper
-                        file
-                    );
-                    imageUrls.push(downloadURL);
+            try {
+                // Get form values (UPDATED to use 'acre-price' instead of 'daily-price')
+                const equipmentData = {
+                    name: document.getElementById('equipment-name').value,
+                    category: document.getElementById('equipment-category').value,
+                    pricePerAcre: parseFloat(document.getElementById('acre-price').value), // UPDATED ID
+                    pricePerHour: parseFloat(document.getElementById('hourly-price').value),
+                    description: document.getElementById('equipment-description').value,
+                    location: document.getElementById('equipment-location').value, // Descriptive location
+                    quantity: parseInt(document.getElementById('equipment-quantity').value),
+                    pincode: sellerData.pincode, // UPDATED: Automatically use seller's registered Pincode
+                    sellerId: window.currentUser.uid,
+                    sellerName: sellerData.name,
+                    businessName: sellerData.businessName || '',
+                    availability: true,
+                    status: 'pending', // Needs admin approval
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    images: []
+                };
+                
+                // Add specifications
+                const specs = {};
+                const specInputs = document.querySelectorAll('#specs-container input');
+                for (let i = 0; i < specInputs.length; i += 2) {
+                    // Ensure spec name and value are present
+                    if (specInputs[i].value && specInputs[i + 1]?.value) {
+                        specs[specInputs[i].value] = specInputs[i + 1].value;
+                    }
+                }
+                equipmentData.specifications = specs;
+                
+                // Save initial document to Firestore
+                const docRef = await window.FirebaseDB.collection('equipment').add(equipmentData);
+                
+                // Upload images using the new ImgBB helper
+                const imageFiles = document.getElementById('image-upload').files;
+                if (imageFiles.length > 0) {
+                    const imageUrls = [];
+                    for (let i = 0; i < imageFiles.length; i++) {
+                        const file = imageFiles[i];
+                        // The path argument is still passed but ignored in the new helper
+                        const downloadURL = await window.firebaseHelpers.uploadFile(
+                            `equipment/${docRef.id}`, // Path is ignored by new helper
+                            file
+                        );
+                        imageUrls.push(downloadURL);
+                    }
+                    
+                    // Update equipment with image URLs
+                    await window.FirebaseDB.collection('equipment').doc(docRef.id).update({
+                        images: imageUrls
+                    });
                 }
                 
-                // Update equipment with image URLs
-                await window.FirebaseDB.collection('equipment').doc(docRef.id).update({
-                    images: imageUrls
-                });
+                window.firebaseHelpers.showAlert('Equipment added successfully! Waiting for admin approval.', 'success');
+                
+                // Reset form
+                this.reset();
+                const imagePreview = document.getElementById('image-preview');
+                if (imagePreview) imagePreview.innerHTML = '';
+                
+                // Go back to equipment list
+                setTimeout(() => {
+                    showSection('equipment');
+                }, 2000);
+                
+            } catch (error) {
+                console.error('Error adding equipment:', error);
+                window.firebaseHelpers.showAlert('Error adding equipment: ' + error.message, 'danger');
+            } finally {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
             }
-            
-            window.firebaseHelpers.showAlert('Equipment added successfully! Waiting for admin approval.', 'success');
-            
-            // Reset form
-            this.reset();
-            document.getElementById('image-preview').innerHTML = '';
-            
-            // Go back to equipment list
-            setTimeout(() => {
-                showSection('equipment');
-            }, 2000);
-            
-        } catch (error) {
-            console.error('Error adding equipment:', error);
-            window.firebaseHelpers.showAlert('Error adding equipment: ' + error.message, 'danger');
-        } finally {
-            submitBtn.innerHTML = originalText;
-            submitBtn.disabled = false;
-        }
-    });
+        });
+    }
 
     // Add specification field for Add Equipment form
     function addSpecField() {
         const specsContainer = document.getElementById('specs-container');
+        if (!specsContainer) return;
+        
         const newRow = document.createElement('div');
         newRow.className = 'row g-2';
         newRow.innerHTML = `
@@ -2390,12 +2390,16 @@ async function populateSellerLocationFields() {
                 
                 document.getElementById('equipment-modal-body').innerHTML = modalBody;
                 // Set handler for the edit button within the view modal
-                document.getElementById('view-edit-equipment-btn').onclick = () => {
-                    // Hide view modal
-                    bootstrap.Modal.getInstance(document.getElementById('equipmentModal')).hide();
-                    // Open edit modal
-                    editEquipment(equipmentId);
-                };
+                const editBtn = document.getElementById('view-edit-equipment-btn');
+                if (editBtn) {
+                    editBtn.onclick = () => {
+                        // Hide view modal
+                        const modalInstance = bootstrap.Modal.getInstance(document.getElementById('equipmentModal'));
+                        if (modalInstance) modalInstance.hide();
+                        // Open edit modal
+                        editEquipment(equipmentId);
+                    };
+                }
                 
                 const modal = new bootstrap.Modal(document.getElementById('equipmentModal'));
                 modal.show();
@@ -2431,8 +2435,10 @@ async function populateSellerLocationFields() {
             document.getElementById('edit-equipment-availability').value = String(equipment.availability);
             
             // FIX: Set the value of the new Pincode input field, which is READONLY
-            document.getElementById('edit-equipment-pincode').value = sellerData.pincode || '';
-
+            const editPincodeInput = document.getElementById('edit-equipment-pincode');
+            if (editPincodeInput) {
+                editPincodeInput.value = sellerData.pincode || '';
+            }
 
             // Clear existing specs and populate
             const specsContainer = document.getElementById('edit-specs-container');
@@ -2458,6 +2464,8 @@ async function populateSellerLocationFields() {
     // Add specification field to Edit form
     function addEditSpecField(key = '', value = '') {
         const specsContainer = document.getElementById('edit-specs-container');
+        if (!specsContainer) return;
+        
         const newRow = document.createElement('div');
         newRow.className = 'row g-2 align-items-center mb-2';
         newRow.innerHTML = `
@@ -2477,72 +2485,75 @@ async function populateSellerLocationFields() {
     }
 
     // Handle form submission for editing equipment
-    document.getElementById('edit-equipment-form').addEventListener('submit', async function(e) {
-        e.preventDefault();
+    const editEquipmentForm = document.getElementById('edit-equipment-form');
+    if (editEquipmentForm) {
+        editEquipmentForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
 
-        const equipmentId = document.getElementById('edit-equipment-id').value;
-        const submitBtn = document.getElementById('save-equipment-btn');
-        const originalText = submitBtn.innerHTML;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
-        submitBtn.disabled = true;
+            const equipmentId = document.getElementById('edit-equipment-id').value;
+            const submitBtn = document.getElementById('save-equipment-btn');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+            submitBtn.disabled = true;
 
-        try {
-            // Gather updated data
-            // FIX: Retrieve Pincode directly from sellerData (which is already enforced in profile)
-            const pincodeFromProfile = sellerData.pincode; 
+            try {
+                // Gather updated data
+                // FIX: Retrieve Pincode directly from sellerData (which is already enforced in profile)
+                const pincodeFromProfile = sellerData.pincode; 
 
-            if (!pincodeFromProfile) {
-                 window.firebaseHelpers.showAlert('Seller Pincode missing. Please update your Profile first.', 'danger');
-                 submitBtn.innerHTML = originalText;
-                 submitBtn.disabled = false;
-                 return;
-            }
-
-            const updatedData = {
-                name: document.getElementById('edit-equipment-name').value,
-                category: document.getElementById('edit-equipment-category').value,
-                pricePerAcre: parseFloat(document.getElementById('edit-acre-price').value),
-                pricePerHour: parseFloat(document.getElementById('edit-hourly-price').value),
-                description: document.getElementById('edit-equipment-description').value,
-                location: document.getElementById('edit-equipment-location').value,
-                quantity: parseInt(document.getElementById('edit-equipment-quantity').value),
-                availability: document.getElementById('edit-equipment-availability').value === 'true',
-                pincode: pincodeFromProfile, // FIX: Use the Pincode from sellerData
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            };
-
-            // Gather specifications
-            const specs = {};
-            const specRows = document.querySelectorAll('#edit-specs-container .row');
-            specRows.forEach(row => {
-                const keyInput = row.querySelector('.col-5:nth-child(1) input');
-                const valueInput = row.querySelector('.col-5:nth-child(2) input');
-                if (keyInput && valueInput && keyInput.value.trim() && valueInput.value.trim()) {
-                    specs[keyInput.value.trim()] = valueInput.value.trim();
+                if (!pincodeFromProfile) {
+                     window.firebaseHelpers.showAlert('Seller Pincode missing. Please update your Profile first.', 'danger');
+                     submitBtn.innerHTML = originalText;
+                     submitBtn.disabled = false;
+                     return;
                 }
-            });
-            updatedData.specifications = specs;
-            
-            // NOTE: Changing images requires a separate file upload process which is not implemented in this quick edit form.
-            
-            // Update Firestore
-            await window.FirebaseDB.collection('equipment').doc(equipmentId).update(updatedData);
 
-            window.firebaseHelpers.showAlert('Equipment updated successfully!', 'success');
-            
-            // Hide modal and reload list
-            const modal = bootstrap.Modal.getInstance(document.getElementById('equipmentEditModal'));
-            modal.hide();
-            loadEquipmentList(); // Reload the equipment grid
+                const updatedData = {
+                    name: document.getElementById('edit-equipment-name').value,
+                    category: document.getElementById('edit-equipment-category').value,
+                    pricePerAcre: parseFloat(document.getElementById('edit-acre-price').value),
+                    pricePerHour: parseFloat(document.getElementById('edit-hourly-price').value),
+                    description: document.getElementById('edit-equipment-description').value,
+                    location: document.getElementById('edit-equipment-location').value,
+                    quantity: parseInt(document.getElementById('edit-equipment-quantity').value),
+                    availability: document.getElementById('edit-equipment-availability').value === 'true',
+                    pincode: pincodeFromProfile, // FIX: Use the Pincode from sellerData
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
 
-        } catch (error) {
-            console.error('Error saving equipment:', error);
-            window.firebaseHelpers.showAlert('Error saving equipment: ' + error.message, 'danger');
-        } finally {
-            submitBtn.innerHTML = originalText;
-            submitBtn.disabled = false;
-        }
-    });
+                // Gather specifications
+                const specs = {};
+                const specRows = document.querySelectorAll('#edit-specs-container .row');
+                specRows.forEach(row => {
+                    const keyInput = row.querySelector('.col-5:nth-child(1) input');
+                    const valueInput = row.querySelector('.col-5:nth-child(2) input');
+                    if (keyInput && valueInput && keyInput.value.trim() && valueInput.value.trim()) {
+                        specs[keyInput.value.trim()] = valueInput.value.trim();
+                    }
+                });
+                updatedData.specifications = specs;
+                
+                // NOTE: Changing images requires a separate file upload process which is not implemented in this quick edit form.
+                
+                // Update Firestore
+                await window.FirebaseDB.collection('equipment').doc(equipmentId).update(updatedData);
+
+                window.firebaseHelpers.showAlert('Equipment updated successfully!', 'success');
+                
+                // Hide modal and reload list
+                const modal = bootstrap.Modal.getInstance(document.getElementById('equipmentEditModal'));
+                if (modal) modal.hide();
+                loadEquipmentList(); // Reload the equipment grid
+
+            } catch (error) {
+                console.error('Error saving equipment:', error);
+                window.firebaseHelpers.showAlert('Error saving equipment: ' + error.message, 'danger');
+            } finally {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
+        });
+    }
 
     // END NEW/UPDATED EDIT LOGIC
 
@@ -2705,8 +2716,11 @@ async function populateSellerLocationFields() {
             document.getElementById('last-month-earnings').textContent = window.firebaseHelpers.formatCurrency(lastMonthEarnings);
             
             const growth = lastMonthEarnings > 0 ? ((thisMonthEarnings - lastMonthEarnings) / lastMonthEarnings * 100).toFixed(1) : (thisMonthEarnings > 0 ? 100 : 0);
-            document.getElementById('month-growth').textContent = `${growth}% from last month`;
-            document.getElementById('month-growth').className = parseFloat(growth) >= 0 ? 'text-success' : 'text-danger';
+            const monthGrowthElement = document.getElementById('month-growth');
+            if (monthGrowthElement) {
+                monthGrowthElement.textContent = `${growth}% from last month`;
+                monthGrowthElement.className = parseFloat(growth) >= 0 ? 'text-success' : 'text-danger';
+            }
             
             // Update chart
             updateDetailedEarningsChart(monthlyEarnings);
@@ -2721,7 +2735,11 @@ async function populateSellerLocationFields() {
 
     // Update detailed earnings chart
     function updateDetailedEarningsChart(monthlyEarnings) {
-        const ctx = document.getElementById('detailedEarningsChart').getContext('2d');
+        const ctx = document.getElementById('detailedEarningsChart');
+        if (!ctx) return;
+        
+        const ctx2d = ctx.getContext('2d');
+        if (!ctx2d) return;
         
         if (detailedEarningsChart) {
             detailedEarningsChart.destroy();
@@ -2729,7 +2747,7 @@ async function populateSellerLocationFields() {
         
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         
-        detailedEarningsChart = new Chart(ctx, {
+        detailedEarningsChart = new Chart(ctx2d, {
             type: 'bar',
             data: {
                 labels: months,
@@ -2789,12 +2807,14 @@ async function populateSellerLocationFields() {
             // Aggregate earnings per equipment
             ordersSnapshot.forEach(orderDoc => {
                 const order = orderDoc.data();
-                order.items.forEach(item => {
-                    // Only count earnings for equipment belonging to this seller
-                    if (item.sellerId === window.currentUser.uid && equipmentEarnings[item.id] !== undefined) {
-                        equipmentEarnings[item.id] += item.price || 0; // Item price is the amount paid for that item rental
-                    }
-                });
+                if (order.items) {
+                    order.items.forEach(item => {
+                        // Only count earnings for equipment belonging to this seller
+                        if (item.sellerId === window.currentUser.uid && equipmentEarnings[item.id] !== undefined) {
+                            equipmentEarnings[item.id] += item.price || 0; // Item price is the amount paid for that item rental
+                        }
+                    });
+                }
             });
             
             // Format for display
@@ -2809,6 +2829,8 @@ async function populateSellerLocationFields() {
             
             // Update UI
             const topEquipmentList = document.getElementById('top-equipment-list');
+            if (!topEquipmentList) return;
+            
             if (topEquipment.length === 0) {
                 topEquipmentList.innerHTML = `
                     <div class="text-center py-3">
@@ -2844,6 +2866,8 @@ async function populateSellerLocationFields() {
         const notifications = notificationData.recentNotifications; // All notifications found
         
         const listContainer = document.getElementById('seller-alerts-list');
+        if (!listContainer) return;
+        
         listContainer.innerHTML = ''; // Clear previous content
 
         if (notifications.length === 0) {
@@ -2921,6 +2945,8 @@ async function populateSellerLocationFields() {
             let totalRating = 0;
             let ratingCount = 0;
             const reviewsList = document.getElementById('reviews-list');
+            if (!reviewsList) return;
+            
             reviewsList.innerHTML = '';
             
             if (reviewsSnapshot.empty) {
@@ -2963,14 +2989,16 @@ async function populateSellerLocationFields() {
             
             // Update star icons based on average rating
             const starContainer = document.querySelector('#reviews-section .table-container .mb-2');
-            const fullStars = Math.round(averageRating);
-            const emptyStars = 5 - fullStars;
-            starContainer.innerHTML = '';
-            for (let i = 0; i < fullStars; i++) {
-                starContainer.innerHTML += '<i class="fas fa-star text-warning"></i>';
-            }
-            for (let i = 0; i < emptyStars; i++) {
-                starContainer.innerHTML += '<i class="far fa-star text-warning"></i>';
+            if (starContainer) {
+                const fullStars = Math.round(averageRating);
+                const emptyStars = 5 - fullStars;
+                starContainer.innerHTML = '';
+                for (let i = 0; i < fullStars; i++) {
+                    starContainer.innerHTML += '<i class="fas fa-star text-warning"></i>';
+                }
+                for (let i = 0; i < emptyStars; i++) {
+                    starContainer.innerHTML += '<i class="far fa-star text-warning"></i>';
+                }
             }
 
             document.getElementById('total-reviews').textContent = `${ratingCount} reviews`;
@@ -2981,140 +3009,143 @@ async function populateSellerLocationFields() {
     }
 
    // Load profile data
-async function loadProfileData() {
-    if (!sellerData) return;
-    
-    // Populate form fields
-    document.getElementById('profile-name').value = sellerData.name || '';
-    document.getElementById('profile-email').value = sellerData.email || '';
-    document.getElementById('profile-phone').value = sellerData.mobile || '';
-    document.getElementById('profile-business').value = sellerData.businessName || '';
-    document.getElementById('profile-address').value = sellerData.address || '';
-    document.getElementById('profile-gst').value = sellerData.gstNumber || '';
-    document.getElementById('profile-bio').value = sellerData.bio || '';
-    document.getElementById('profile-pincode').value = sellerData.pincode || '';
-    document.getElementById('profile-city').value = sellerData.city || '';
-    document.getElementById('profile-state').value = sellerData.state || '';
-    
-    // Update profile picture if exists
-    if (sellerData.profilePicture) {
-        document.getElementById('profile-picture').src = sellerData.profilePicture;
-    }
-    
-    // Update join date
-    if (sellerData.createdAt) {
-        const joinDate = window.firebaseHelpers.formatDate(sellerData.createdAt);
-        document.getElementById('join-date').textContent = joinDate;
-    }
-    
-    // If seller has pincode, populate the village dropdown
-    if (sellerData.pincode) {
-        await populateSellerLocationFields();
-        // Select the saved village if it exists
-        const villageSelect = document.getElementById('profile-village');
-        if (villageSelect && sellerData.village) {
-            // Wait a moment for the options to be populated
-            setTimeout(() => {
-                villageSelect.value = sellerData.village;
-            }, 500);
+    async function loadProfileData() {
+        if (!sellerData) return;
+        
+        // Populate form fields
+        document.getElementById('profile-name').value = sellerData.name || '';
+        document.getElementById('profile-email').value = sellerData.email || '';
+        document.getElementById('profile-phone').value = sellerData.mobile || '';
+        document.getElementById('profile-business').value = sellerData.businessName || '';
+        document.getElementById('profile-address').value = sellerData.address || '';
+        document.getElementById('profile-gst').value = sellerData.gstNumber || '';
+        document.getElementById('profile-bio').value = sellerData.bio || '';
+        document.getElementById('profile-pincode').value = sellerData.pincode || '';
+        document.getElementById('profile-city').value = sellerData.city || '';
+        document.getElementById('profile-state').value = sellerData.state || '';
+        
+        // Update profile picture if exists
+        if (sellerData.profilePicture) {
+            document.getElementById('profile-picture').src = sellerData.profilePicture;
         }
+        
+        // Update join date
+        if (sellerData.createdAt) {
+            const joinDate = window.firebaseHelpers.formatDate(sellerData.createdAt);
+            document.getElementById('join-date').textContent = joinDate;
+        }
+        
+        // If seller has pincode, populate the village dropdown
+        if (sellerData.pincode) {
+            await populateSellerLocationFields();
+            // Select the saved village if it exists
+            const villageSelect = document.getElementById('profile-village');
+            if (villageSelect && sellerData.village) {
+                // Wait a moment for the options to be populated
+                setTimeout(() => {
+                    villageSelect.value = sellerData.village;
+                }, 500);
+            }
+        }
+        
+        // Re-run updateSellerInfo to apply readonly status on Pincode input
+        updateSellerInfo();
     }
-    
-    // Re-run updateSellerInfo to apply readonly status on Pincode input
-    updateSellerInfo();
-}
     
    // Profile form submission
-document.getElementById('profile-form').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    if (!window.currentUser) return;
+    const profileForm = document.getElementById('profile-form');
+    if (profileForm) {
+        profileForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!window.currentUser) return;
 
-    // Validate Pincode and location fields
-    const pincodeInput = document.getElementById('profile-pincode').value;
-    const villageSelect = document.getElementById('profile-village');
-    const cityInput = document.getElementById('profile-city').value;
-    const stateInput = document.getElementById('profile-state').value;
-    
-    if (!pincodeInput || !/^[0-9]{6}$/.test(pincodeInput)) {
-        window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
-        return;
-    }
-    
-    if (!villageSelect.value) {
-        window.firebaseHelpers.showAlert('Please select your Village/Post Office.', 'danger');
-        return;
-    }
-    
-    if (!cityInput || !stateInput) {
-        window.firebaseHelpers.showAlert('Please verify your Pincode to load city and state information.', 'danger');
-        return;
-    }
-    
-    try {
-        const updates = {
-            name: document.getElementById('profile-name').value,
-            mobile: document.getElementById('profile-phone').value,
-            businessName: document.getElementById('profile-business').value,
-            address: document.getElementById('profile-address').value,
-            gstNumber: document.getElementById('profile-gst').value,
-            city: cityInput,
-            state: stateInput,
-            village: villageSelect.value,
-            pincode: pincodeInput,
-            bio: document.getElementById('profile-bio').value,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
-        
-        // Update password if provided
-        const currentPassword = document.getElementById('current-password').value;
-        const newPassword = document.getElementById('new-password').value;
-        const confirmPassword = document.getElementById('confirm-password').value;
-        
-        if (newPassword || currentPassword || confirmPassword) {
-            if (!currentPassword) {
-                window.firebaseHelpers.showAlert('Please enter your current password to change it.', 'danger');
-                return;
-            }
-            if (newPassword !== confirmPassword) {
-                window.firebaseHelpers.showAlert('New passwords do not match', 'danger');
-                return;
-            }
-            if (newPassword.length < 6) {
-                window.firebaseHelpers.showAlert('New password must be at least 6 characters long', 'danger');
+            // Validate Pincode and location fields
+            const pincodeInput = document.getElementById('profile-pincode').value;
+            const villageSelect = document.getElementById('profile-village');
+            const cityInput = document.getElementById('profile-city').value;
+            const stateInput = document.getElementById('profile-state').value;
+            
+            if (!pincodeInput || !/^[0-9]{6}$/.test(pincodeInput)) {
+                window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
                 return;
             }
             
-            // Reauthenticate user
-            const credential = firebase.auth.EmailAuthProvider.credential(
-                window.currentUser.email,
-                currentPassword
-            );
+            if (!villageSelect.value) {
+                window.firebaseHelpers.showAlert('Please select your Village/Post Office.', 'danger');
+                return;
+            }
             
-            await window.currentUser.reauthenticateWithCredential(credential);
-            await window.currentUser.updatePassword(newPassword);
-            window.firebaseHelpers.showAlert('Password updated successfully', 'success');
+            if (!cityInput || !stateInput) {
+                window.firebaseHelpers.showAlert('Please verify your Pincode to load city and state information.', 'danger');
+                return;
+            }
             
-            // Clear password fields
-            document.getElementById('current-password').value = '';
-            document.getElementById('new-password').value = '';
-            document.getElementById('confirm-password').value = '';
-        }
-        
-        // Update Firestore
-        await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(updates);
-        
-        // Update local seller data
-        sellerData = { ...sellerData, ...updates };
-        updateSellerInfo(); // Re-render Pincode display everywhere
-        
-        window.firebaseHelpers.showAlert('Profile updated successfully', 'success');
-        
-    } catch (error) {
-        console.error('Error updating profile:', error);
-        window.firebaseHelpers.showAlert('Error updating profile: ' + error.message, 'danger');
+            try {
+                const updates = {
+                    name: document.getElementById('profile-name').value,
+                    mobile: document.getElementById('profile-phone').value,
+                    businessName: document.getElementById('profile-business').value,
+                    address: document.getElementById('profile-address').value,
+                    gstNumber: document.getElementById('profile-gst').value,
+                    city: cityInput,
+                    state: stateInput,
+                    village: villageSelect.value,
+                    pincode: pincodeInput,
+                    bio: document.getElementById('profile-bio').value,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                
+                // Update password if provided
+                const currentPassword = document.getElementById('current-password').value;
+                const newPassword = document.getElementById('new-password').value;
+                const confirmPassword = document.getElementById('confirm-password').value;
+                
+                if (newPassword || currentPassword || confirmPassword) {
+                    if (!currentPassword) {
+                        window.firebaseHelpers.showAlert('Please enter your current password to change it.', 'danger');
+                        return;
+                    }
+                    if (newPassword !== confirmPassword) {
+                        window.firebaseHelpers.showAlert('New passwords do not match', 'danger');
+                        return;
+                    }
+                    if (newPassword.length < 6) {
+                        window.firebaseHelpers.showAlert('New password must be at least 6 characters long', 'danger');
+                        return;
+                    }
+                    
+                    // Reauthenticate user
+                    const credential = firebase.auth.EmailAuthProvider.credential(
+                        window.currentUser.email,
+                        currentPassword
+                    );
+                    
+                    await window.currentUser.reauthenticateWithCredential(credential);
+                    await window.currentUser.updatePassword(newPassword);
+                    window.firebaseHelpers.showAlert('Password updated successfully', 'success');
+                    
+                    // Clear password fields
+                    document.getElementById('current-password').value = '';
+                    document.getElementById('new-password').value = '';
+                    document.getElementById('confirm-password').value = '';
+                }
+                
+                // Update Firestore
+                await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(updates);
+                
+                // Update local seller data
+                sellerData = { ...sellerData, ...updates };
+                updateSellerInfo(); // Re-render Pincode display everywhere
+                
+                window.firebaseHelpers.showAlert('Profile updated successfully', 'success');
+                
+            } catch (error) {
+                console.error('Error updating profile:', error);
+                window.firebaseHelpers.showAlert('Error updating profile: ' + error.message, 'danger');
+            }
+        });
     }
-});
     
     // Show delete account modal
     function showDeleteAccountModal() {
@@ -3122,10 +3153,13 @@ document.getElementById('profile-form').addEventListener('submit', async functio
         modal.show();
         
         // Enable/disable delete button based on confirmation
-        document.getElementById('delete-confirmation').addEventListener('input', function() {
-            document.getElementById('delete-account-btn').disabled = 
-                this.value !== 'DELETE';
-        });
+        const deleteConfirmation = document.getElementById('delete-confirmation');
+        if (deleteConfirmation) {
+            deleteConfirmation.addEventListener('input', function() {
+                document.getElementById('delete-account-btn').disabled = 
+                    this.value !== 'DELETE';
+            });
+        }
     }
 
     // Delete account
@@ -3174,68 +3208,76 @@ document.getElementById('profile-form').addEventListener('submit', async functio
     }
 
     // Handle image upload preview
-    document.getElementById('image-upload').addEventListener('change', function(e) {
-        const preview = document.getElementById('image-preview');
-        preview.innerHTML = '';
-        
-        for (let i = 0; i < this.files.length; i++) {
-            const file = this.files[i];
-            const reader = new FileReader();
+    const imageUpload = document.getElementById('image-upload');
+    if (imageUpload) {
+        imageUpload.addEventListener('change', function(e) {
+            const preview = document.getElementById('image-preview');
+            if (!preview) return;
             
-            reader.onload = function(e) {
-                const img = document.createElement('img');
-                img.src = e.target.result;
-                img.style.width = '100px';
-                img.style.height = '100px';
-                img.style.objectFit = 'cover';
-                img.style.margin = '5px';
-                img.style.borderRadius = '5px';
-                preview.appendChild(img);
+            preview.innerHTML = '';
+            
+            for (let i = 0; i < this.files.length; i++) {
+                const file = this.files[i];
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    img.style.width = '100px';
+                    img.style.height = '100px';
+                    img.style.objectFit = 'cover';
+                    img.style.margin = '5px';
+                    img.style.borderRadius = '5px';
+                    preview.appendChild(img);
+                }
+                
+                reader.readAsDataURL(file);
             }
-            
-            reader.readAsDataURL(file);
-        }
-    });
+        });
+    }
 
     // Handle profile picture upload
-    document.getElementById('profile-picture-upload').addEventListener('change', async function(e) {
-        if (this.files[0]) {
-            try {
-                const file = this.files[0];
-                
-                // Show loading placeholder
-                const profilePic = document.getElementById('profile-picture');
-                profilePic.src = 'https://via.placeholder.com/100?text=Uploading...';
-                
-                // Use the new ImgBB helper
-                const downloadURL = await window.firebaseHelpers.uploadFile(
-                    `profile_pictures/${window.currentUser.uid}`, // Path is passed but ignored by the new helper
-                    file
-                );
-                
-                // Update profile picture in Firestore
-                await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update({
-                    profilePicture: downloadURL,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                
-                // Update local data and UI
-                sellerData.profilePicture = downloadURL;
-                profilePic.src = downloadURL;
-                
-                window.firebaseHelpers.showAlert('Profile picture updated successfully', 'success');
-                
-            } catch (error) {
-                console.error('Error uploading profile picture:', error);
-                window.firebaseHelpers.showAlert('Error uploading profile picture. ' + error.message, 'danger');
-                
-                // Restore original picture or default placeholder on failure
-                const currentSellerData = await window.FirebaseDB.collection('users').doc(window.currentUser.uid).get();
-                const restoredSrc = currentSellerData.data()?.profilePicture || 'https://via.placeholder.com/100';
-                document.getElementById('profile-picture').src = restoredSrc;
+    const profilePictureUpload = document.getElementById('profile-picture-upload');
+    if (profilePictureUpload) {
+        profilePictureUpload.addEventListener('change', async function(e) {
+            if (this.files[0]) {
+                try {
+                    const file = this.files[0];
+                    
+                    // Show loading placeholder
+                    const profilePic = document.getElementById('profile-picture');
+                    profilePic.src = 'https://via.placeholder.com/100?text=Uploading...';
+                    
+                    // Use the new ImgBB helper
+                    const downloadURL = await window.firebaseHelpers.uploadFile(
+                        `profile_pictures/${window.currentUser.uid}`, // Path is passed but ignored by the new helper
+                        file
+                    );
+                    
+                    // Update profile picture in Firestore
+                    await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update({
+                        profilePicture: downloadURL,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    
+                    // Update local data and UI
+                    sellerData.profilePicture = downloadURL;
+                    profilePic.src = downloadURL;
+                    
+                    window.firebaseHelpers.showAlert('Profile picture updated successfully', 'success');
+                    
+                } catch (error) {
+                    console.error('Error uploading profile picture:', error);
+                    window.firebaseHelpers.showAlert('Error uploading profile picture. ' + error.message, 'danger');
+                    
+                    // Restore original picture or default placeholder on failure
+                    const currentSellerData = await window.FirebaseDB.collection('users').doc(window.currentUser.uid).get();
+                    const restoredSrc = currentSellerData.data()?.profilePicture || 'https://via.placeholder.com/100';
+                    document.getElementById('profile-picture').src = restoredSrc;
+                }
             }
-        }
-    });
+        });
+    }
 
     // Initialize dashboard on load
     showSection('dashboard');
