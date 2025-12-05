@@ -798,7 +798,7 @@ async function updatePincodeDisplay() {
             <div class="alert alert-success d-flex justify-content-between align-items-center mb-0">
                 <div>
                     <i class="fas fa-map-marker-alt me-2"></i>
-                    **Viewing equipment for Pincode:** <strong>${pincode}</strong> (Listings match seller Pincode)
+                    Equipment listings displayed for Pincode: <strong>${pincode}</strong> Only
                 </div>
                 <a href="#" class="btn btn-sm btn-outline-success" onclick="showPincodeModal()">Change Pincode</a>
             </div>
