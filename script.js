@@ -161,6 +161,27 @@ async function getPlatformFeeRate() {
 }
 // --- END NEW FUNCTION ---
 
+// Load seller dashboard logic
+async function loadSellerDashboard() {
+    // This function is called from script.js for seller.html
+    // The actual seller dashboard logic is in seller.html itself
+    // So we don't need to do anything here
+    console.log('Seller dashboard page loaded');
+    
+    // Ensure Firebase is initialized
+    if (!window.FirebaseDB) {
+        console.error('Firebase not initialized yet');
+        return;
+    }
+    
+    // Check authentication
+    const user = await window.firebaseHelpers.getCurrentUser();
+    if (!user) {
+        window.location.href = 'auth.html?role=seller';
+        return;
+    }
+}
+
 // --- LOCATION LOOKUP FUNCTIONS (Post Office API Integration) ---
 
 /**
