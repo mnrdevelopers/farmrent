@@ -99,6 +99,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (path === 'orders.html') {
         loadOrdersPage();
         updateNavbarPincodeDisplay();
+    } else if (path === 'seller.html' || path === 'seller-pending.html') {
+        loadSellerDashboard();
+        updateNavbarPincodeDisplay();
     } else if (path === 'index.html' || path === '') { // Handles index.html
         loadHomepageData();
         checkAndPromptForPincode(); // Initiates the pincode flow
@@ -591,7 +594,7 @@ async function logout() {
     }
 }
 
-// Load data specifically for the Browse page (MODIFIED to rely on firebaseHelpers.pincodeSystem)
+// Load data specifically for the Browse page (Modified to rely on firebaseHelpers.pincodeSystem)
 async function loadBrowsePageData() {
     // Ensure window.customerPincode is set from precedence logic in initializeAuth
     window.customerPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode(); 
@@ -1416,6 +1419,11 @@ function initializeEventListeners() {
         const pincodeInput = document.getElementById('profile-pincode');
         if (pincodeInput) {
             pincodeInput.addEventListener('input', () => {
+                // If the user is a seller and already has a pincode, they cannot edit it
+                if (window.currentUser && window.currentUser.role === 'seller' && window.currentUser.pincode) {
+                    return;
+                }
+
                 document.getElementById('profile-city').value = '';
                 document.getElementById('profile-state').value = '';
                 const villageSelect = document.getElementById('profile-village');
@@ -1927,6 +1935,27 @@ async function loadProfilePage() {
     document.getElementById('profile-state').value = user.state || '';
     document.getElementById('profile-pincode').value = user.pincode || '';
     
+    // Check if user is a seller and has a pincode set
+    const isSeller = user.role === 'seller';
+    const hasPincode = !!user.pincode;
+
+    if (isSeller && hasPincode) {
+        const pincodeInput = document.getElementById('profile-pincode');
+        if (pincodeInput) {
+            pincodeInput.readOnly = true;
+            pincodeInput.classList.add('bg-light', 'text-muted'); // Visual cue for non-editable
+        }
+        const pincodeGroup = document.getElementById('pincode-input-group');
+        if (pincodeGroup) {
+            // Add a small warning message for sellers
+            pincodeGroup.innerHTML += `
+                <div class="alert alert-warning p-2 mt-2 small">
+                    <i class="fas fa-lock me-1"></i> Your Seller Pincode is permanent for consistency. Contact support to change location.
+                </div>
+            `;
+        }
+    }
+
     // Load villages if pincode and saved village exist
     if (user.pincode) {
         (async () => {
@@ -1957,6 +1986,7 @@ async function handleProfileUpdate(e) {
     const pincodeInput = document.getElementById('profile-pincode').value.trim();
     const villageSelect = document.getElementById('profile-village');
     
+    // Mandatory check even if readOnly, in case of client-side bypass
     if (!pincodeInput || !window.firebaseHelpers.pincodeSystem.validatePincode(pincodeInput)) {
         window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
         return;
@@ -1977,9 +2007,15 @@ async function handleProfileUpdate(e) {
         city: document.getElementById('profile-city').value,
         state: document.getElementById('profile-state').value, 
         village: villageSelect ? villageSelect.value : '', 
-        pincode: pincodeInput, 
+        pincode: pincodeInput, // Seller Pincode is non-editable here but still saved
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
+    
+    // Seller Pincode enforcement: If they are a seller and already had a pincode, ensure we don't try to change it if they cleared the field (though it's readonly)
+    if (window.currentUser.role === 'seller' && window.currentUser.pincode) {
+        updates.pincode = window.currentUser.pincode; // Revert to original pincode if somehow modified
+    }
+
 
     try {
         await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(updates);
@@ -2146,4 +2182,486 @@ if (typeof Razorpay === 'undefined') {
     const script = document.createElement('script');
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
     document.head.appendChild(script);
+}
+
+// ***************************************************************************************************
+// ************************* SELLER DASHBOARD FUNCTIONS (seller.html) ********************************
+// ***************************************************************************************************
+
+let sellerEquipmentData = []; 
+
+// Load seller dashboard data (orders, equipment, etc.)
+async function loadSellerDashboard() {
+    const user = await window.firebaseHelpers.getCurrentUser();
+    if (!user || user.role !== 'seller') {
+        window.firebaseHelpers.showAlert('Access Denied. Only sellers can view this page.', 'danger');
+        setTimeout(() => { window.location.href = 'auth.html?role=seller'; }, 2000);
+        return;
+    }
+
+    if (!user.pincode) {
+        window.firebaseHelpers.showAlert('Please set your Pincode in the Profile section before adding equipment.', 'danger');
+        setTimeout(() => { window.location.href = 'profile.html'; }, 3000);
+        return;
+    }
+
+    document.getElementById('welcome-message').textContent = `Welcome, ${user.businessName || user.name || 'Seller'}!`;
+    document.getElementById('seller-pincode-display').textContent = user.pincode;
+
+    await loadSellerEquipment();
+    await loadSellerOrders();
+}
+
+// Load equipment listed by the current seller
+async function loadSellerEquipment() {
+    if (!window.currentUser) return;
+    
+    try {
+        const snapshot = await window.FirebaseDB.collection('equipment')
+            .where('sellerId', '==', window.currentUser.uid)
+            .orderBy('createdAt', 'desc')
+            .get();
+        
+        sellerEquipmentData = [];
+        snapshot.forEach(doc => {
+            sellerEquipmentData.push({ id: doc.id, ...doc.data() });
+        });
+        
+        displaySellerEquipment(sellerEquipmentData);
+        
+    } catch (error) {
+        console.error('Error loading seller equipment:', error);
+        window.firebaseHelpers.showAlert('Error loading your equipment listings.', 'danger');
+    }
+}
+
+// Display seller equipment list
+function displaySellerEquipment(equipmentList) {
+    const activeContainer = document.getElementById('active-equipment-list');
+    const pendingContainer = document.getElementById('pending-equipment-list');
+    
+    if (!activeContainer || !pendingContainer) return;
+
+    activeContainer.innerHTML = '';
+    pendingContainer.innerHTML = '';
+    
+    let activeCount = 0;
+    let pendingCount = 0;
+
+    if (equipmentList.length === 0) {
+        activeContainer.innerHTML = '<div class="col-12 text-center py-4"><p class="text-muted">You have no equipment listings yet.</p><button class="btn btn-primary" onclick="openAddEquipmentModal()">Add First Equipment</button></div>';
+        pendingContainer.innerHTML = '<div class="col-12 text-center py-4"><p class="text-muted">No pending equipment.</p></div>';
+        return;
+    }
+
+    equipmentList.forEach(equipment => {
+        const cardHtml = createSellerEquipmentCard(equipment);
+        if (equipment.status === 'approved') {
+            activeContainer.innerHTML += cardHtml;
+            activeCount++;
+        } else {
+            pendingContainer.innerHTML += cardHtml;
+            pendingCount++;
+        }
+    });
+
+    if (activeCount === 0 && activeContainer.innerHTML === '') {
+        activeContainer.innerHTML = '<div class="col-12 text-center py-4"><p class="text-muted">No approved equipment. Add a new listing to start renting.</p></div>';
+    }
+    if (pendingCount === 0 && pendingContainer.innerHTML === '') {
+        pendingContainer.innerHTML = '<div class="col-12 text-center py-4"><p class="text-muted">No equipment awaiting admin approval.</p></div>';
+    }
+    
+    document.getElementById('active-count').textContent = activeCount;
+    document.getElementById('pending-count').textContent = pendingCount;
+}
+
+// Create equipment card for seller dashboard
+function createSellerEquipmentCard(equipment) {
+    const imageUrl = equipment.images && equipment.images[0] ? equipment.images[0] : 'https://placehold.co/100x70/2B5C2B/FFFFFF?text=Tool';
+    const statusColor = equipment.status === 'approved' ? 'bg-success' : equipment.status === 'pending' ? 'bg-warning' : 'bg-danger';
+
+    return `
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body d-flex align-items-start">
+                    <img src="${imageUrl}" class="rounded me-3" style="width: 80px; height: 80px; object-fit: cover;">
+                    <div class="flex-grow-1">
+                        <h5 class="card-title">${equipment.name}</h5>
+                        <p class="mb-1 small text-muted">Category: ${equipment.category || 'N/A'}</p>
+                        <p class="mb-1 small text-muted">Pincode: ${equipment.pincode || 'N/A'}</p>
+                        <p class="mb-1 small text-muted">Price: ${window.firebaseHelpers.formatCurrency(equipment.pricePerAcre)}/acre</p>
+                        <span class="badge ${statusColor} text-white">${equipment.status.toUpperCase()}</span>
+                    </div>
+                </div>
+                <div class="card-footer text-end">
+                    <button class="btn btn-sm btn-outline-primary" onclick="openEditEquipmentModal('${equipment.id}')">
+                        <i class="fas fa-edit me-1"></i> Edit
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteEquipment('${equipment.id}')">
+                        <i class="fas fa-trash me-1"></i> Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Open Add Equipment Modal
+async function openAddEquipmentModal() {
+    if (!window.currentUser || !window.currentUser.pincode) {
+        window.firebaseHelpers.showAlert('Please set your Pincode in the Profile section before adding equipment.', 'danger');
+        setTimeout(() => { window.location.href = 'profile.html'; }, 2000);
+        return;
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('equipmentModal'));
+    document.getElementById('equipmentModalTitle').textContent = 'Add New Equipment';
+    document.getElementById('equipment-id').value = '';
+    document.getElementById('equipment-form').reset();
+    
+    // Auto-populate Seller Pincode and make it non-editable
+    document.getElementById('seller-pincode-readonly').textContent = window.currentUser.pincode;
+    
+    // Load categories for dropdown
+    await loadCategoriesForSellerModal();
+    
+    // Clear image preview
+    document.getElementById('image-preview-container').innerHTML = '';
+    
+    // Change button to Add
+    document.getElementById('submit-equipment-btn').textContent = 'Add Equipment';
+    
+    modal.show();
+}
+
+// Open Edit Equipment Modal
+async function openEditEquipmentModal(equipmentId) {
+    const equipment = sellerEquipmentData.find(e => e.id === equipmentId);
+    if (!equipment) {
+        window.firebaseHelpers.showAlert('Equipment not found.', 'danger');
+        return;
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('equipmentModal'));
+    document.getElementById('equipmentModalTitle').textContent = `Edit Equipment: ${equipment.name}`;
+    
+    // Set equipment ID for update
+    document.getElementById('equipment-id').value = equipment.id;
+
+    // Load form data
+    document.getElementById('equipment-name').value = equipment.name || '';
+    document.getElementById('equipment-description').value = equipment.description || '';
+    document.getElementById('price-per-acre').value = equipment.pricePerAcre || '';
+    document.getElementById('price-per-hour').value = equipment.pricePerHour || '';
+    document.getElementById('equipment-quantity').value = equipment.quantity || 1;
+    document.getElementById('equipment-availability').checked = equipment.availability === true;
+    
+    // Auto-populate Seller Pincode (Non-editable display)
+    document.getElementById('seller-pincode-readonly').textContent = window.currentUser.pincode;
+    
+    // Load categories and set selected value
+    await loadCategoriesForSellerModal(equipment.category);
+    
+    // Display image previews
+    const previewContainer = document.getElementById('image-preview-container');
+    previewContainer.innerHTML = '';
+    if (equipment.images && equipment.images.length > 0) {
+        previewContainer.innerHTML = equipment.images.map((url, index) => `
+            <div class="position-relative d-inline-block me-2">
+                <img src="${url}" class="img-thumbnail" style="width: 100px; height: 100px; object-fit: cover;">
+                <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0" onclick="removeImageFromEditModal(${index})">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `).join('');
+    }
+    
+    // Store existing image URLs in a hidden field or global variable if needed for deletion logic
+    // For simplicity, we assume re-upload replaces them, but let's store them in the element's dataset
+    previewContainer.dataset.existingImages = JSON.stringify(equipment.images || []);
+
+    // Change button to Update
+    document.getElementById('submit-equipment-btn').textContent = 'Update Equipment';
+    
+    modal.show();
+}
+
+
+// Load categories for the seller modal dropdown
+async function loadCategoriesForSellerModal(selectedCategory = null) {
+    try {
+        const snapshot = await window.FirebaseDB.collection('categories')
+            .where('status', '==', 'active')
+            .orderBy('order', 'asc')
+            .get();
+
+        const select = document.getElementById('equipment-category');
+        select.innerHTML = '<option value="" disabled selected>Select Category *</option>';
+        
+        snapshot.forEach(doc => {
+            const category = doc.data();
+            const option = document.createElement('option');
+            option.value = category.name;
+            option.textContent = category.name;
+            if (category.name === selectedCategory) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+
+    } catch (error) {
+        console.error('Error loading categories for seller modal:', error);
+    }
+}
+
+// Remove image from edit modal preview (client-side only for now)
+function removeImageFromEditModal(index) {
+    const previewContainer = document.getElementById('image-preview-container');
+    const existingImages = JSON.parse(previewContainer.dataset.existingImages || '[]');
+    
+    if (index >= 0 && index < existingImages.length) {
+        // Remove the image from the array
+        existingImages.splice(index, 1);
+        previewContainer.dataset.existingImages = JSON.stringify(existingImages);
+        
+        // Re-render the previews
+        previewContainer.innerHTML = existingImages.map((url, i) => `
+            <div class="position-relative d-inline-block me-2">
+                <img src="${url}" class="img-thumbnail" style="width: 100px; height: 100px; object-fit: cover;">
+                <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0" onclick="removeImageFromEditModal(${i})">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `).join('');
+    }
+}
+
+
+// Handle equipment form submission (Add/Edit)
+async function handleEquipmentSubmit(e) {
+    e.preventDefault();
+
+    if (!window.currentUser || window.currentUser.role !== 'seller') return;
+    
+    // CRITICAL: Check for mandatory Pincode from Seller Profile
+    const sellerPincode = window.currentUser.pincode;
+    if (!sellerPincode) {
+        window.firebaseHelpers.showAlert('Seller Pincode missing. Please update your Profile first.', 'danger');
+        return;
+    }
+
+
+    const form = document.getElementById('equipment-form');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+
+    const equipmentId = document.getElementById('equipment-id').value;
+    const isNew = !equipmentId;
+    const submitBtn = document.getElementById('submit-equipment-btn');
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Processing...';
+    
+    const imageInput = document.getElementById('equipment-image');
+    let newImageUrls = [];
+    
+    try {
+        // 1. Handle image uploads (only if new files are selected)
+        if (imageInput.files.length > 0) {
+            window.firebaseHelpers.showAlert('Uploading images... Please wait.', 'info');
+            
+            for (const file of imageInput.files) {
+                const imageUrl = await window.firebaseHelpers.uploadFile('equipment_images', file);
+                newImageUrls.push(imageUrl);
+            }
+            window.firebaseHelpers.showAlert('Image upload complete!', 'success');
+        }
+        
+        // 2. Combine existing images (if editing) with new images
+        let finalImageUrls = newImageUrls;
+        if (!isNew) {
+            const previewContainer = document.getElementById('image-preview-container');
+            const existingImages = JSON.parse(previewContainer.dataset.existingImages || '[]');
+            // Use existing images that were not removed
+            finalImageUrls = [...existingImages, ...newImageUrls];
+        }
+
+        // 3. Prepare equipment data
+        const equipmentData = {
+            name: document.getElementById('equipment-name').value,
+            description: document.getElementById('equipment-description').value,
+            category: document.getElementById('equipment-category').value,
+            pricePerAcre: parseFloat(document.getElementById('price-per-acre').value),
+            pricePerHour: parseFloat(document.getElementById('price-per-hour').value),
+            quantity: parseInt(document.getElementById('equipment-quantity').value, 10),
+            availability: document.getElementById('equipment-availability').checked,
+            images: finalImageUrls,
+            
+            // CRITICAL: Auto-inject seller Pincode from profile (non-editable source)
+            pincode: sellerPincode,
+            
+            sellerId: window.currentUser.uid,
+            businessName: window.currentUser.businessName || window.currentUser.name,
+            
+            // New items start as 'pending' for admin approval
+            status: isNew ? 'pending' : (sellerEquipmentData.find(e => e.id === equipmentId)?.status || 'pending'), 
+            
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        };
+        
+        if (isNew) {
+            equipmentData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+        }
+
+        // 4. Save to Firestore
+        if (isNew) {
+            await window.FirebaseDB.collection('equipment').add(equipmentData);
+            window.firebaseHelpers.showAlert('Equipment added successfully! Awaiting admin approval.', 'success');
+        } else {
+            await window.FirebaseDB.collection('equipment').doc(equipmentId).update(equipmentData);
+            window.firebaseHelpers.showAlert('Equipment updated successfully!', 'success');
+        }
+
+        // 5. Close modal and reload
+        const modal = bootstrap.Modal.getInstance(document.getElementById('equipmentModal'));
+        if (modal) modal.hide();
+        loadSellerEquipment();
+        
+    } catch (error) {
+        console.error('Error submitting equipment:', error);
+        window.firebaseHelpers.showAlert(`Error submitting equipment: ${error.message || 'Check console.'}`, 'danger');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = isNew ? 'Add Equipment' : 'Update Equipment';
+    }
+}
+
+
+// Delete equipment listing
+async function deleteEquipment(equipmentId) {
+    if (!window.currentUser) return;
+    
+    // Note: Use custom modal instead of built-in confirm in production
+    if (!confirm('Are you sure you want to delete this equipment listing? This action cannot be undone.')) return;
+
+    try {
+        await window.FirebaseDB.collection('equipment').doc(equipmentId).delete();
+        window.firebaseHelpers.showAlert('Equipment deleted successfully.', 'success');
+        loadSellerEquipment();
+        
+    } catch (error) {
+        console.error('Error deleting equipment:', error);
+        window.firebaseHelpers.showAlert('Error deleting equipment. Please try again.', 'danger');
+    }
+}
+
+// Load seller orders
+async function loadSellerOrders() {
+    if (!window.currentUser) return;
+
+    try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
+
+        const ordersSnapshot = await ordersCollectionRef
+            .where('sellerIds', 'array-contains', window.currentUser.uid) 
+            .orderBy('createdAt', 'desc')
+            .get();
+        
+        const container = document.getElementById('seller-orders-list');
+        if (!container) return;
+
+        container.innerHTML = '';
+        
+        if (ordersSnapshot.empty) {
+            container.innerHTML = `<div class="col-12 text-center py-4"><p class="text-muted">No orders received yet.</p></div>`;
+            return;
+        }
+        
+        let ordersHtml = '';
+        ordersSnapshot.forEach(doc => {
+            const order = { id: doc.id, ...doc.data() };
+            // Simple display for seller dashboard
+            ordersHtml += createSellerOrderCard(order);
+        });
+        container.innerHTML = ordersHtml;
+
+    } catch (error) {
+        console.error('Error loading seller orders:', error);
+        window.firebaseHelpers.showAlert('Error loading customer orders.', 'danger');
+    }
+}
+
+// Create HTML card for a seller order
+function createSellerOrderCard(order) {
+    const statusClass = `order-status-${order.status || 'pending'}`;
+    const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
+    const date = window.firebaseHelpers.formatDate(order.createdAt);
+    
+    const relevantItems = order.items.filter(item => item.sellerId === window.currentUser.uid);
+
+    return `
+        <div class="col-lg-12 mb-3">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">Order #${order.id.substring(0, 8)} - ${statusText}</h6>
+                        <span class="badge ${statusClass}">${statusText}</span>
+                    </div>
+                    <p class="small text-muted mb-1">Placed: ${date} | Customer: ${order.customerName}</p>
+                    <p class="small text-muted mb-1">Pickup Pincode: ${order.orderPincode}</p>
+                    <p class="small mb-2">Total Value (Your share): <strong>${window.firebaseHelpers.formatCurrency(relevantItems.reduce((sum, item) => sum + item.price, 0))}</strong></p>
+
+                    <ul class="list-unstyled small mb-2 border-top pt-2">
+                        ${relevantItems.map(item => `
+                            <li>
+                                <i class="fas fa-tools me-1"></i> 
+                                ${item.name} (${item.rentalValue} ${item.rentalType === 'acre' ? 'Acres' : 'Hours'})
+                            </li>
+                        `).join('')}
+                    </ul>
+
+                    <div class="text-end">
+                        <button class="btn btn-sm btn-outline-info" onclick="viewSellerOrderDetails('${order.id}')">
+                            <i class="fas fa-eye me-1"></i> Details
+                        </button>
+                        ${order.status === 'pending' ? `
+                            <button class="btn btn-sm btn-success ms-2" onclick="updateOrderStatus('${order.id}', 'confirmed')">
+                                <i class="fas fa-check me-1"></i> Confirm
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Update order status (Seller action)
+async function updateOrderStatus(orderId, newStatus) {
+    if (!window.currentUser) return;
+    
+    try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const orderRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders').doc(orderId);
+
+        await orderRef.update({
+            status: newStatus,
+            updatedBySellerAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        window.firebaseHelpers.showAlert(`Order ${orderId.substring(0, 8)} status updated to ${newStatus}.`, 'success');
+        loadSellerOrders();
+        
+    } catch (error) {
+        console.error('Error updating order status:', error);
+        window.firebaseHelpers.showAlert('Failed to update order status. Please try again.', 'danger');
+    }
+}
+
+// Function to view detailed order information for the seller (simplified, placeholder)
+function viewSellerOrderDetails(orderId) {
+    window.firebaseHelpers.showAlert(`Showing details for Order #${orderId.substring(0, 8)}. (Customer details and pickup location provided in full order data)`, 'info');
 }
