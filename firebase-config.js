@@ -53,26 +53,26 @@ try {
     }
     
     // Enable Firestore offline persistence (Wrapped in try/catch to handle Access to storage error)
-   // Enable Firestore offline persistence (Wrapped in try/catch to handle Access to storage error)
-try {
-    // Check if we're in a secure context (HTTPS or localhost)
-    if (window.isSecureContext) {
+   try {
+    // FIX: Removed window.isSecureContext check as it's environment dependent and often causes issues in iframes.
+    // We rely on the catch block to handle the 'Access to storage' error gracefully.
         db.enablePersistence()
             .catch((err) => {
                 if (err.code == 'failed-precondition') {
-                    console.warn('Multiple tabs open, persistence can only be enabled in one tab at a time.');
+                    console.warn('Persistence warning: Multiple tabs open, persistence can only be enabled in one tab.');
                 } else if (err.code == 'unimplemented') {
-                    console.warn('The current browser doesn\'t support persistence.');
-                } else {
-                    console.warn('Persistence error:', err.message);
+                    console.warn('Persistence warning: The current browser/context doesn\'t support persistence.');
+                } else if (err.message.includes('Access to storage is not allowed')) {
+                    // FIX: Gracefully log the "Access to storage" error
+                    console.warn('Persistence warning: Access to storage is not allowed (common in isolated contexts like iframes). Functionality will continue online.');
+                }
+                 else {
+                    console.warn('Persistence setup error:', err.message);
                 }
             });
-    } else {
-        console.warn('Cannot enable persistence: not in a secure context (HTTPS required)');
+    } catch (e) {
+        console.warn('Persistence setup error (initialization):', e.message);
     }
-} catch (e) {
-    console.warn('Persistence setup error:', e.message);
-}
     
     // Export Firebase services
     window.FirebaseAuth = auth;
