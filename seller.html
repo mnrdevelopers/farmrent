@@ -115,6 +115,7 @@
         
         .dashboard-card:hover {
             transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
         }
         
         .card-icon {
@@ -203,7 +204,7 @@
         
         .status-available {
             background-color: #E2E3E5;
-            color: #383D41;
+            color: #383341;
         }
         
         .order-status-pending {
@@ -247,6 +248,11 @@
             padding: 8px 20px;
             border-radius: 6px;
             font-weight: 600;
+        }
+        
+        .btn-warning:hover {
+            background-color: #f0b537;
+            border-color: #f0b537;
         }
         
         .btn-outline-primary {
@@ -914,14 +920,14 @@
                 <!-- Notifications/Alerts -->
                 <div class="col-md-6 mb-4">
                     <div class="table-container">
-                         <h5 class="mb-3"><i class="fas fa-exclamation-triangle me-2 text-warning"></i>Actionable Alerts</h5>
-                         <div id="seller-alerts-list" class="list-group list-group-flush">
+                        <h5 class="mb-3"><i class="fas fa-exclamation-triangle me-2 text-warning"></i>Actionable Alerts</h5>
+                        <div id="seller-alerts-list" class="list-group list-group-flush">
                             <div class="text-center py-4">
                                 <div class="spinner-border spinner-border-sm text-primary"></div>
                                 <p class="mt-2 mb-0">Loading alerts...</p>
                             </div>
-                         </div>
-                         <small class="text-muted d-block mt-3">Alerts refresh whenever you load the dashboard or notification page.</small>
+                        </div>
+                        <small class="text-muted d-block mt-3">Alerts refresh whenever you load the dashboard or notification page.</small>
                     </div>
                 </div>
 
@@ -986,327 +992,328 @@
         </div>
 
         <!-- Profile Section -->
-<div class="section" id="profile-section" style="display: none;">
-    <div class="page-header">
-        <h1>Profile Settings</h1>
-        <p class="text-muted">Manage your seller account</p>
-    </div>
-    
-    <div class="row">
-        <div class="col-lg-8">
-            <div class="table-container">
-                <form id="profile-form">
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="profile-name" class="form-label">Full Name *</label>
-                            <input type="text" class="form-control" id="profile-name" required>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="profile-email" class="form-label">Email Address *</label>
-                            <input type="email" class="form-control" id="profile-email" required readonly>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="profile-phone" class="form-label">Phone Number *</label>
-                            <input type="tel" class="form-control" id="profile-phone" required>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="profile-business" class="form-label">Business Name *</label>
-                            <input type="text" class="form-control" id="profile-business" required>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="profile-address" class="form-label">Business Address (Street/House Number) *</label>
-                        <textarea class="form-control" id="profile-address" rows="3" required placeholder="Primary pickup address (must include House/Street details)"></textarea>
-                    </div>
-                    
-                    <!-- UPDATED: Pincode and Location Fields -->
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="profile-pincode" class="form-label">Pincode (Primary Operating Area) *</label>
-                            <input type="text" class="form-control" id="profile-pincode" pattern="[0-9]{6}" maxlength="6" required placeholder="e.g., 503001">
-                            <small id="pincode-status-message" class="form-text text-muted"></small>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="profile-village" class="form-label">Village/Post Office *</label>
-                            <select class="form-select" id="profile-village" required disabled>
-                                <option value="">Enter Pincode Above</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="profile-city" class="form-label">City/District *</label>
-                            <input type="text" class="form-control" id="profile-city" readonly required>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="profile-state" class="form-label">State *</label>
-                            <input type="text" class="form-control" id="profile-state" readonly required>
-                        </div>
-                    </div>
-                    <!-- END UPDATED -->
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="profile-gst" class="form-label">GST Number (Optional)</label>
-                            <input type="text" class="form-control" id="profile-gst">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="profile-bio" class="form-label">Business Description</label>
-                            <textarea class="form-control" id="profile-bio" rows="2" placeholder="Tell customers about your business"></textarea>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Profile Picture</label>
-                        <div class="d-flex align-items-center gap-3">
-                            <img src="https://via.placeholder.com/100" alt="Profile" class="rounded-circle" id="profile-picture" width="100" height="100">
-                            <div>
-                                <input type="file" class="form-control d-none" id="profile-picture-upload" accept="image/*">
-                                <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('profile-picture-upload').click()">
-                                    <i class="fas fa-upload me-2"></i>Upload New Picture
-                                </button>
-                                <small class="text-muted d-block mt-1">Recommended: Square image, max 2MB</small>
+        <div class="section" id="profile-section" style="display: none;">
+            <div class="page-header">
+                <h1>Profile Settings</h1>
+                <p class="text-muted">Manage your seller account</p>
+            </div>
+            
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="table-container">
+                        <form id="profile-form">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="profile-name" class="form-label">Full Name *</label>
+                                    <input type="text" class="form-control" id="profile-name" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="profile-email" class="form-label">Email Address *</label>
+                                    <input type="email" class="form-control" id="profile-email" required readonly>
+                                </div>
                             </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="profile-phone" class="form-label">Phone Number *</label>
+                                    <input type="tel" class="form-control" id="profile-phone" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="profile-business" class="form-label">Business Name *</label>
+                                    <input type="text" class="form-control" id="profile-business" required>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="profile-address" class="form-label">Business Address (Street/House Number) *</label>
+                                <textarea class="form-control" id="profile-address" rows="3" required placeholder="Primary pickup address (must include House/Street details)"></textarea>
+                            </div>
+                            
+                            <!-- UPDATED: Pincode and Location Fields -->
+                            <div class="row">
+                                <div class="col-md-6 mb-3" id="pincode-input-group">
+                                    <label for="profile-pincode" class="form-label">Pincode (Primary Operating Area) *</label>
+                                    <input type="text" class="form-control" id="profile-pincode" pattern="[0-9]{6}" maxlength="6" required placeholder="e.g., 503001">
+                                    <small id="pincode-status-message" class="form-text text-muted"></small>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="profile-village" class="form-label">Village/Post Office *</label>
+                                    <select class="form-select" id="profile-village" required disabled>
+                                        <option value="">Enter Pincode Above</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="profile-city" class="form-label">City/District *</label>
+                                    <input type="text" class="form-control" id="profile-city" readonly required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="profile-state" class="form-label">State *</label>
+                                    <input type="text" class="form-control" id="profile-state" readonly required>
+                                </div>
+                            </div>
+                            <!-- END UPDATED -->
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="profile-gst" class="form-label">GST Number (Optional)</label>
+                                    <input type="text" class="form-control" id="profile-gst">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="profile-bio" class="form-label">Business Description</label>
+                                    <textarea class="form-control" id="profile-bio" rows="2" placeholder="Tell customers about your business"></textarea>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Profile Picture</label>
+                                <div class="d-flex align-items-center gap-3">
+                                    <img src="https://via.placeholder.com/100" alt="Profile" class="rounded-circle" id="profile-picture" width="100" height="100">
+                                    <div>
+                                        <input type="file" class="form-control d-none" id="profile-picture-upload" accept="image/*">
+                                        <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('profile-picture-upload').click()">
+                                            <i class="fas fa-upload me-2"></i>Upload New Picture
+                                        </button>
+                                        <small class="text-muted d-block mt-1">Recommended: Square image, max 2MB</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <hr>
+                            
+                            <h5 class="mb-3">Change Password</h5>
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="current-password" class="form-label">Current Password</label>
+                                    <input type="password" class="form-control" id="current-password">
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="new-password" class="form-label">New Password</label>
+                                    <input type="password" class="form-control" id="new-password">
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="confirm-password" class="form-label">Confirm Password</label>
+                                    <input type="password" class="form-control" id="confirm-password">
+                                </div>
+                            </div>
+                            
+                            <div class="d-flex justify-content-between">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save me-2"></i>Save Changes
+                                </button>
+                                <button type="button" class="btn btn-outline-danger" onclick="showDeleteAccountModal()">
+                                    <i class="fas fa-trash me-2"></i>Delete Account
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="table-container">
+                        <h5 class="mb-3">Account Status</h5>
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <strong>Verified Seller</strong>
+                            <p class="mb-0 mt-1">Your account is active and verified</p>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <h6>Seller Since</h6>
+                            <p id="join-date">Loading...</p>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <h6>Account Verification</h6>
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Email Verified
+                                    <span class="badge bg-success" id="email-verified">Yes</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Phone Verified
+                                    <span class="badge bg-success" id="phone-verified">Yes</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Business Verified
+                                    <span class="badge bg-success" id="business-verified">Yes</span>
+                                </li>
+                            </ul>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Need help? Contact our seller support team at <strong>support@farmrent.com</strong>
                         </div>
                     </div>
-                    
-                    <hr>
-                    
-                    <h5 class="mb-3">Change Password</h5>
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <label for="current-password" class="form-label">Current Password</label>
-                            <input type="password" class="form-control" id="current-password">
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label for="new-password" class="form-label">New Password</label>
-                            <input type="password" class="form-control" id="new-password">
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label for="confirm-password" class="form-label">Confirm Password</label>
-                            <input type="password" class="form-control" id="confirm-password">
-                        </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Equipment Details Modal (View Only) -->
+        <div class="modal fade" id="equipmentModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Equipment Details</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
-                    
-                    <div class="d-flex justify-content-between">
-                        <button type="submit" class="btn btn-primary">
+                    <div class="modal-body" id="equipment-modal-body">
+                        <!-- Equipment details will be loaded here -->
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <!-- UPDATED: Replaced original Edit button with a dynamic one to call editEquipment -->
+                        <button type="button" class="btn btn-warning" id="view-edit-equipment-btn">Edit</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NEW: Equipment Edit Modal -->
+        <div class="modal fade" id="equipmentEditModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header bg-warning text-dark">
+                        <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Edit Equipment Listing</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="edit-equipment-form">
+                            <input type="hidden" id="edit-equipment-id">
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="edit-equipment-name" class="form-label">Equipment Name *</label>
+                                    <input type="text" class="form-control" id="edit-equipment-name" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="edit-equipment-category" class="form-label">Category *</label>
+                                    <select class="form-select" id="edit-equipment-category" required>
+                                        <option value="tractor">Tractor</option>
+                                        <option value="harvester">Harvester</option>
+                                        <option value="cultivator">Cultivator</option>
+                                        <option value="drone">Agricultural Drone</option>
+                                        <option value="spray">Spray Machine</option>
+                                        <option value="crane">Crane</option>
+                                        <option value="jcb">JCB</option>
+                                        <option value="grass-cutter">Grass Cutter</option>
+                                        <option value="trolley">Trolley</option>
+                                        <option value="water-tanker">Water Tanker</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <!-- UPDATED ID to edit-acre-price -->
+                                <div class="col-md-6 mb-3">
+                                    <label for="edit-acre-price" class="form-label">Per Acre Rental Price (₹) *</label>
+                                    <input type="number" class="form-control" id="edit-acre-price" min="0" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="edit-hourly-price" class="form-label">Hourly Rental Price (₹) *</label>
+                                    <input type="number" class="form-control" id="edit-hourly-price" min="0" required>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="edit-equipment-description" class="form-label">Description *</label>
+                                <textarea class="form-control" id="edit-equipment-description" rows="3" required></textarea>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="edit-equipment-location" class="form-label">Location (Descriptive)</label>
+                                    <input type="text" class="form-control" id="edit-equipment-location" required>
+                                </div>
+                                <!-- START FIX: Added Pincode input field for editing, will be readonly -->
+                                <div class="col-md-4 mb-3">
+                                    <label for="edit-equipment-pincode" class="form-label">Pincode *</label>
+                                    <input type="text" class="form-control bg-light" id="edit-equipment-pincode" pattern="[0-9]{6}" maxlength="6" readonly required>
+                                    <small class="text-muted">Set in Profile for consistency.</small>
+                                </div>
+                                <!-- END FIX -->
+                                <div class="col-md-4 mb-3">
+                                    <label for="edit-equipment-quantity" class="form-label">Quantity Available *</label>
+                                    <input type="number" class="form-control" id="edit-equipment-quantity" min="1" required>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="edit-equipment-availability" class="form-label">Availability Status</label>
+                                    <select class="form-select" id="edit-equipment-availability">
+                                        <option value="true">Available</option>
+                                        <option value="false">Rented</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <h6 class="mt-3 mb-2">Specifications (Key-Value Pairs)</h6>
+                            <div id="edit-specs-container">
+                                <!-- Specs populated dynamically by JS -->
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="addEditSpecField()">
+                                <i class="fas fa-plus me-1"></i>Add Specification
+                            </button>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-warning" id="save-equipment-btn" form="edit-equipment-form">
                             <i class="fas fa-save me-2"></i>Save Changes
                         </button>
-                        <button type="button" class="btn btn-outline-danger" onclick="showDeleteAccountModal()">
-                            <i class="fas fa-trash me-2"></i>Delete Account
-                        </button>
                     </div>
-                </form>
-            </div>
-        </div>
-        <div class="col-lg-4">
-            <div class="table-container">
-                <h5 class="mb-3">Account Status</h5>
-                <div class="alert alert-success">
-                    <i class="fas fa-check-circle me-2"></i>
-                    <strong>Verified Seller</strong>
-                    <p class="mb-0 mt-1">Your account is active and verified</p>
-                </div>
-                
-                <div class="mb-4">
-                    <h6>Seller Since</h6>
-                    <p id="join-date">Loading...</p>
-                </div>
-                
-                <div class="mb-4">
-                    <h6>Account Verification</h6>
-                    <ul class="list-group list-group-flush">
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            Email Verified
-                            <span class="badge bg-success" id="email-verified">Yes</span>
-                        </li>
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            Phone Verified
-                            <span class="badge bg-success" id="phone-verified">Yes</span>
-                        </li>
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            Business Verified
-                            <span class="badge bg-success" id="business-verified">Yes</span>
-                        </li>
-                    </ul>
-                </div>
-                
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i>
-                    Need help? Contact our seller support team at <strong>support@farmrent.com</strong>
                 </div>
             </div>
         </div>
-    </div>
-</div>
+        <!-- END NEW: Equipment Edit Modal -->
 
-    <!-- Equipment Details Modal (View Only) -->
-    <div class="modal fade" id="equipmentModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Equipment Details</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="equipment-modal-body">
-                    <!-- Equipment details will be loaded here -->
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <!-- UPDATED: Replaced original Edit button with a dynamic one to call editEquipment -->
-                    <button type="button" class="btn btn-warning" id="view-edit-equipment-btn">Edit</button>
+        <!-- Order Details Modal -->
+        <div class="modal fade" id="orderModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Order Details</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body" id="order-modal-body">
+                        <!-- Order details will be loaded here -->
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- NEW: Equipment Edit Modal -->
-    <div class="modal fade" id="equipmentEditModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header bg-warning text-dark">
-                    <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Edit Equipment Listing</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="edit-equipment-form">
-                        <input type="hidden" id="edit-equipment-id">
-                        
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="edit-equipment-name" class="form-label">Equipment Name *</label>
-                                <input type="text" class="form-control" id="edit-equipment-name" required>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="edit-equipment-category" class="form-label">Category *</label>
-                                <select class="form-select" id="edit-equipment-category" required>
-                                    <option value="tractor">Tractor</option>
-                                    <option value="harvester">Harvester</option>
-                                    <option value="cultivator">Cultivator</option>
-                                    <option value="drone">Agricultural Drone</option>
-                                    <option value="spray">Spray Machine</option>
-                                    <option value="crane">Crane</option>
-                                    <option value="jcb">JCB</option>
-                                    <option value="grass-cutter">Grass Cutter</option>
-                                    <option value="trolley">Trolley</option>
-                                    <option value="water-tanker">Water Tanker</option>
-                                </select>
-                            </div>
+        <!-- Delete Account Modal -->
+        <div class="modal fade" id="deleteAccountModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title">Delete Account</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Warning: This action cannot be undone!</strong>
                         </div>
-
-                        <div class="row">
-                            <!-- UPDATED ID to edit-acre-price -->
-                            <div class="col-md-6 mb-3">
-                                <label for="edit-acre-price" class="form-label">Per Acre Rental Price (₹) *</label>
-                                <input type="number" class="form-control" id="edit-acre-price" min="0" required>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="edit-hourly-price" class="form-label">Hourly Rental Price (₹) *</label>
-                                <input type="number" class="form-control" id="edit-hourly-price" min="0" required>
-                            </div>
-                        </div>
-
+                        <p>Are you sure you want to delete your seller account? This will:</p>
+                        <ul>
+                            <li>Remove all your equipment listings</li>
+                            <li>Cancel all pending orders</li>
+                            <li>Delete your profile and business information</li>
+                            <li>Remove you from the FarmRent platform</li>
+                        </ul>
                         <div class="mb-3">
-                            <label for="edit-equipment-description" class="form-label">Description *</label>
-                            <textarea class="form-control" id="edit-equipment-description" rows="3" required></textarea>
+                            <label for="delete-confirmation" class="form-label">Type "DELETE" to confirm:</label>
+                            <input type="text" class="form-control" id="delete-confirmation" placeholder="Type DELETE here">
                         </div>
-
-                        <div class="row">
-                            <div class="col-md-4 mb-3">
-                                <label for="edit-equipment-location" class="form-label">Location (Descriptive)</label>
-                                <input type="text" class="form-control" id="edit-equipment-location" required>
-                            </div>
-                            <!-- START FIX: Added Pincode input field -->
-                            <div class="col-md-4 mb-3">
-                                <label for="edit-equipment-pincode" class="form-label">Pincode *</label>
-                                <input type="text" class="form-control" id="edit-equipment-pincode" pattern="[0-9]{6}" maxlength="6" required>
-                            </div>
-                            <!-- END FIX -->
-                            <div class="col-md-4 mb-3">
-                                <label for="edit-equipment-quantity" class="form-label">Quantity Available *</label>
-                                <input type="number" class="form-control" id="edit-equipment-quantity" min="1" required>
-                            </div>
-                             <div class="col-md-4 mb-3">
-                                <label for="edit-equipment-availability" class="form-label">Availability Status</label>
-                                <select class="form-select" id="edit-equipment-availability">
-                                    <option value="true">Available</option>
-                                    <option value="false">Rented</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <h6 class="mt-3 mb-2">Specifications (Key-Value Pairs)</h6>
-                        <div id="edit-specs-container">
-                            <!-- Specs populated dynamically by JS -->
-                        </div>
-                        <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="addEditSpecField()">
-                            <i class="fas fa-plus me-1"></i>Add Specification
-                        </button>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-warning" id="save-equipment-btn" form="edit-equipment-form">
-                        <i class="fas fa-save me-2"></i>Save Changes
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-    <!-- END NEW: Equipment Edit Modal -->
-
-    <!-- Order Details Modal -->
-    <div class="modal fade" id="orderModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Order Details</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="order-modal-body">
-                    <!-- Order details will be loaded here -->
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Delete Account Modal -->
-    <div class="modal fade" id="deleteAccountModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title">Delete Account</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="alert alert-danger">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        <strong>Warning: This action cannot be undone!</strong>
                     </div>
-                    <p>Are you sure you want to delete your seller account? This will:</p>
-                    <ul>
-                        <li>Remove all your equipment listings</li>
-                        <li>Cancel all pending orders</li>
-                        <li>Delete your profile and business information</li>
-                        <li>Remove you from the FarmRent platform</li>
-                    </ul>
-                    <div class="mb-3">
-                        <label for="delete-confirmation" class="form-label">Type "DELETE" to confirm:</label>
-                        <input type="text" class="form-control" id="delete-confirmation" placeholder="Type DELETE here">
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-danger" onclick="deleteAccount()" id="delete-account-btn" disabled>Delete Account</button>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-danger" onclick="deleteAccount()" id="delete-account-btn" disabled>Delete Account</button>
-                </div>
             </div>
         </div>
-    </div>
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
@@ -1319,7 +1326,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-remote-config-compat.js"></script>
     <!-- REMOVED: <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-storage-compat.js"></script> -->
     <script src="firebase-config.js"></script>
-        <script src="script.js"></script>
+    <script src="script.js"></script>
 <script>
     // Global variables
     let sellerData = null; // FIX: Removed 'let currentUser = null;' to prevent SyntaxError
@@ -1381,6 +1388,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const pincodeInput = document.getElementById('profile-pincode');
     if (pincodeInput) {
         pincodeInput.addEventListener('input', function() {
+            // FIX: Prevent seller from editing if Pincode is already set
+            if (sellerData && sellerData.pincode) return;
+
             // Clear previous city/state/village on change
             document.getElementById('profile-city').value = '';
             document.getElementById('profile-state').value = '';
@@ -1395,7 +1405,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-   // Update seller information in UI
+    // Update seller information in UI
 function updateSellerInfo() {
     if (sellerData) {
         document.getElementById('seller-name').textContent = sellerData.name || 'Seller';
@@ -1405,12 +1415,31 @@ function updateSellerInfo() {
             document.getElementById('page-title').textContent = `${sellerData.businessName} - Dashboard`;
         }
 
-        // Update Pincode display in Add Equipment and Edit Modal sections
-        const pincodeDisplay = document.getElementById('registered-pincode-display');
-        if (pincodeDisplay) {
-            pincodeDisplay.textContent = sellerData.pincode || 'N/A (Update Profile)';
+        // Update Pincode display in Dashboard header and Add Equipment section
+        document.getElementById('seller-pincode-display').textContent = sellerData.pincode || 'N/A (Update Profile)';
+        const registeredPincodeDisplay = document.getElementById('registered-pincode-display');
+        if (registeredPincodeDisplay) {
+            registeredPincodeDisplay.textContent = sellerData.pincode || 'N/A';
         }
         
+        // FIX: Enforce readonly Pincode in profile if set
+        const profilePincodeInput = document.getElementById('profile-pincode');
+        const pincodeGroup = document.getElementById('pincode-input-group');
+        if (profilePincodeInput && sellerData.pincode) {
+            profilePincodeInput.readOnly = true;
+            profilePincodeInput.classList.add('bg-light', 'text-muted');
+            if (pincodeGroup && !pincodeGroup.querySelector('.alert')) {
+                pincodeGroup.innerHTML += `
+                    <div class="alert alert-info p-2 mt-2 small">
+                        <i class="fas fa-lock me-1"></i> Your Seller Pincode is permanent for consistency.
+                    </div>
+                `;
+            }
+        } else if (profilePincodeInput) {
+             profilePincodeInput.readOnly = false;
+             profilePincodeInput.classList.remove('bg-light', 'text-muted');
+        }
+
         // Update location info in UI if elements exist
         if (document.getElementById('seller-location-info')) {
             document.getElementById('seller-location-info').textContent = 
@@ -1847,7 +1876,7 @@ async function populateSellerLocationFields() {
                         <i class="fas fa-eye"></i>
                     </button>
                     ${order.status === 'pending' ? `
-                        <button class="btn btn-sm btn-success ms-1" onclick="updateOrderStatus('${order.id}', 'approved')">
+                        <button class="btn btn-sm btn-success ms-1" onclick="updateOrderStatus('${order.id}', 'active')">
                             <i class="fas fa-check"></i>
                         </button>
                     ` : ''}
@@ -2401,8 +2430,8 @@ async function populateSellerLocationFields() {
             document.getElementById('edit-equipment-quantity').value = equipment.quantity || 1;
             document.getElementById('edit-equipment-availability').value = String(equipment.availability);
             
-            // FIX: Set the value of the new Pincode input field
-            document.getElementById('edit-equipment-pincode').value = equipment.pincode || '';
+            // FIX: Set the value of the new Pincode input field, which is READONLY
+            document.getElementById('edit-equipment-pincode').value = sellerData.pincode || '';
 
 
             // Clear existing specs and populate
@@ -2459,12 +2488,14 @@ async function populateSellerLocationFields() {
 
         try {
             // Gather updated data
-            const pincodeInput = document.getElementById('edit-equipment-pincode').value; // FIX: Get Pincode
-            if (!pincodeInput || !/^[0-9]{6}$/.test(pincodeInput)) {
-                window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
-                submitBtn.innerHTML = originalText;
-                submitBtn.disabled = false;
-                return;
+            // FIX: Retrieve Pincode directly from sellerData (which is already enforced in profile)
+            const pincodeFromProfile = sellerData.pincode; 
+
+            if (!pincodeFromProfile) {
+                 window.firebaseHelpers.showAlert('Seller Pincode missing. Please update your Profile first.', 'danger');
+                 submitBtn.innerHTML = originalText;
+                 submitBtn.disabled = false;
+                 return;
             }
 
             const updatedData = {
@@ -2476,7 +2507,7 @@ async function populateSellerLocationFields() {
                 location: document.getElementById('edit-equipment-location').value,
                 quantity: parseInt(document.getElementById('edit-equipment-quantity').value),
                 availability: document.getElementById('edit-equipment-availability').value === 'true',
-                pincode: pincodeInput, // FIX: Save the updated Pincode
+                pincode: pincodeFromProfile, // FIX: Use the Pincode from sellerData
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             };
 
@@ -2988,6 +3019,9 @@ async function loadProfileData() {
             }, 500);
         }
     }
+    
+    // Re-run updateSellerInfo to apply readonly status on Pincode input
+    updateSellerInfo();
 }
     
    // Profile form submission
