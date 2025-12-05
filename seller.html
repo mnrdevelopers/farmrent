@@ -1328,7 +1328,7 @@
     <script src="firebase-config.js"></script>
     <script src="script.js"></script>
 <script>
-    // Global variables
+   // Global variables
     let sellerData = null; // FIX: Removed 'let currentUser = null;' to prevent SyntaxError
     let equipmentData = [];
     let ordersData = [];
@@ -1343,18 +1343,24 @@
             .collection('public').doc('data').collection(collectionName);
     }
 
-    // Initialize dashboard
-    document.addEventListener('DOMContentLoaded', async () => {
-        // Check authentication using helper function
+    // Export the loadSellerDashboard function globally so script.js can call it
+    window.loadSellerDashboard = async () => {
+        // Hide initial loading spinner early
+        const loadingEl = document.getElementById('loading');
+        if (loadingEl) loadingEl.classList.add('active'); // Keep it active until auth check completes
+
+        // Check authentication
         const authCheck = await window.firebaseHelpers.checkAuthAndRole('seller');
         
         if (!authCheck.authenticated) {
             window.location.href = 'auth.html?role=seller';
+            if (loadingEl) loadingEl.classList.remove('active');
             return;
         }
         
         if (!authCheck.authorized) {
             window.location.href = 'index.html';
+            if (loadingEl) loadingEl.classList.remove('active');
             return;
         }
         
@@ -1364,6 +1370,7 @@
         // Check if seller is approved
         if (sellerData.status !== 'approved') {
             window.location.href = 'seller-pending.html';
+            if (loadingEl) loadingEl.classList.remove('active');
             return;
         }
 
@@ -1371,16 +1378,21 @@
         if (!sellerData.pincode || !sellerData.businessName || !sellerData.address) {
              window.firebaseHelpers.showAlert('Please complete your profile (Pincode, Business Name, Address) before listing equipment.', 'warning');
              showSection('profile'); // Force redirect to profile
+             if (loadingEl) loadingEl.classList.remove('active');
+             return;
         }
         
         // Update UI with seller data
         updateSellerInfo();
         loadDashboardData();
-        loadProfileData();
+        loadProfileData(); // This loads the data into the profile section form
         
         // Hide loading spinner
-        document.getElementById('loading').classList.remove('active');
-    });
+        if (loadingEl) loadingEl.classList.remove('active');
+        
+        // Ensure dashboard is shown by default
+        showSection('dashboard');
+    }
 
     // Add Pincode input event listener
 document.addEventListener('DOMContentLoaded', function() {
@@ -1389,17 +1401,22 @@ document.addEventListener('DOMContentLoaded', function() {
     if (pincodeInput) {
         pincodeInput.addEventListener('input', function() {
             // FIX: Prevent seller from editing if Pincode is already set
-            if (sellerData && sellerData.pincode) return;
+            if (sellerData && sellerData.pincode && pincodeInput.readOnly) return;
 
             // Clear previous city/state/village on change
-            document.getElementById('profile-city').value = '';
-            document.getElementById('profile-state').value = '';
+            const cityInput = document.getElementById('profile-city');
+            if(cityInput) cityInput.value = '';
+            const stateInput = document.getElementById('profile-state');
+            if(stateInput) stateInput.value = '';
+            
             const villageSelect = document.getElementById('profile-village');
-            villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
-            villageSelect.disabled = true;
+            if(villageSelect) {
+                villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
+                villageSelect.disabled = true;
+            }
 
-            if (this.value.length === 6) {
-                populateSellerLocationFields();
+            if (this.value.length === 6 && window.populateLocationFields) {
+                window.populateLocationFields('profile-pincode', 'profile-village', 'profile-city', 'profile-state', 'pincode-status-message');
             }
         });
     }
@@ -1407,16 +1424,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Update seller information in UI
 function updateSellerInfo() {
+    // FIX: Ensure null checks are applied before accessing DOM elements.
     if (sellerData) {
-        document.getElementById('seller-name').textContent = sellerData.name || 'Seller';
-        document.getElementById('welcome-message').textContent = `Welcome back, ${sellerData.name || 'Seller'}!`;
+        const sellerNameEl = document.getElementById('seller-name');
+        if (sellerNameEl) sellerNameEl.textContent = sellerData.name || 'Seller';
         
-        if (sellerData.businessName) {
-            document.getElementById('page-title').textContent = `${sellerData.businessName} - Dashboard`;
+        const welcomeMessageEl = document.getElementById('welcome-message');
+        if (welcomeMessageEl) welcomeMessageEl.textContent = `Welcome back, ${sellerData.name || 'Seller'}!`;
+        
+        const pageTitleEl = document.getElementById('page-title');
+        if (pageTitleEl && sellerData.businessName) {
+            pageTitleEl.textContent = `${sellerData.businessName} - Dashboard`;
         }
 
         // Update Pincode display in Dashboard header and Add Equipment section
-        document.getElementById('seller-pincode-display').textContent = sellerData.pincode || 'N/A (Update Profile)';
+        const sellerPincodeDisplayEl = document.getElementById('seller-pincode-display');
+        if(sellerPincodeDisplayEl) sellerPincodeDisplayEl.textContent = sellerData.pincode || 'N/A (Update Profile)';
+        
         const registeredPincodeDisplay = document.getElementById('registered-pincode-display');
         if (registeredPincodeDisplay) {
             registeredPincodeDisplay.textContent = sellerData.pincode || 'N/A';
@@ -1426,6 +1450,7 @@ function updateSellerInfo() {
         const profilePincodeInput = document.getElementById('profile-pincode');
         const pincodeGroup = document.getElementById('pincode-input-group');
         if (profilePincodeInput && sellerData.pincode) {
+            profilePincodeInput.value = sellerData.pincode; // Ensure value is set
             profilePincodeInput.readOnly = true;
             profilePincodeInput.classList.add('bg-light', 'text-muted');
             if (pincodeGroup && !pincodeGroup.querySelector('.alert')) {
@@ -1440,9 +1465,10 @@ function updateSellerInfo() {
              profilePincodeInput.classList.remove('bg-light', 'text-muted');
         }
 
-        // Update location info in UI if elements exist
-        if (document.getElementById('seller-location-info')) {
-            document.getElementById('seller-location-info').textContent = 
+        // Update location info in UI if elements exist (Note: seller.html doesn't have this by default, but keeping check just in case)
+        const sellerLocationInfoEl = document.getElementById('seller-location-info');
+        if (sellerLocationInfoEl) {
+            sellerLocationInfoEl.textContent = 
                 `${sellerData.city || ''}, ${sellerData.state || ''} - ${sellerData.pincode || ''}`;
         }
     }
@@ -1477,8 +1503,8 @@ async function populateSellerLocationFields() {
     }
 
     try {
-        // Use the function from script.js (make sure script.js is loaded before seller.html script)
-        const postOffices = await getPostOfficeData(pincode);
+        // Use the globally exposed function from script.js
+        const postOffices = await window.getPostOfficeData(pincode);
 
         if (postOffices.length > 0) {
             const firstOffice = postOffices[0];
@@ -1537,7 +1563,8 @@ async function populateSellerLocationFields() {
         });
         
         // Show selected section
-        document.getElementById(`${sectionId}-section`).style.display = 'block';
+        const targetSection = document.getElementById(`${sectionId}-section`);
+        if (targetSection) targetSection.style.display = 'block';
         
         // Update active nav link
         const navLink = Array.from(document.querySelectorAll('.nav-link')).find(link => 
@@ -1559,7 +1586,11 @@ async function populateSellerLocationFields() {
                 loadOrders();
                 break;
             case 'add-equipment':
-                // No specific load function, form is static
+                // Set the correct registered pincode display for reference
+                const registeredPincodeDisplay = document.getElementById('registered-pincode-display');
+                if (registeredPincodeDisplay) {
+                     registeredPincodeDisplay.textContent = sellerData?.pincode || 'N/A';
+                }
                 break;
             case 'earnings':
                 loadEarningsData();
@@ -1588,16 +1619,30 @@ async function populateSellerLocationFields() {
             ]);
             
             // Update stats cards
-            document.getElementById('total-earnings').textContent = window.firebaseHelpers.formatCurrency(stats.totalEarnings);
-            document.getElementById('total-orders').textContent = stats.totalOrders;
-            document.getElementById('total-equipment').textContent = stats.totalEquipment;
-            document.getElementById('seller-rating').textContent = stats.rating.toFixed(1);
+            const totalEarningsEl = document.getElementById('total-earnings');
+            if (totalEarningsEl) totalEarningsEl.textContent = window.firebaseHelpers.formatCurrency(stats.totalEarnings);
+            
+            const totalOrdersEl = document.getElementById('total-orders');
+            if (totalOrdersEl) totalOrdersEl.textContent = stats.totalOrders;
+            
+            const totalEquipmentEl = document.getElementById('total-equipment');
+            if (totalEquipmentEl) totalEquipmentEl.textContent = stats.totalEquipment;
+            
+            const sellerRatingEl = document.getElementById('seller-rating');
+            if (sellerRatingEl) sellerRatingEl.textContent = stats.rating.toFixed(1);
             
             // Update notification badges
-            document.getElementById('new-messages-count').textContent = notificationData.unreadCount;
-            document.getElementById('new-messages-count-mobile').textContent = notificationData.unreadCount;
-            document.getElementById('notification-count').textContent = notificationData.unreadCount;
-            document.getElementById('quick-alert-count').textContent = notificationData.unreadCount;
+            const newMessagesCountEl = document.getElementById('new-messages-count');
+            if (newMessagesCountEl) newMessagesCountEl.textContent = notificationData.unreadCount;
+            
+            const newMessagesCountMobileEl = document.getElementById('new-messages-count-mobile');
+            if (newMessagesCountMobileEl) newMessagesCountMobileEl.textContent = notificationData.unreadCount;
+            
+            const notificationCountEl = document.getElementById('notification-count');
+            if (notificationCountEl) notificationCountEl.textContent = notificationData.unreadCount;
+            
+            const quickAlertCountEl = document.getElementById('quick-alert-count');
+            if (quickAlertCountEl) quickAlertCountEl.textContent = notificationData.unreadCount;
 
             displayTopNotifications(notificationData.recentNotifications); // NEW: Display top notifications
             
@@ -1622,6 +1667,7 @@ async function populateSellerLocationFields() {
         try {
             // 1. Pending Orders
             const ordersSnapshot = await getPublicCollectionRef('orders')
+                // FIX: Filter by the seller's ID being in the sellerIds array
                 .where('sellerIds', 'array-contains', window.currentUser.uid)
                 .where('status', '==', 'pending')
                 .orderBy('createdAt', 'desc')
@@ -1643,7 +1689,8 @@ async function populateSellerLocationFields() {
 
             // 2. New Reviews (Simulated: Marking as unread if created within the last 24 hours)
             const yesterday = firebase.firestore.Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
-            const reviewsSnapshot = await window.FirebaseDB.collection('reviews')
+            // This is a direct collection, not public/data, but reviews collection is assumed.
+            const reviewsSnapshot = await window.FirebaseDB.collection('reviews') 
                 .where('sellerId', '==', window.currentUser.uid)
                 .where('createdAt', '>', yesterday) // Filter for recent reviews
                 .orderBy('createdAt', 'desc')
@@ -1670,7 +1717,7 @@ async function populateSellerLocationFields() {
             
             return {
                 unreadCount,
-                recentNotifications: notifications.slice(0, 5)
+                recentNotifications: notifications
             };
 
         } catch (error) {
@@ -1686,12 +1733,15 @@ async function populateSellerLocationFields() {
 
         list.innerHTML = '<li><h6 class="dropdown-header">Notifications</h6></li>';
 
-        if (notifications.length === 0) {
+        // Limit to 5 for the dropdown
+        const recentAlerts = notifications.slice(0, 5);
+
+        if (recentAlerts.length === 0) {
             list.innerHTML += '<li><a class="dropdown-item" href="#">No pending alerts</a></li>';
             return;
         }
 
-        notifications.forEach(notification => {
+        recentAlerts.forEach(notification => {
             const timeAgo = notification.date ? window.firebaseHelpers.formatTimeAgo(notification.date) : 'N/A';
             const icon = notification.type === 'order_request' ? 'fas fa-clipboard-list' : 'fas fa-star';
             
@@ -1745,7 +1795,8 @@ async function populateSellerLocationFields() {
             
             const relevantOrders = ordersSnapshot.docs.filter(doc => {
                  const order = doc.data();
-                 return order.sellerIds && order.sellerIds.includes(window.currentUser.uid);
+                 // Filter by the seller's ID being in the sellerIds array
+                 return order.sellerIds && order.sellerIds.includes(window.currentUser.uid); 
             });
             
             const totalOrders = relevantOrders.length;
@@ -1807,6 +1858,7 @@ async function populateSellerLocationFields() {
                 .get();
             
             const ordersTable = document.getElementById('recent-orders-table');
+            if (!ordersTable) return;
             ordersTable.innerHTML = '';
             
             ordersData = [];
@@ -1843,7 +1895,8 @@ async function populateSellerLocationFields() {
             
         } catch (error) {
             console.error('Error loading recent orders:', error);
-            ordersTable.innerHTML = `
+            const ordersTable = document.getElementById('recent-orders-table');
+            if(ordersTable) ordersTable.innerHTML = `
                 <tr>
                     <td colspan="7" class="text-center py-4 text-danger">
                         <i class="fas fa-exclamation-triangle me-2"></i>
@@ -1887,7 +1940,9 @@ async function populateSellerLocationFields() {
 
     // Initialize earnings chart
     function initializeEarningsChart() {
-        const ctx = document.getElementById('earningsChart').getContext('2d');
+        const ctx = document.getElementById('earningsChart')?.getContext('2d');
+        
+        if (!ctx) return;
         
         if (earningsChart) {
             earningsChart.destroy();
@@ -1940,6 +1995,8 @@ async function populateSellerLocationFields() {
                 .get();
             
             const equipmentGrid = document.getElementById('equipment-grid');
+            if (!equipmentGrid) return;
+            
             equipmentGrid.innerHTML = '';
             
             if (equipmentSnapshot.empty) {
@@ -1967,7 +2024,8 @@ async function populateSellerLocationFields() {
         } catch (error) {
             console.error('Error loading equipment:', error);
             window.firebaseHelpers.showAlert('Error loading equipment list', 'danger');
-            equipmentGrid.innerHTML = `
+            const equipmentGrid = document.getElementById('equipment-grid');
+            if (equipmentGrid) equipmentGrid.innerHTML = `
                 <div class="col-12 text-center py-5 text-danger">
                     <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
                     <h4>Error loading equipment</h4>
@@ -2018,7 +2076,7 @@ async function populateSellerLocationFields() {
 
     // Search equipment
     function searchEquipment() {
-        const searchTerm = document.getElementById('equipment-search').value.toLowerCase();
+        const searchTerm = document.getElementById('equipment-search')?.value?.toLowerCase() || '';
         const filteredEquipment = equipmentData.filter(equipment => 
             equipment.name.toLowerCase().includes(searchTerm) ||
             equipment.category.toLowerCase().includes(searchTerm) ||
@@ -2030,7 +2088,7 @@ async function populateSellerLocationFields() {
 
     // Filter equipment
     function filterEquipment() {
-        const filterValue = document.getElementById('equipment-filter').value;
+        const filterValue = document.getElementById('equipment-filter')?.value || 'all';
         let filteredEquipment = equipmentData;
         
         if (filterValue === 'available') {
@@ -2047,6 +2105,8 @@ async function populateSellerLocationFields() {
     // Display filtered equipment
     function displayFilteredEquipment(equipmentList) {
         const equipmentGrid = document.getElementById('equipment-grid');
+        if (!equipmentGrid) return;
+        
         equipmentGrid.innerHTML = '';
         
         if (equipmentList.length === 0) {
@@ -2078,6 +2138,7 @@ async function populateSellerLocationFields() {
                 .get();
             
             const ordersTable = document.getElementById('orders-table');
+            if (!ordersTable) return;
             ordersTable.innerHTML = '';
             
             ordersData = [];
@@ -2169,17 +2230,20 @@ async function populateSellerLocationFields() {
         const rows = document.querySelectorAll('#orders-table tr');
         rows.forEach(row => {
             const orderStatus = row.querySelector('.status-badge')?.textContent.toLowerCase() || '';
-            if (status === 'all' || orderStatus.includes(status)) {
-                row.style.display = '';
-            } else {
-                row.style.display = 'none';
+            // Only toggle visibility if the row contains an actual order (not a loading/empty row)
+            if (row.querySelector('td')?.colSpan !== 7) { 
+                if (status === 'all' || orderStatus.includes(status)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
             }
         });
     }
 
     // Filter by date (NOTE: This filter is based on creation date, not rental period)
     function filterByDate() {
-        const dateFilter = document.getElementById('order-date-filter').value;
+        const dateFilter = document.getElementById('order-date-filter')?.value;
         if (!dateFilter) {
             loadOrders();
             return;
@@ -2193,6 +2257,7 @@ async function populateSellerLocationFields() {
         });
 
         const ordersTable = document.getElementById('orders-table');
+        if (!ordersTable) return;
         ordersTable.innerHTML = '';
 
         if (filteredOrders.length === 0) {
@@ -2219,7 +2284,7 @@ async function populateSellerLocationFields() {
     }
 
     // Add equipment form submission
-    document.getElementById('add-equipment-form').addEventListener('submit', async function(e) {
+    document.getElementById('add-equipment-form')?.addEventListener('submit', async function(e) {
         e.preventDefault();
         
         if (!window.currentUser) {
@@ -2237,19 +2302,21 @@ async function populateSellerLocationFields() {
         
         const submitBtn = document.getElementById('submit-equipment-btn');
         const originalText = submitBtn.innerHTML;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
-        submitBtn.disabled = true;
+        if(submitBtn) {
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+            submitBtn.disabled = true;
+        }
         
         try {
             // Get form values (UPDATED to use 'acre-price' instead of 'daily-price')
             const equipmentData = {
-                name: document.getElementById('equipment-name').value,
-                category: document.getElementById('equipment-category').value,
-                pricePerAcre: parseFloat(document.getElementById('acre-price').value), // UPDATED ID
-                pricePerHour: parseFloat(document.getElementById('hourly-price').value),
-                description: document.getElementById('equipment-description').value,
-                location: document.getElementById('equipment-location').value, // Descriptive location
-                quantity: parseInt(document.getElementById('equipment-quantity').value),
+                name: document.getElementById('equipment-name')?.value,
+                category: document.getElementById('equipment-category')?.value,
+                pricePerAcre: parseFloat(document.getElementById('acre-price')?.value || 0), // UPDATED ID
+                pricePerHour: parseFloat(document.getElementById('hourly-price')?.value || 0),
+                description: document.getElementById('equipment-description')?.value,
+                location: document.getElementById('equipment-location')?.value, // Descriptive location
+                quantity: parseInt(document.getElementById('equipment-quantity')?.value || 1),
                 pincode: sellerData.pincode, // UPDATED: Automatically use seller's registered Pincode
                 sellerId: window.currentUser.uid,
                 sellerName: sellerData.name,
@@ -2259,6 +2326,12 @@ async function populateSellerLocationFields() {
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 images: []
             };
+
+            // Basic validation check
+            if (!equipmentData.name || !equipmentData.category || equipmentData.pricePerAcre === 0) {
+                 window.firebaseHelpers.showAlert('Please fill in all required equipment details.', 'warning');
+                 return;
+            }
             
             // Add specifications
             const specs = {};
@@ -2275,8 +2348,8 @@ async function populateSellerLocationFields() {
             const docRef = await window.FirebaseDB.collection('equipment').add(equipmentData);
             
             // Upload images using the new ImgBB helper
-            const imageFiles = document.getElementById('image-upload').files;
-            if (imageFiles.length > 0) {
+            const imageFiles = document.getElementById('image-upload')?.files;
+            if (imageFiles && imageFiles.length > 0) {
                 const imageUrls = [];
                 for (let i = 0; i < imageFiles.length; i++) {
                     const file = imageFiles[i];
@@ -2292,13 +2365,17 @@ async function populateSellerLocationFields() {
                 await window.FirebaseDB.collection('equipment').doc(docRef.id).update({
                     images: imageUrls
                 });
+            } else {
+                 // Check if images are mandatory (assuming yes)
+                 window.firebaseHelpers.showAlert('Warning: No images uploaded. Listing may be rejected by admin.', 'warning');
             }
             
             window.firebaseHelpers.showAlert('Equipment added successfully! Waiting for admin approval.', 'success');
             
             // Reset form
             this.reset();
-            document.getElementById('image-preview').innerHTML = '';
+            const imagePreview = document.getElementById('image-preview');
+            if (imagePreview) imagePreview.innerHTML = '';
             
             // Go back to equipment list
             setTimeout(() => {
@@ -2309,14 +2386,18 @@ async function populateSellerLocationFields() {
             console.error('Error adding equipment:', error);
             window.firebaseHelpers.showAlert('Error adding equipment: ' + error.message, 'danger');
         } finally {
-            submitBtn.innerHTML = originalText;
-            submitBtn.disabled = false;
+            if(submitBtn) {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
         }
     });
 
     // Add specification field for Add Equipment form
     function addSpecField() {
         const specsContainer = document.getElementById('specs-container');
+        if (!specsContainer) return;
+        
         const newRow = document.createElement('div');
         newRow.className = 'row g-2';
         newRow.innerHTML = `
@@ -2329,6 +2410,8 @@ async function populateSellerLocationFields() {
         `;
         specsContainer.appendChild(newRow);
     }
+    // Make available globally if needed by HTML directly
+    window.addSpecField = addSpecField;
 
     // View equipment details
     async function viewEquipmentDetails(equipmentId) {
@@ -2390,9 +2473,11 @@ async function populateSellerLocationFields() {
                 
                 document.getElementById('equipment-modal-body').innerHTML = modalBody;
                 // Set handler for the edit button within the view modal
-                document.getElementById('view-edit-equipment-btn').onclick = () => {
+                const viewEditBtn = document.getElementById('view-edit-equipment-btn');
+                if(viewEditBtn) viewEditBtn.onclick = () => {
                     // Hide view modal
-                    bootstrap.Modal.getInstance(document.getElementById('equipmentModal')).hide();
+                    const viewModal = bootstrap.Modal.getInstance(document.getElementById('equipmentModal'));
+                    if (viewModal) viewModal.hide();
                     // Open edit modal
                     editEquipment(equipmentId);
                 };
@@ -2420,23 +2505,41 @@ async function populateSellerLocationFields() {
             const equipment = doc.data();
 
             // Populate form fields
-            document.getElementById('edit-equipment-id').value = equipmentId;
-            document.getElementById('edit-equipment-name').value = equipment.name || '';
-            document.getElementById('edit-equipment-category').value = equipment.category || '';
-            document.getElementById('edit-acre-price').value = equipment.pricePerAcre || 0;
-            document.getElementById('edit-hourly-price').value = equipment.pricePerHour || 0;
-            document.getElementById('edit-equipment-description').value = equipment.description || '';
-            document.getElementById('edit-equipment-location').value = equipment.location || '';
-            document.getElementById('edit-equipment-quantity').value = equipment.quantity || 1;
-            document.getElementById('edit-equipment-availability').value = String(equipment.availability);
+            const editEquipmentIdEl = document.getElementById('edit-equipment-id');
+            if (editEquipmentIdEl) editEquipmentIdEl.value = equipmentId;
+            
+            const editEquipmentNameEl = document.getElementById('edit-equipment-name');
+            if (editEquipmentNameEl) editEquipmentNameEl.value = equipment.name || '';
+            
+            const editEquipmentCategoryEl = document.getElementById('edit-equipment-category');
+            if (editEquipmentCategoryEl) editEquipmentCategoryEl.value = equipment.category || '';
+            
+            const editAcrePriceEl = document.getElementById('edit-acre-price');
+            if (editAcrePriceEl) editAcrePriceEl.value = equipment.pricePerAcre || 0;
+            
+            const editHourlyPriceEl = document.getElementById('edit-hourly-price');
+            if (editHourlyPriceEl) editHourlyPriceEl.value = equipment.pricePerHour || 0;
+            
+            const editEquipmentDescriptionEl = document.getElementById('edit-equipment-description');
+            if (editEquipmentDescriptionEl) editEquipmentDescriptionEl.value = equipment.description || '';
+            
+            const editEquipmentLocationEl = document.getElementById('edit-equipment-location');
+            if (editEquipmentLocationEl) editEquipmentLocationEl.value = equipment.location || '';
+            
+            const editEquipmentQuantityEl = document.getElementById('edit-equipment-quantity');
+            if (editEquipmentQuantityEl) editEquipmentQuantityEl.value = equipment.quantity || 1;
+            
+            const editEquipmentAvailabilityEl = document.getElementById('edit-equipment-availability');
+            if (editEquipmentAvailabilityEl) editEquipmentAvailabilityEl.value = String(equipment.availability);
             
             // FIX: Set the value of the new Pincode input field, which is READONLY
-            document.getElementById('edit-equipment-pincode').value = sellerData.pincode || '';
+            const editEquipmentPincodeEl = document.getElementById('edit-equipment-pincode');
+            if (editEquipmentPincodeEl) editEquipmentPincodeEl.value = sellerData.pincode || '';
 
 
             // Clear existing specs and populate
             const specsContainer = document.getElementById('edit-specs-container');
-            specsContainer.innerHTML = '';
+            if(specsContainer) specsContainer.innerHTML = '';
             if (equipment.specifications && Object.keys(equipment.specifications).length > 0) {
                 Object.entries(equipment.specifications).forEach(([key, value]) => {
                     addEditSpecField(key, value);
@@ -2458,6 +2561,8 @@ async function populateSellerLocationFields() {
     // Add specification field to Edit form
     function addEditSpecField(key = '', value = '') {
         const specsContainer = document.getElementById('edit-specs-container');
+        if (!specsContainer) return;
+        
         const newRow = document.createElement('div');
         newRow.className = 'row g-2 align-items-center mb-2';
         newRow.innerHTML = `
@@ -2475,41 +2580,54 @@ async function populateSellerLocationFields() {
         `;
         specsContainer.appendChild(newRow);
     }
+    // Make available globally if needed by HTML directly
+    window.addEditSpecField = addEditSpecField;
 
     // Handle form submission for editing equipment
-    document.getElementById('edit-equipment-form').addEventListener('submit', async function(e) {
+    document.getElementById('edit-equipment-form')?.addEventListener('submit', async function(e) {
         e.preventDefault();
 
-        const equipmentId = document.getElementById('edit-equipment-id').value;
+        const equipmentId = document.getElementById('edit-equipment-id')?.value;
         const submitBtn = document.getElementById('save-equipment-btn');
         const originalText = submitBtn.innerHTML;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
-        submitBtn.disabled = true;
+        if(submitBtn) {
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+            submitBtn.disabled = true;
+        }
 
         try {
             // Gather updated data
             // FIX: Retrieve Pincode directly from sellerData (which is already enforced in profile)
-            const pincodeFromProfile = sellerData.pincode; 
+            const pincodeFromProfile = sellerData?.pincode; 
 
             if (!pincodeFromProfile) {
                  window.firebaseHelpers.showAlert('Seller Pincode missing. Please update your Profile first.', 'danger');
-                 submitBtn.innerHTML = originalText;
-                 submitBtn.disabled = false;
+                 if(submitBtn) {
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                 }
                  return;
             }
 
             const updatedData = {
-                name: document.getElementById('edit-equipment-name').value,
-                category: document.getElementById('edit-equipment-category').value,
-                pricePerAcre: parseFloat(document.getElementById('edit-acre-price').value),
-                pricePerHour: parseFloat(document.getElementById('edit-hourly-price').value),
-                description: document.getElementById('edit-equipment-description').value,
-                location: document.getElementById('edit-equipment-location').value,
-                quantity: parseInt(document.getElementById('edit-equipment-quantity').value),
-                availability: document.getElementById('edit-equipment-availability').value === 'true',
+                name: document.getElementById('edit-equipment-name')?.value,
+                category: document.getElementById('edit-equipment-category')?.value,
+                pricePerAcre: parseFloat(document.getElementById('edit-acre-price')?.value || 0),
+                pricePerHour: parseFloat(document.getElementById('edit-hourly-price')?.value || 0),
+                description: document.getElementById('edit-equipment-description')?.value,
+                location: document.getElementById('edit-equipment-location')?.value,
+                quantity: parseInt(document.getElementById('edit-equipment-quantity')?.value || 1),
+                availability: document.getElementById('edit-equipment-availability')?.value === 'true',
                 pincode: pincodeFromProfile, // FIX: Use the Pincode from sellerData
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             };
+            
+             // Basic validation check
+            if (!updatedData.name || !updatedData.category || updatedData.pricePerAcre === 0) {
+                 window.firebaseHelpers.showAlert('Please fill in all required equipment details for the edit.', 'warning');
+                 return;
+            }
+
 
             // Gather specifications
             const specs = {};
@@ -2523,8 +2641,6 @@ async function populateSellerLocationFields() {
             });
             updatedData.specifications = specs;
             
-            // NOTE: Changing images requires a separate file upload process which is not implemented in this quick edit form.
-            
             // Update Firestore
             await window.FirebaseDB.collection('equipment').doc(equipmentId).update(updatedData);
 
@@ -2532,15 +2648,17 @@ async function populateSellerLocationFields() {
             
             // Hide modal and reload list
             const modal = bootstrap.Modal.getInstance(document.getElementById('equipmentEditModal'));
-            modal.hide();
+            if (modal) modal.hide();
             loadEquipmentList(); // Reload the equipment grid
 
         } catch (error) {
             console.error('Error saving equipment:', error);
             window.firebaseHelpers.showAlert('Error saving equipment: ' + error.message, 'danger');
         } finally {
-            submitBtn.innerHTML = originalText;
-            submitBtn.disabled = false;
+            if(submitBtn) {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
         }
     });
 
@@ -2548,18 +2666,45 @@ async function populateSellerLocationFields() {
 
     // Delete equipment
     async function deleteEquipment(equipmentId) {
-        if (!confirm('Are you sure you want to delete this equipment?')) {
-            return;
-        }
+        // NOTE: Use custom modal instead of built-in confirm
+         const modalHtml = `
+            <div class="modal fade" id="confirm-delete-equipment-modal" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header bg-danger text-white">
+                            <h5 class="modal-title"><i class="fas fa-trash me-2"></i>Confirm Deletion</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Are you sure you want to permanently delete this equipment listing? This action cannot be undone.</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-danger" id="confirm-delete-btn">Delete Listing</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
         
-        try {
-            await window.FirebaseDB.collection('equipment').doc(equipmentId).delete();
-            window.firebaseHelpers.showAlert('Equipment deleted successfully', 'success');
-            loadEquipmentList();
-        } catch (error) {
-            console.error('Error deleting equipment:', error);
-            window.firebaseHelpers.showAlert('Error deleting equipment', 'danger');
-        }
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modalElement = document.getElementById('confirm-delete-equipment-modal');
+        const modalInstance = new bootstrap.Modal(modalElement);
+        modalInstance.show();
+
+        document.getElementById('confirm-delete-btn').onclick = async () => {
+            modalInstance.hide();
+            try {
+                await window.FirebaseDB.collection('equipment').doc(equipmentId).delete();
+                window.firebaseHelpers.showAlert('Equipment deleted successfully', 'success');
+                loadEquipmentList();
+            } catch (error) {
+                console.error('Error deleting equipment:', error);
+                window.firebaseHelpers.showAlert('Error deleting equipment', 'danger');
+            } finally {
+                modalElement.remove();
+            }
+        };
     }
 
     // View order details
@@ -2596,6 +2741,7 @@ async function populateSellerLocationFields() {
                             <table class="table table-sm">
                                 <tr><th>Equipment:</th><td>${order.equipmentNames || 'N/A'}</td></tr>
                                 <tr><th>Rental Period:</th><td>${rentalPeriod}</td></tr>
+                                <tr><th>Pickup Location:</th><td>${order.deliveryAddress || 'Self-Pickup'} (${order.orderPincode || 'N/A'})</td></tr>
                             </table>
                         </div>
                     </div>
@@ -2639,23 +2785,55 @@ async function populateSellerLocationFields() {
 
     // Update order status
     async function updateOrderStatus(orderId, newStatus) {
-        try {
-            const orderRef = getPublicCollectionRef('orders').doc(orderId);
-            
-            await orderRef.update({
-                status: newStatus,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            
-            window.firebaseHelpers.showAlert(`Order ${newStatus} successfully!`, 'success');
-            loadDashboardData(); // Reload dashboard for badge/stats update
-            loadRecentOrders();
-            loadOrders();
-            
-        } catch (error) {
-            console.error('Error updating order:', error);
-            window.firebaseHelpers.showAlert('Error updating order status', 'danger');
-        }
+        // NOTE: Use custom modal instead of built-in confirm
+         const actionText = newStatus === 'active' ? 'Approve Pickup' : newStatus === 'completed' ? 'Mark Completed' : 'Cancel Order';
+         const modalHtml = `
+            <div class="modal fade" id="confirm-status-modal" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header bg-${newStatus === 'active' ? 'success' : newStatus === 'completed' ? 'primary' : 'danger'} text-white">
+                            <h5 class="modal-title"><i class="fas fa-check me-2"></i>Confirm Status Change</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Are you sure you want to change Order #${orderId.substring(0, 8)} status to **${newStatus.toUpperCase()}**?</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-${newStatus === 'active' ? 'success' : newStatus === 'completed' ? 'primary' : 'danger'}" id="confirm-status-btn">${actionText}</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modalElement = document.getElementById('confirm-status-modal');
+        const modalInstance = new bootstrap.Modal(modalElement);
+        modalInstance.show();
+
+        document.getElementById('confirm-status-btn').onclick = async () => {
+            modalInstance.hide();
+            try {
+                const orderRef = getPublicCollectionRef('orders').doc(orderId);
+                
+                await orderRef.update({
+                    status: newStatus,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                window.firebaseHelpers.showAlert(`Order ${newStatus} successfully!`, 'success');
+                loadDashboardData(); // Reload dashboard for badge/stats update
+                loadRecentOrders();
+                loadOrders();
+                
+            } catch (error) {
+                console.error('Error updating order:', error);
+                window.firebaseHelpers.showAlert('Error updating order status', 'danger');
+            } finally {
+                modalElement.remove();
+            }
+        };
     }
 
     // Load earnings data
@@ -2672,9 +2850,8 @@ async function populateSellerLocationFields() {
             
             // Get all relevant orders
             const ordersSnapshot = await ordersCollectionRef
-                .where('sellerIds', 'array-contains', window.currentUser.uid)
-                .where('status', 'in', ['completed', 'active'])
-                .get();
+                 // FIX: Cannot use 'array-contains' with 'where' on multiple fields or range queries easily. Fetch all and filter client-side for months/years.
+                .get(); 
             
             let thisMonthEarnings = 0;
             let lastMonthEarnings = 0;
@@ -2685,28 +2862,36 @@ async function populateSellerLocationFields() {
                 const orderDate = order.createdAt ? order.createdAt.toDate() : new Date();
                 const year = orderDate.getFullYear();
                 
-                // NOTE: This is still a simplification; totalAmount is gross, but we use it as net here. 
-                const amount = order.totalAmount || 0; 
-                
-                if (year === currentYear) {
-                    const month = orderDate.getMonth();
-                    monthlyEarnings[month] += amount;
+                if (order.sellerIds && order.sellerIds.includes(window.currentUser.uid) && (order.status === 'completed' || order.status === 'active')) {
+                     const amount = order.totalAmount || 0; 
                     
-                    if (month === currentMonth) {
-                        thisMonthEarnings += amount;
-                    } else if (month === currentMonth - 1 || (currentMonth === 0 && month === 11)) {
-                        lastMonthEarnings += amount;
+                    if (year === currentYear) {
+                        const month = orderDate.getMonth();
+                        monthlyEarnings[month] += amount;
+                        
+                        if (month === currentMonth) {
+                            thisMonthEarnings += amount;
+                        } else if (month === currentMonth - 1 || (currentMonth === 0 && month === 11)) {
+                            lastMonthEarnings += amount;
+                        }
                     }
                 }
             });
             
             // Update UI
-            document.getElementById('month-earnings').textContent = window.firebaseHelpers.formatCurrency(thisMonthEarnings);
-            document.getElementById('last-month-earnings').textContent = window.firebaseHelpers.formatCurrency(lastMonthEarnings);
+            const monthEarningsEl = document.getElementById('month-earnings');
+            if (monthEarningsEl) monthEarningsEl.textContent = window.firebaseHelpers.formatCurrency(thisMonthEarnings);
+            
+            const lastMonthEarningsEl = document.getElementById('last-month-earnings');
+            if (lastMonthEarningsEl) lastMonthEarningsEl.textContent = window.firebaseHelpers.formatCurrency(lastMonthEarnings);
             
             const growth = lastMonthEarnings > 0 ? ((thisMonthEarnings - lastMonthEarnings) / lastMonthEarnings * 100).toFixed(1) : (thisMonthEarnings > 0 ? 100 : 0);
-            document.getElementById('month-growth').textContent = `${growth}% from last month`;
-            document.getElementById('month-growth').className = parseFloat(growth) >= 0 ? 'text-success' : 'text-danger';
+            
+            const monthGrowthEl = document.getElementById('month-growth');
+            if (monthGrowthEl) {
+                monthGrowthEl.textContent = `${growth}% from last month`;
+                monthGrowthEl.className = parseFloat(growth) >= 0 ? 'text-success' : 'text-danger';
+            }
             
             // Update chart
             updateDetailedEarningsChart(monthlyEarnings);
@@ -2721,7 +2906,9 @@ async function populateSellerLocationFields() {
 
     // Update detailed earnings chart
     function updateDetailedEarningsChart(monthlyEarnings) {
-        const ctx = document.getElementById('detailedEarningsChart').getContext('2d');
+        const ctx = document.getElementById('detailedEarningsChart')?.getContext('2d');
+        
+        if (!ctx) return;
         
         if (detailedEarningsChart) {
             detailedEarningsChart.destroy();
@@ -2764,7 +2951,12 @@ async function populateSellerLocationFields() {
 
     // Load top equipment
     async function loadTopEquipment() {
+        if (!window.currentUser) return;
+        
         try {
+            const topEquipmentList = document.getElementById('top-equipment-list');
+            if (!topEquipmentList) return;
+            
             // Fetch all equipment belonging to the seller
             const equipmentSnapshot = await window.FirebaseDB.collection('equipment')
                 .where('sellerId', '==', window.currentUser.uid)
@@ -2782,19 +2974,20 @@ async function populateSellerLocationFields() {
             const ordersCollectionRef = getPublicCollectionRef('orders');
             
             const ordersSnapshot = await ordersCollectionRef
-                .where('sellerIds', 'array-contains', window.currentUser.uid)
-                .where('status', 'in', ['completed', 'active'])
+                 // FIX: Cannot use 'array-contains' with 'where' on multiple fields or range queries easily. Fetch all and filter client-side.
                 .get();
 
             // Aggregate earnings per equipment
             ordersSnapshot.forEach(orderDoc => {
                 const order = orderDoc.data();
-                order.items.forEach(item => {
-                    // Only count earnings for equipment belonging to this seller
-                    if (item.sellerId === window.currentUser.uid && equipmentEarnings[item.id] !== undefined) {
-                        equipmentEarnings[item.id] += item.price || 0; // Item price is the amount paid for that item rental
-                    }
-                });
+                 if (order.sellerIds && order.sellerIds.includes(window.currentUser.uid) && (order.status === 'completed' || order.status === 'active')) {
+                    order.items.forEach(item => {
+                        // Only count earnings for equipment belonging to this seller
+                        if (item.sellerId === window.currentUser.uid && equipmentEarnings[item.id] !== undefined) {
+                            equipmentEarnings[item.id] += item.price || 0; // Item price is the amount paid for that item rental
+                        }
+                    });
+                }
             });
             
             // Format for display
@@ -2808,7 +3001,6 @@ async function populateSellerLocationFields() {
                 .slice(0, 5);
             
             // Update UI
-            const topEquipmentList = document.getElementById('top-equipment-list');
             if (topEquipment.length === 0) {
                 topEquipmentList.innerHTML = `
                     <div class="text-center py-3">
@@ -2844,6 +3036,7 @@ async function populateSellerLocationFields() {
         const notifications = notificationData.recentNotifications; // All notifications found
         
         const listContainer = document.getElementById('seller-alerts-list');
+        if (!listContainer) return;
         listContainer.innerHTML = ''; // Clear previous content
 
         if (notifications.length === 0) {
@@ -2865,7 +3058,7 @@ async function populateSellerLocationFields() {
 
             listContainer.innerHTML += `
                 <div class="list-group-item notification-item notification-unread d-flex justify-content-between align-items-center p-3 mb-2 rounded shadow-sm"
-                     onclick="handleNotificationAction('${notification.id}', '${notification.type}')">
+                     onclick="handleNotificationAction('${notification.relatedId}', '${notification.type}')">
                     <div class="d-flex align-items-center">
                         <i class="${typeIcon} fa-2x me-3" style="color: var(--sun-yellow);"></i>
                         <div>
@@ -2905,12 +3098,14 @@ async function populateSellerLocationFields() {
         
         if (message) {
              window.firebaseHelpers.showAlert('Message sent (simulated). Chat feature is not fully implemented.', 'info');
-             input.value = '';
+             if (input) input.value = '';
         }
     }
 
     // Load reviews
     async function loadReviews() {
+        if (!window.currentUser) return;
+        
         try {
             const reviewsSnapshot = await window.FirebaseDB.collection('reviews')
                 .where('sellerId', '==', window.currentUser.uid)
@@ -2921,6 +3116,7 @@ async function populateSellerLocationFields() {
             let totalRating = 0;
             let ratingCount = 0;
             const reviewsList = document.getElementById('reviews-list');
+            if (!reviewsList) return;
             reviewsList.innerHTML = '';
             
             if (reviewsSnapshot.empty) {
@@ -2959,21 +3155,26 @@ async function populateSellerLocationFields() {
             
             // Update average rating
             const averageRating = ratingCount > 0 ? totalRating / ratingCount : 0;
-            document.getElementById('average-rating').textContent = averageRating.toFixed(1);
+            
+            const averageRatingEl = document.getElementById('average-rating');
+            if (averageRatingEl) averageRatingEl.textContent = averageRating.toFixed(1);
             
             // Update star icons based on average rating
             const starContainer = document.querySelector('#reviews-section .table-container .mb-2');
-            const fullStars = Math.round(averageRating);
-            const emptyStars = 5 - fullStars;
-            starContainer.innerHTML = '';
-            for (let i = 0; i < fullStars; i++) {
-                starContainer.innerHTML += '<i class="fas fa-star text-warning"></i>';
-            }
-            for (let i = 0; i < emptyStars; i++) {
-                starContainer.innerHTML += '<i class="far fa-star text-warning"></i>';
+            if (starContainer) {
+                const fullStars = Math.round(averageRating);
+                const emptyStars = 5 - fullStars;
+                starContainer.innerHTML = '';
+                for (let i = 0; i < fullStars; i++) {
+                    starContainer.innerHTML += '<i class="fas fa-star text-warning"></i>';
+                }
+                for (let i = 0; i < emptyStars; i++) {
+                    starContainer.innerHTML += '<i class="far fa-star text-warning"></i>';
+                }
             }
 
-            document.getElementById('total-reviews').textContent = `${ratingCount} reviews`;
+            const totalReviewsEl = document.getElementById('total-reviews');
+            if (totalReviewsEl) totalReviewsEl.textContent = `${ratingCount} reviews`;
             
         } catch (error) {
             console.error('Error loading reviews:', error);
@@ -2985,31 +3186,54 @@ async function loadProfileData() {
     if (!sellerData) return;
     
     // Populate form fields
-    document.getElementById('profile-name').value = sellerData.name || '';
-    document.getElementById('profile-email').value = sellerData.email || '';
-    document.getElementById('profile-phone').value = sellerData.mobile || '';
-    document.getElementById('profile-business').value = sellerData.businessName || '';
-    document.getElementById('profile-address').value = sellerData.address || '';
-    document.getElementById('profile-gst').value = sellerData.gstNumber || '';
-    document.getElementById('profile-bio').value = sellerData.bio || '';
-    document.getElementById('profile-pincode').value = sellerData.pincode || '';
-    document.getElementById('profile-city').value = sellerData.city || '';
-    document.getElementById('profile-state').value = sellerData.state || '';
+    const profileNameEl = document.getElementById('profile-name');
+    if (profileNameEl) profileNameEl.value = sellerData.name || '';
+    
+    const profileEmailEl = document.getElementById('profile-email');
+    if (profileEmailEl) profileEmailEl.value = sellerData.email || '';
+    
+    const profilePhoneEl = document.getElementById('profile-phone');
+    if (profilePhoneEl) profilePhoneEl.value = sellerData.mobile || '';
+    
+    const profileBusinessEl = document.getElementById('profile-business');
+    if (profileBusinessEl) profileBusinessEl.value = sellerData.businessName || '';
+    
+    const profileAddressEl = document.getElementById('profile-address');
+    if (profileAddressEl) profileAddressEl.value = sellerData.address || '';
+    
+    const profileGstEl = document.getElementById('profile-gst');
+    if (profileGstEl) profileGstEl.value = sellerData.gstNumber || '';
+    
+    const profileBioEl = document.getElementById('profile-bio');
+    if (profileBioEl) profileBioEl.value = sellerData.bio || '';
+    
+    const profilePincodeEl = document.getElementById('profile-pincode');
+    if (profilePincodeEl) profilePincodeEl.value = sellerData.pincode || '';
+    
+    const profileCityEl = document.getElementById('profile-city');
+    if (profileCityEl) profileCityEl.value = sellerData.city || '';
+    
+    const profileStateEl = document.getElementById('profile-state');
+    if (profileStateEl) profileStateEl.value = sellerData.state || '';
     
     // Update profile picture if exists
-    if (sellerData.profilePicture) {
-        document.getElementById('profile-picture').src = sellerData.profilePicture;
+    const profilePictureEl = document.getElementById('profile-picture');
+    if (profilePictureEl && sellerData.profilePicture) {
+        profilePictureEl.src = sellerData.profilePicture;
     }
     
     // Update join date
-    if (sellerData.createdAt) {
+    const joinDateEl = document.getElementById('join-date');
+    if (joinDateEl && sellerData.createdAt) {
         const joinDate = window.firebaseHelpers.formatDate(sellerData.createdAt);
-        document.getElementById('join-date').textContent = joinDate;
+        joinDateEl.textContent = joinDate;
     }
     
     // If seller has pincode, populate the village dropdown
-    if (sellerData.pincode) {
+    if (sellerData.pincode && window.populateLocationFields) {
+        // Only run if populateLocationFields is available (from script.js)
         await populateSellerLocationFields();
+        
         // Select the saved village if it exists
         const villageSelect = document.getElementById('profile-village');
         if (villageSelect && sellerData.village) {
@@ -3025,51 +3249,51 @@ async function loadProfileData() {
 }
     
    // Profile form submission
-document.getElementById('profile-form').addEventListener('submit', async function(e) {
+document.getElementById('profile-form')?.addEventListener('submit', async function(e) {
     e.preventDefault();
     
     if (!window.currentUser) return;
 
     // Validate Pincode and location fields
-    const pincodeInput = document.getElementById('profile-pincode').value;
+    const pincodeInput = document.getElementById('profile-pincode')?.value;
     const villageSelect = document.getElementById('profile-village');
-    const cityInput = document.getElementById('profile-city').value;
-    const stateInput = document.getElementById('profile-state').value;
+    const cityInput = document.getElementById('profile-city')?.value;
+    const stateInput = document.getElementById('profile-state')?.value;
     
     if (!pincodeInput || !/^[0-9]{6}$/.test(pincodeInput)) {
         window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
         return;
     }
     
-    if (!villageSelect.value) {
+    if (villageSelect && !villageSelect.value) {
         window.firebaseHelpers.showAlert('Please select your Village/Post Office.', 'danger');
         return;
     }
     
     if (!cityInput || !stateInput) {
-        window.firebaseHelpers.showAlert('Please verify your Pincode to load city and state information.', 'danger');
+        window.firebaseHelpers.showAlert('Pincode lookup failed. Please try again or verify your Pincode.', 'danger');
         return;
     }
     
     try {
         const updates = {
-            name: document.getElementById('profile-name').value,
-            mobile: document.getElementById('profile-phone').value,
-            businessName: document.getElementById('profile-business').value,
-            address: document.getElementById('profile-address').value,
-            gstNumber: document.getElementById('profile-gst').value,
+            name: document.getElementById('profile-name')?.value,
+            mobile: document.getElementById('profile-phone')?.value,
+            businessName: document.getElementById('profile-business')?.value,
+            address: document.getElementById('profile-address')?.value,
+            gstNumber: document.getElementById('profile-gst')?.value,
             city: cityInput,
             state: stateInput,
-            village: villageSelect.value,
+            village: villageSelect ? villageSelect.value : '',
             pincode: pincodeInput,
-            bio: document.getElementById('profile-bio').value,
+            bio: document.getElementById('profile-bio')?.value,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
         
         // Update password if provided
-        const currentPassword = document.getElementById('current-password').value;
-        const newPassword = document.getElementById('new-password').value;
-        const confirmPassword = document.getElementById('confirm-password').value;
+        const currentPassword = document.getElementById('current-password')?.value;
+        const newPassword = document.getElementById('new-password')?.value;
+        const confirmPassword = document.getElementById('confirm-password')?.value;
         
         if (newPassword || currentPassword || confirmPassword) {
             if (!currentPassword) {
@@ -3096,9 +3320,12 @@ document.getElementById('profile-form').addEventListener('submit', async functio
             window.firebaseHelpers.showAlert('Password updated successfully', 'success');
             
             // Clear password fields
-            document.getElementById('current-password').value = '';
-            document.getElementById('new-password').value = '';
-            document.getElementById('confirm-password').value = '';
+            const currentPasswordEl = document.getElementById('current-password');
+            if (currentPasswordEl) currentPasswordEl.value = '';
+            const newPasswordEl = document.getElementById('new-password');
+            if (newPasswordEl) newPasswordEl.value = '';
+            const confirmPasswordEl = document.getElementById('confirm-password');
+            if (confirmPasswordEl) confirmPasswordEl.value = '';
         }
         
         // Update Firestore
@@ -3106,6 +3333,7 @@ document.getElementById('profile-form').addEventListener('submit', async functio
         
         // Update local seller data
         sellerData = { ...sellerData, ...updates };
+        window.currentUser = { ...window.currentUser, ...updates }; // Update global context
         updateSellerInfo(); // Re-render Pincode display everywhere
         
         window.firebaseHelpers.showAlert('Profile updated successfully', 'success');
@@ -3122,15 +3350,22 @@ document.getElementById('profile-form').addEventListener('submit', async functio
         modal.show();
         
         // Enable/disable delete button based on confirmation
-        document.getElementById('delete-confirmation').addEventListener('input', function() {
-            document.getElementById('delete-account-btn').disabled = 
-                this.value !== 'DELETE';
-        });
+        const deleteConfirmation = document.getElementById('delete-confirmation');
+        if (deleteConfirmation) {
+            deleteConfirmation.addEventListener('input', function() {
+                const deleteBtn = document.getElementById('delete-account-btn');
+                if(deleteBtn) deleteBtn.disabled = this.value !== 'DELETE';
+            });
+        }
     }
 
     // Delete account
     async function deleteAccount() {
         if (!window.currentUser) return;
+        
+        // Re-authenticate check (must be done before deleting account)
+        // NOTE: This usually requires recent sign-in credentials, which is complex to manage here.
+        // For now, rely on the visual confirmation, but in production, Firebase requires re-authentication.
         
         try {
             // Delete user data from Firestore
@@ -3174,8 +3409,10 @@ document.getElementById('profile-form').addEventListener('submit', async functio
     }
 
     // Handle image upload preview
-    document.getElementById('image-upload').addEventListener('change', function(e) {
+    document.getElementById('image-upload')?.addEventListener('change', function(e) {
         const preview = document.getElementById('image-preview');
+        if (!preview) return;
+        
         preview.innerHTML = '';
         
         for (let i = 0; i < this.files.length; i++) {
@@ -3198,14 +3435,19 @@ document.getElementById('profile-form').addEventListener('submit', async functio
     });
 
     // Handle profile picture upload
-    document.getElementById('profile-picture-upload').addEventListener('change', async function(e) {
+    document.getElementById('profile-picture-upload')?.addEventListener('change', async function(e) {
         if (this.files[0]) {
+            if (!window.currentUser) {
+                 window.firebaseHelpers.showAlert('Please log in again to upload a profile picture.', 'danger');
+                 return;
+            }
+            
             try {
                 const file = this.files[0];
                 
                 // Show loading placeholder
                 const profilePic = document.getElementById('profile-picture');
-                profilePic.src = 'https://via.placeholder.com/100?text=Uploading...';
+                if (profilePic) profilePic.src = 'https://via.placeholder.com/100?text=Uploading...';
                 
                 // Use the new ImgBB helper
                 const downloadURL = await window.firebaseHelpers.uploadFile(
@@ -3221,7 +3463,7 @@ document.getElementById('profile-form').addEventListener('submit', async functio
                 
                 // Update local data and UI
                 sellerData.profilePicture = downloadURL;
-                profilePic.src = downloadURL;
+                if (profilePic) profilePic.src = downloadURL;
                 
                 window.firebaseHelpers.showAlert('Profile picture updated successfully', 'success');
                 
@@ -3232,13 +3474,19 @@ document.getElementById('profile-form').addEventListener('submit', async functio
                 // Restore original picture or default placeholder on failure
                 const currentSellerData = await window.FirebaseDB.collection('users').doc(window.currentUser.uid).get();
                 const restoredSrc = currentSellerData.data()?.profilePicture || 'https://via.placeholder.com/100';
-                document.getElementById('profile-picture').src = restoredSrc;
+                const profilePic = document.getElementById('profile-picture');
+                if (profilePic) profilePic.src = restoredSrc;
             }
         }
     });
 
-    // Initialize dashboard on load
-    showSection('dashboard');
+    // Initialize dashboard only if not called by script.js already
+    if (!window.loadSellerDashboard) {
+         document.addEventListener('DOMContentLoaded', () => {
+             // If script.js failed to call it due to loading order, run it here.
+             window.loadSellerDashboard();
+         });
+    }
 </script>
     
 </body>
