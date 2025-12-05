@@ -195,31 +195,50 @@
                     </div>
                 </div>
                 <div class="modal-footer d-block">
-                    <div class="row g-2 align-items-center">
-                        <div class="col-md-4">
-                            <label for="rental-duration-type" class="form-label mb-0 small">Rental Duration</label>
-                            <select class="form-select" id="rental-duration-type">
-                                <option value="acre">By Acre</option>
-                                <option value="hour">By Hour</option>
-                            </select>
-                        </div>
-                         <div class="col-md-4">
-                            <label for="rental-duration-value" class="form-label mb-0 small">Number of Acres/Hours</label>
-                            <input type="number" class="form-control" id="rental-duration-value" value="1" min="1">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label mb-0 small">Total Price</label>
-                            <div class="h5 mb-0 text-success" id="modal-total-price">₹0</div>
+                    <!-- NEW RENTAL & PICKUP DETAILS SECTION -->
+                    <div class="card p-3 mb-3 bg-light">
+                        <div class="row g-3">
+                            <!-- Column 1: Rental Duration -->
+                            <div class="col-md-4">
+                                <label for="rental-duration-type" class="form-label mb-1 small fw-bold">1. Rental Duration</label>
+                                <select class="form-select mb-2" id="rental-duration-type">
+                                    <option value="acre">By Acre</option>
+                                    <option value="hour">By Hour</option>
+                                </select>
+                                <input type="number" class="form-control" id="rental-duration-value" value="1" min="1">
+                            </div>
+                            <!-- Column 2: Pickup Date -->
+                            <div class="col-md-4">
+                                <label for="pickup-date" class="form-label mb-1 small fw-bold text-danger">2. Required Pickup Date *</label>
+                                <input type="date" class="form-control" id="pickup-date" required>
+                                <small class="text-muted d-block mt-1">Date customer will pickup equipment.</small>
+                            </div>
+                            <!-- Column 3: Pickup Time -->
+                            <div class="col-md-4">
+                                <label for="pickup-time" class="form-label mb-1 small fw-bold text-danger">3. Required Pickup Time *</label>
+                                <input type="time" class="form-control" id="pickup-time" required>
+                                <small class="text-muted d-block mt-1">Time customer will pickup equipment.</small>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div class="d-flex gap-2 mt-3">
-                        <button type="button" class="btn btn-outline-primary flex-fill" id="add-to-cart-btn" onclick="addToCartModal()">
-                            <i class="fas fa-shopping-cart me-2"></i>Add to Cart
-                        </button>
-                        <button type="button" class="btn btn-warning flex-fill" id="rent-now-btn" onclick="rentNowModal()">
-                            <i class="fas fa-calendar-check me-2"></i>Rent Now
-                        </button>
+                    <!-- END NEW RENTAL & PICKUP DETAILS SECTION -->
+
+                    <!-- TOTAL AND ACTION BUTTONS -->
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-4">
+                            <label class="form-label mb-0 small fw-bold">Total Rental Price</label>
+                            <div class="h3 mb-0 text-success" id="modal-total-price">₹0</div>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-outline-primary flex-fill" id="add-to-cart-btn" onclick="addToCartModal()">
+                                    <i class="fas fa-shopping-cart me-2"></i>Add to Cart
+                                </button>
+                                <button type="button" class="btn btn-warning flex-fill" id="rent-now-btn" onclick="rentNowModal()">
+                                    <i class="fas fa-calendar-check me-2"></i>Rent Now
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
