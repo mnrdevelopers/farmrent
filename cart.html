@@ -36,10 +36,8 @@
                 <ul class="navbar-nav align-items-center">
                     <!-- NEW: Pincode Display in Navbar -->
                     <li class="nav-item d-none d-lg-block">
-                        <span class="nav-link" id="navbar-pincode-display">
-                            <span class="badge bg-warning text-dark p-2" onclick="showPincodeModal()" style="cursor: pointer;">
-                                <i class="fas fa-map-marker-alt me-1"></i> <strong id="current-pincode-value-nav">All Locations</strong>
-                            </span>
+                        <span class="nav-link pincode-indicator" id="navbar-pincode-display" onclick="showPincodeModal()" style="cursor: pointer;">
+                            <i class="fas fa-map-marker-alt me-1"></i> <strong id="current-pincode-value-nav">All Locations</strong>
                         </span>
                     </li>
                     <!-- END NEW -->
@@ -61,6 +59,12 @@
     <section class="py-5">
         <div class="container">
             <h1 class="section-title">Your Rental Cart</h1>
+            
+            <!-- NEW: Pincode Compatibility Warning -->
+            <div id="cart-pincode-warning" class="mb-4">
+                <!-- Warning will be inserted by JavaScript -->
+            </div>
+            
             <div class="row">
                 <div class="col-lg-8">
                     <div id="cart-items-container" class="card p-3 shadow-sm">
@@ -108,43 +112,85 @@
         </div>
     </footer>
     
-    <!-- Pincode Prompt Modal (Needed here too for consistency) -->
-    <div class="modal fade" id="pincodeModal" tabindex="-1">
+    <!-- Pincode Prompt Modal (NEW) -->
+    <div class="modal fade pincode-modal" id="pincodeModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header bg-warning text-dark">
-                    <h5 class="modal-title"><i class="fas fa-map-marker-alt me-2"></i>Select Your Location</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-map-marker-alt me-2"></i>
+                        Choose Your Location
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <form id="pincode-form">
                     <div class="modal-body">
-                        <p>To show you the most relevant equipment from local sellers, please enter your 6-digit Pincode.</p>
+                        <div class="mb-4">
+                            <p class="mb-2">Enter your pincode to see equipment available in your area</p>
+                            
+                            <!-- Current Location Button -->
+                            <div class="d-grid mb-3">
+                                <button type="button" class="btn btn-outline-primary" id="location-access-btn" 
+                                        onclick="getCurrentLocationPincode()">
+                                    <i class="fas fa-location-arrow me-2"></i>
+                                    Use Current Location
+                                </button>
+                                <small class="text-muted mt-1 text-center" id="location-status"></small>
+                            </div>
+                            
+                            <!-- Divider -->
+                            <div class="divider text-center mb-3">
+                                <span class="text-muted small">OR ENTER PINCODE</span>
+                            </div>
+                            
+                            <!-- Pincode Input -->
+                            <div class="input-group input-group-lg">
+                                <input type="text" 
+                                        class="form-control" 
+                                        id="pincode-input"
+                                        placeholder="Enter 6-digit pincode"
+                                        maxlength="6"
+                                        pattern="[0-9]{6}"
+                                        inputmode="numeric">
+                                <button class="btn btn-primary" type="submit">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                            </div>
+                            
+                            <!-- Pincode Help -->
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    We'll show equipment from sellers in your area
+                                </small>
+                            </div>
+                        </div>
                         
-                        <!-- LOCATION ACCESS BUTTON -->
-                        <div class="d-grid mb-3">
-                             <button type="button" class="btn btn-outline-info" id="location-access-btn" onclick="getCurrentLocationPincode()">
-                                <i class="fas fa-location-arrow me-2"></i> Use Current Location
-                            </button>
-                            <small class="text-muted mt-1" id="location-status"></small>
-                        </div>
-                        <!-- END LOCATION ACCESS BUTTON -->
-
-                        <div class="divider text-center mb-3">
-                            <span class="text-muted small">OR ENTER MANUALLY</span>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="pincode-input" class="form-label">Pincode *</label>
-                            <input type="text" class="form-control form-control-lg" id="pincode-input" pattern="[0-9]{6}" maxlength="6" placeholder="Enter 6-digit Pincode" required>
-                        </div>
-                        <div class="form-text text-danger">
-                            **Mandatory to view localized equipment listings.**
+                        <!-- Popular Cities (Optional) -->
+                        <div id="popular-cities">
+                            <h6 class="text-muted mb-2">Popular Locations (Demo):</h6>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="savePincode('500001')">
+                                    Hyderabad
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="savePincode('110001')">
+                                    Delhi
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="savePincode('400001')">
+                                    Mumbai
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="savePincode('600001')">
+                                    Chennai
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-secondary" onclick="skipPincode()">Skip (View all)</button>
-                        <button type="submit" class="btn btn-primary" id="save-pincode-btn">
-                            <i class="fas fa-check me-2"></i>Apply Filter
+                        <button type="button" class="btn btn-outline-secondary" onclick="skipPincode()">
+                            Skip for now
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            Apply Location
                         </button>
                     </div>
                 </form>
