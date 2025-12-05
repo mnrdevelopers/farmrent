@@ -102,7 +102,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadOrdersPage();
         updateNavbarPincodeDisplay();
     } else if (path === 'seller.html' || path === 'seller-pending.html') {
-        loadSellerDashboard();
+        // FIX: Check if loadSellerDashboard is defined (it's defined in seller.js, 
+        // which might load after this script or in a separate scope.
+        // It is defined as a global function in seller.js now.)
+        if (window.loadSellerDashboard) {
+            window.loadSellerDashboard();
+        } else {
+            console.warn("loadSellerDashboard is not defined. Ensure seller.js is loaded and exported correctly.");
+        }
         updateNavbarPincodeDisplay();
     } else if (path === 'index.html' || path === '') { // Handles index.html
         loadHomepageData();
@@ -166,7 +173,7 @@ async function getPlatformFeeRate() {
 /**
  * Fetches location data (Post Offices, District, State) for a given Pincode using the India Post API.
  * @param {string} pincode 
- * @returns {Promise<Array<Object>>} Array of Post Office objects, or empty array on failure.
+ * @returns {Promise<Array>} Array of Post Office objects, or empty array on failure.
  */
 async function getPostOfficeData(pincode) {
     if (!window.firebaseHelpers.pincodeSystem.validatePincode(pincode)) {
@@ -195,6 +202,8 @@ async function getPostOfficeData(pincode) {
         return [];
     }
 }
+// Make getPostOfficeData globally available for seller.js
+window.getPostOfficeData = getPostOfficeData;
 
 /**
  * Automatically populates City, State, and a Village/Post Office dropdown based on Pincode input.
@@ -264,6 +273,8 @@ async function populateLocationFields(pincodeInputId, villageSelectId, cityInput
         }
     }
 }
+// Make populateLocationFields globally available for auth.html, profile.html, etc.
+window.populateLocationFields = populateLocationFields;
 
 /**
  * Use Geolocation API to find coordinates and then simulate reverse geocoding to Pincode.
@@ -274,18 +285,18 @@ async function getCurrentLocationPincode() {
     const buttonElement = document.getElementById('location-access-btn');
     
     if (!navigator.geolocation) {
-        statusElement.textContent = 'Geolocation is not supported by your browser.';
-        statusElement.classList.remove('text-muted');
-        statusElement.classList.add('text-danger');
+        if(statusElement) statusElement.textContent = 'Geolocation is not supported by your browser.';
+        if(statusElement) statusElement.classList.remove('text-muted');
+        if(statusElement) statusElement.classList.add('text-danger');
         window.firebaseHelpers.showAlert('Geolocation not supported.', 'danger');
         return;
     }
 
-    statusElement.textContent = 'Fetching location...';
-    statusElement.classList.remove('text-danger', 'text-warning', 'text-success');
-    statusElement.classList.add('text-info');
-    buttonElement.disabled = true;
-    buttonElement.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Detecting...';
+    if(statusElement) statusElement.textContent = 'Fetching location...';
+    if(statusElement) statusElement.classList.remove('text-danger', 'text-warning', 'text-success');
+    if(statusElement) statusElement.classList.add('text-info');
+    if(buttonElement) buttonElement.disabled = true;
+    if(buttonElement) buttonElement.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Detecting...';
 
     // Simulated Reverse Geocoding (Returns a common Pincode for India demo)
     const simulatedReverseGeocode = async (lat, lon) => {
@@ -299,31 +310,31 @@ async function getCurrentLocationPincode() {
 
     navigator.geolocation.getCurrentPosition(async (position) => {
         const { latitude, longitude } = position.coords;
-        statusElement.textContent = `Location found. Determining Pincode...`;
+        if(statusElement) statusElement.textContent = `Location found. Determining Pincode...`;
         
         const pincode = await simulatedReverseGeocode(latitude, longitude);
 
         if (pincode) {
-            statusElement.textContent = `Pincode found: ${pincode}. Applying filter...`;
-            statusElement.classList.remove('text-info');
-            statusElement.classList.add('text-success');
-            inputElement.value = pincode;
+            if(statusElement) statusElement.textContent = `Pincode found: ${pincode}. Applying filter...`;
+            if(statusElement) statusElement.classList.remove('text-info');
+            if(statusElement) statusElement.classList.add('text-success');
+            if(inputElement) inputElement.value = pincode;
             
             // Automatically submit the form to save and filter
             setTimeout(async () => {
                 await savePincode(pincode);
                 const modal = bootstrap.Modal.getInstance(document.getElementById('pincodeModal'));
                 if (modal) modal.hide();
-                buttonElement.disabled = false;
-                buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
+                if(buttonElement) buttonElement.disabled = false;
+                if(buttonElement) buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
             }, 1000);
 
         } else {
-            statusElement.textContent = 'Could not determine Pincode. Please enter manually.';
-            statusElement.classList.remove('text-info');
-            statusElement.classList.add('text-warning');
-            buttonElement.disabled = false;
-            buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
+            if(statusElement) statusElement.textContent = 'Could not determine Pincode. Please enter manually.';
+            if(statusElement) statusElement.classList.remove('text-info');
+            if(statusElement) statusElement.classList.add('text-warning');
+            if(buttonElement) buttonElement.disabled = false;
+            if(buttonElement) buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
         }
 
     }, (error) => {
@@ -335,11 +346,11 @@ async function getCurrentLocationPincode() {
         } else if (error.code === error.TIMEOUT) {
             message = 'The request to get user location timed out.';
         }
-        statusElement.textContent = message;
-        statusElement.classList.remove('text-info');
-        statusElement.classList.add('text-danger');
-        buttonElement.disabled = false;
-        buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
+        if(statusElement) statusElement.textContent = message;
+        if(statusElement) statusElement.classList.remove('text-info');
+        if(statusElement) statusElement.classList.add('text-danger');
+        if(buttonElement) buttonElement.disabled = false;
+        if(buttonElement) buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
         window.firebaseHelpers.showAlert(message, 'danger');
     }, {
         enableHighAccuracy: true,
@@ -381,7 +392,9 @@ function showPincodeModal() {
     if (!modalElement) return;
 
     // Reset status/input when showing the modal
-    document.getElementById('pincode-input').value = window.customerPincode || '';
+    const pincodeInput = document.getElementById('pincode-input');
+    if (pincodeInput) pincodeInput.value = window.customerPincode || '';
+    
     const statusElement = document.getElementById('location-status');
     if (statusElement) {
         statusElement.textContent = '';
@@ -490,8 +503,10 @@ function updateHomepagePincodeDisplay() {
     // Also update the full display container if it exists
     const homepageDisplay = document.getElementById('homepage-pincode-display');
     if (homepageDisplay) {
-         homepageDisplay.querySelector('p strong').textContent = window.customerPincode ? window.customerPincode : 'All Locations';
-         homepageDisplay.querySelector('button').textContent = window.customerPincode ? 'Change Location Filter' : 'Set Location Filter';
+         const strongElement = homepageDisplay.querySelector('p strong');
+         if (strongElement) strongElement.textContent = window.customerPincode ? window.customerPincode : 'All Locations';
+         const buttonElement = homepageDisplay.querySelector('button');
+         if (buttonElement) buttonElement.textContent = window.customerPincode ? 'Change Location Filter' : 'Set Location Filter';
     }
 }
 
@@ -508,22 +523,49 @@ function updateNavbarPincodeDisplay() {
 
 // Clear cart and shop in new location
 async function updateCartForNewPincode() {
-    // Note: Since we are using a custom modal style warning in firebase-config.js, 
-    // we use a standard JS confirm here as a secondary confirmation layer before clearing critical data.
-    if (!window.confirm('This will clear your cart and show equipment available in your new location. Continue?')) {
-        return;
-    }
+    // Note: Use custom modal instead of built-in confirm in production
+    const modalHtml = `
+        <div class="modal fade" id="confirm-clear-cart-modal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title"><i class="fas fa-trash me-2"></i>Confirm Clear Cart</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Are you sure you want to clear your cart? This action is permanent and will allow you to shop in your new location.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-danger" id="confirm-clear-cart-btn">Clear Cart</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
     
-    await updateCartInFirestore([]);
-    window.firebaseHelpers.showAlert('Cart cleared. Showing equipment for your new location.', 'success');
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modalElement = document.getElementById('confirm-clear-cart-modal');
+    const modalInstance = new bootstrap.Modal(modalElement);
+    modalInstance.show();
     
-    // Reload appropriate page
-    const path = window.location.pathname.split('/').pop();
-    if (path === 'cart.html') {
-        loadCartPage();
-    } else if (path === 'browse.html') {
-        loadAllEquipment();
-    }
+    document.getElementById('confirm-clear-cart-btn').onclick = async () => {
+        modalInstance.hide();
+        
+        await updateCartInFirestore([]);
+        window.firebaseHelpers.showAlert('Cart cleared. Showing equipment for your new location.', 'success');
+        
+        // Reload appropriate page
+        const path = window.location.pathname.split('/').pop();
+        if (path === 'cart.html') {
+            loadCartPage();
+        } else if (path === 'browse.html') {
+            loadAllEquipment();
+        }
+        
+        // Remove the temporary modal element
+        modalElement.remove();
+    };
 }
 
 // Revert to previous pincode
@@ -533,6 +575,13 @@ async function revertToPreviousPincode() {
         // Call savePincode to handle setting it and subsequent UI reloads/checks
         await savePincode(oldPincode); 
         localStorage.removeItem('previousPincode'); // Clear after successful revert
+        
+        // Find and hide the custom warning modal if it's currently showing
+        const customWarningModal = document.getElementById('custom-warning-modal');
+        if (customWarningModal) {
+            const modalInstance = bootstrap.Modal.getInstance(customWarningModal);
+            if (modalInstance) modalInstance.hide();
+        }
     }
 }
 
@@ -550,7 +599,15 @@ async function changePincodeToMatchEquipment(equipmentPincode) {
     
     // Delay slightly to ensure savePincode async operations complete before re-triggering modal
     setTimeout(() => {
-        addToCartModal();
+        // This relies on the modal logic running again which should be triggered by the button that called this function
+        // For simplicity, we just rely on the user manually clicking the add to cart button again, or we can just navigate to cart/checkout if needed.
+        // If coming from 'Rent Now', it will proceed to checkout.
+        if (window.location.href.includes('checkout.html')) {
+            loadCheckoutPage();
+        } else {
+             // If coming from Add to Cart or item page, the item modal is likely closed. Let the user re-try.
+             window.firebaseHelpers.showAlert('Location updated. Please click "Add to Cart" or "Rent Now" again.', 'info');
+        }
     }, 500);
 }
 
@@ -650,7 +707,11 @@ async function initializeAuthInternal() {
                         updateNavbarPincodeDisplay();
                     }
                 } catch (error) {
+                    // FIX: Catch block for error getting user data
                     console.error("Error getting user data:", error);
+                    // Force logout or handle gracefully if user document is missing
+                    await window.firebaseHelpers.signOut();
+                    window.location.reload(); 
                 } finally {
                     isAuthInitialized = true;
                 }
@@ -775,7 +836,8 @@ async function loadAllEquipment() {
 
     } catch (error) {
         console.error('Error loading all equipment:', error);
-        document.getElementById('equipment-grid').innerHTML = '<div class="col-12 text-center py-5 text-danger"><p>Error loading equipment listings. Please try again later.</p></div>';
+        const grid = document.getElementById('equipment-grid');
+        if (grid) grid.innerHTML = '<div class="col-12 text-center py-5 text-danger"><p>Error loading equipment listings. Please try again later.</p></div>';
     }
 }
 
@@ -877,7 +939,8 @@ async function loadFeaturedEquipment() {
         
     } catch (error) {
         console.error('Error loading featured equipment:', error);
-        document.getElementById('featured-equipment').innerHTML = '<div class="col-12 text-center py-5 text-danger"><p>Error loading equipment. Please try again later.</p></div>';
+        const featuredContainer = document.getElementById('featured-equipment');
+        if (featuredContainer) featuredContainer.innerHTML = '<div class="col-12 text-center py-5 text-danger"><p>Error loading equipment. Please try again later.</p></div>';
     }
 }
 
@@ -931,13 +994,15 @@ function createEquipmentCard(equipment, id, isBrowsePage = false) {
 // Add item to cart from modal (UPDATED for Pincode consistency check)
 async function addToCartModal() {
     const item = selectedEquipment;
-    const { durationType, durationValue, calculatedPrice } = item.rentalDetails;
+    const rentalDetails = item.rentalDetails;
     
-    if (calculatedPrice <= 0 || !item.id || !durationType) {
+    if (!rentalDetails || rentalDetails.calculatedPrice <= 0 || !item.id || !rentalDetails.durationType) {
         window.firebaseHelpers.showAlert('Please select a valid rental duration.', 'warning');
         return;
     }
 
+    const { durationType, durationValue, calculatedPrice } = rentalDetails;
+    
     let cart = await getCartFromFirestore(); 
     
     const itemPincode = item.pincode;
@@ -1025,12 +1090,14 @@ async function addToCartModal() {
 // Direct rent/checkout from modal (MODIFIED for Pincode check)
 async function rentNowModal() {
     const item = selectedEquipment;
-    const { calculatedPrice } = item.rentalDetails;
-
-    if (calculatedPrice <= 0 || !item.id) {
+    const rentalDetails = item.rentalDetails;
+    
+    if (!rentalDetails || rentalDetails.calculatedPrice <= 0 || !item.id) {
         window.firebaseHelpers.showAlert('Please select a valid rental duration.', 'warning');
         return;
     }
+
+    const { calculatedPrice } = rentalDetails;
 
     const itemPincode = item.pincode;
     if (!itemPincode) {
@@ -1060,7 +1127,7 @@ async function rentNowModal() {
                     <button class="btn btn-sm btn-warning" onclick="changePincodeToMatchEquipment('${itemPincode}'); window.location.href='checkout.html'">
                         Change My Location to ${itemPincode} & Checkout
                     </button>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="$('#equipmentDetailsModal .btn-close').click()">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="bootstrap.Modal.getInstance(document.getElementById('custom-warning-modal')).hide();">
                         Cancel
                     </button>
                 </div>
@@ -1297,12 +1364,8 @@ async function changePincodeToMatchCart(cartPincode) {
 }
 
 async function clearCartForCurrentLocation() {
-    if (!window.confirm('Clear your cart and show equipment available in your current location?')) {
-        return;
-    }
-    
-    await updateCartInFirestore([]);
-    window.firebaseHelpers.showAlert('Cart cleared. Now showing equipment for your location.', 'success');
+    // Use custom modal for confirmation
+    await updateCartForNewPincode();
     loadCartPage();
 }
 // --- END NEW CART RESOLUTION HELPERS ---
@@ -1409,15 +1472,20 @@ async function loadCheckoutPage() {
             checkoutSummaryElement.innerHTML = warningHtml;
         }
         
-        document.getElementById('pay-now-btn').disabled = true;
-        document.getElementById('pay-button-amount').textContent = 'Error';
+        const payBtn = document.getElementById('pay-now-btn');
+        if (payBtn) payBtn.disabled = true;
+        const payAmount = document.getElementById('pay-button-amount');
+        if (payAmount) payAmount.textContent = 'Error';
         return;
     }
     
     window.currentUser = user; 
-    document.getElementById('customer-name').value = user.name || '';
-    document.getElementById('customer-email').value = user.email || '';
-    document.getElementById('customer-phone').value = user.mobile || '';
+    const customerNameInput = document.getElementById('customer-name');
+    if (customerNameInput) customerNameInput.value = user.name || '';
+    const customerEmailInput = document.getElementById('customer-email');
+    if (customerEmailInput) customerEmailInput.value = user.email || '';
+    const customerPhoneInput = document.getElementById('customer-phone');
+    if (customerPhoneInput) customerPhoneInput.value = user.mobile || '';
 
     displayCheckoutSummary(cart);
 }
@@ -1428,6 +1496,12 @@ async function loadCheckoutPage() {
 // Update navbar for logged in user
 function updateNavbarForLoggedInUser(userData) {
     const navbarAuth = document.getElementById('navbar-auth');
+    
+    // FIX: Add null check for navbarAuth as it might not exist on all pages (e.g., seller.html)
+    if (!navbarAuth) {
+         // This is expected on pages like seller.html
+         return; 
+    }
     
     let dropdownHtml = `
         <li class="nav-item dropdown">
@@ -1460,6 +1534,11 @@ function updateNavbarForLoggedInUser(userData) {
 // Update navbar for logged out user
 function updateNavbarForLoggedOutUser() {
     const navbarAuth = document.getElementById('navbar-auth');
+    
+    // FIX: Add null check for navbarAuth
+    if (!navbarAuth) {
+         return; 
+    }
     
     navbarAuth.innerHTML = `
         <li class="nav-item dropdown" id="role-dropdown">
@@ -1828,8 +1907,10 @@ function initializeEventListeners() {
                 document.getElementById('signupCity').value = '';
                 document.getElementById('signupState').value = '';
                 const villageSelect = document.getElementById('signupVillage');
-                villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
-                villageSelect.disabled = true;
+                if(villageSelect) {
+                    villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
+                    villageSelect.disabled = true;
+                }
 
                 if (pincodeInput.value.length === 6) {
                     window.populateLocationFields('pincode', 'signupVillage', 'signupCity', 'signupState', 'location-lookup-status');
@@ -1848,8 +1929,10 @@ function initializeEventListeners() {
                 document.getElementById('profile-city').value = '';
                 document.getElementById('profile-state').value = '';
                 const villageSelect = document.getElementById('profile-village');
-                villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
-                villageSelect.disabled = true;
+                if(villageSelect) {
+                    villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
+                    villageSelect.disabled = true;
+                }
                 
                 if (pincodeInput.value.length === 6) {
                     window.populateLocationFields('profile-pincode', 'profile-village', 'profile-city', 'profile-state', 'pincode-status-message');
@@ -1868,15 +1951,17 @@ async function loadCategoriesForFilter() {
             .get();
 
         const filterSelect = document.getElementById('category-filter');
-        filterSelect.innerHTML = '<option value="all">All Categories</option>';
-        
-        snapshot.forEach(doc => {
-            const category = doc.data();
-            const option = document.createElement('option');
-            option.value = category.name.toLowerCase();
-            option.textContent = category.name;
-            filterSelect.appendChild(option);
-        });
+        if (filterSelect) {
+            filterSelect.innerHTML = '<option value="all">All Categories</option>';
+            
+            snapshot.forEach(doc => {
+                const category = doc.data();
+                const option = document.createElement('option');
+                option.value = category.name.toLowerCase();
+                option.textContent = category.name;
+                filterSelect.appendChild(option);
+            });
+        }
 
     } catch (error) {
         console.error('Error loading categories for filter:', error);
@@ -1968,17 +2053,29 @@ async function showEquipmentDetailsModal(id) {
         document.getElementById('modal-content-area').innerHTML = buildModalContent(selectedEquipment);
         
         // Set up cart/rent buttons with item ID
-        document.getElementById('add-to-cart-btn').onclick = () => addToCartModal(selectedEquipment.id);
-        document.getElementById('rent-now-btn').onclick = () => rentNowModal(selectedEquipment.id);
+        const addToCartBtn = document.getElementById('add-to-cart-btn');
+        if (addToCartBtn) addToCartBtn.onclick = () => addToCartModal();
+        const rentNowBtn = document.getElementById('rent-now-btn');
+        if (rentNowBtn) rentNowBtn.onclick = () => rentNowModal();
 
         // Calculate price dynamically in modal footer
         const durationType = document.getElementById('rental-duration-type');
         const durationValue = document.getElementById('rental-duration-value');
         
-        updateModalPrice(durationType.value, durationValue.value);
+        if(durationType && durationValue) {
+             updateModalPrice(durationType.value, durationValue.value);
 
-        durationType.onchange = () => updateModalPrice(durationType.value, durationValue.value);
-        durationValue.oninput = () => updateModalPrice(durationType.value, durationValue.value);
+             durationType.onchange = () => updateModalPrice(durationType.value, durationValue.value);
+             durationValue.oninput = () => updateModalPrice(durationType.value, durationValue.value);
+        } else {
+             // Set default rental details if inputs are missing (e.g., if the modal structure is simplified)
+            selectedEquipment.rentalDetails = {
+                durationType: 'acre',
+                durationValue: 1,
+                calculatedPrice: selectedEquipment.pricePerAcre || 0
+            };
+        }
+
 
         const modal = new bootstrap.Modal(document.getElementById('equipmentDetailsModal'));
         modal.show();
@@ -2042,7 +2139,13 @@ function updateModalPrice(type, value) {
     const priceElement = document.getElementById('modal-total-price');
     
     if (isNaN(duration) || duration <= 0) {
-        priceElement.textContent = '₹0';
+        if(priceElement) priceElement.textContent = '₹0';
+        // Ensure rentalDetails is reset if invalid
+        selectedEquipment.rentalDetails = {
+            durationType: type,
+            durationValue: 0,
+            calculatedPrice: 0
+        };
         return;
     }
 
@@ -2059,7 +2162,7 @@ function updateModalPrice(type, value) {
         calculatedPrice: price
     };
     
-    priceElement.textContent = window.firebaseHelpers.formatCurrency(price);
+    if(priceElement) priceElement.textContent = window.firebaseHelpers.formatCurrency(price);
 }
 
 // Display items currently in the cart
@@ -2072,10 +2175,10 @@ async function displayCartItems(cart) {
     const loadingElement = document.getElementById('cart-loading');
     if (loadingElement) loadingElement.style.display = 'none';
 
-    container.innerHTML = '';
+    if(container) container.innerHTML = '';
     
     if (cart.length === 0) {
-        container.innerHTML = `
+        if(container) container.innerHTML = `
             <div class="text-center py-5">
                 <i class="fas fa-shopping-basket fa-3x text-muted mb-3"></i>
                 <h4>Your cart is empty</h4>
@@ -2096,7 +2199,7 @@ async function displayCartItems(cart) {
 
     cart.forEach((item, index) => {
         subtotal += item.price;
-        container.innerHTML += `
+        if(container) container.innerHTML += `
             <div class="d-flex align-items-center py-3 border-bottom">
                 <img src="${item.imageUrl || 'https://placehold.co/80x80'}" class="rounded me-3" style="width: 80px; height: 80px; object-fit: cover;">
                 <div class="flex-grow-1">
@@ -2136,17 +2239,24 @@ async function removeItemFromCart(index) {
 
 // Update the summary section on the cart page
 function updateCartSummary(subtotal, fees, total, isDisabled) {
-    document.getElementById('cart-subtotal').textContent = window.firebaseHelpers.formatCurrency(subtotal);
-    document.getElementById('cart-discount').textContent = window.firebaseHelpers.formatCurrency(0); 
-    document.getElementById('cart-fees').textContent = window.firebaseHelpers.formatCurrency(fees);
-    document.getElementById('cart-total').textContent = window.firebaseHelpers.formatCurrency(total);
+    const subtotalEl = document.getElementById('cart-subtotal');
+    if (subtotalEl) subtotalEl.textContent = window.firebaseHelpers.formatCurrency(subtotal);
+    const discountEl = document.getElementById('cart-discount');
+    if (discountEl) discountEl.textContent = window.firebaseHelpers.formatCurrency(0); 
+    const feesEl = document.getElementById('cart-fees');
+    if (feesEl) feesEl.textContent = window.firebaseHelpers.formatCurrency(fees);
+    const totalEl = document.getElementById('cart-total');
+    if (totalEl) totalEl.textContent = window.firebaseHelpers.formatCurrency(total);
 
-    document.getElementById('checkout-btn').disabled = isDisabled || total === 0;
+    const checkoutEl = document.getElementById('checkout-btn');
+    if (checkoutEl) checkoutEl.disabled = isDisabled || total === 0;
 }
 
 // Display items and calculate total on the checkout page
 function displayCheckoutSummary(cart) {
     const listContainer = document.getElementById('checkout-item-list');
+    if (!listContainer) return;
+
     listContainer.innerHTML = '';
     
     let subtotal = 0;
@@ -2171,7 +2281,8 @@ function displayCheckoutSummary(cart) {
         totalRentalDetails.push(`${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'}`);
     });
     
-    document.getElementById('rental-dates').value = totalRentalDetails.join(', ');
+    const rentalDates = document.getElementById('rental-dates');
+    if (rentalDates) rentalDates.value = totalRentalDetails.join(', ');
 
     const fees = subtotal * platformFeeRate;
     const total = subtotal + fees;
@@ -2181,10 +2292,14 @@ function displayCheckoutSummary(cart) {
         feeLabelElement.textContent = `Platform Fee (${(platformFeeRate * 100).toFixed(0)}%):`;
     }
 
-    document.getElementById('checkout-subtotal').textContent = window.firebaseHelpers.formatCurrency(subtotal);
-    document.getElementById('checkout-fees').textContent = window.firebaseHelpers.formatCurrency(fees);
-    document.getElementById('checkout-total').textContent = window.firebaseHelpers.formatCurrency(total);
-    document.getElementById('pay-button-amount').textContent = window.firebaseHelpers.formatCurrency(total);
+    const subtotalEl = document.getElementById('checkout-subtotal');
+    if (subtotalEl) subtotalEl.textContent = window.firebaseHelpers.formatCurrency(subtotal);
+    const feesEl = document.getElementById('checkout-fees');
+    if (feesEl) feesEl.textContent = window.firebaseHelpers.formatCurrency(fees);
+    const totalEl = document.getElementById('checkout-total');
+    if (totalEl) totalEl.textContent = window.firebaseHelpers.formatCurrency(total);
+    const payAmount = document.getElementById('pay-button-amount');
+    if (payAmount) payAmount.textContent = window.firebaseHelpers.formatCurrency(total);
 
     window.razorpayContext = { subtotal, fees, total, orderPincode }; 
 }
@@ -2201,7 +2316,8 @@ async function processPayment() {
     const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
     if (!userPincode) {
         window.firebaseHelpers.showAlert('Critical Error: Customer Pincode is not set. Cannot proceed.', 'danger');
-        document.getElementById('pay-now-btn').disabled = true;
+        const payBtn = document.getElementById('pay-now-btn');
+        if (payBtn) payBtn.disabled = true;
         return;
     }
     
@@ -2325,15 +2441,24 @@ async function loadProfilePage() {
         return;
     }
 
-    // Set form data
-    document.getElementById('profile-name').value = user.name || '';
-    document.getElementById('profile-email').value = user.email || '';
-    document.getElementById('profile-phone').value = user.mobile || '';
-    document.getElementById('profile-address').value = user.address || '';
-    document.getElementById('profile-city').value = user.city || '';
-    document.getElementById('profile-state').value = user.state || '';
-    document.getElementById('profile-pincode').value = user.pincode || '';
+    const profileNameEl = document.getElementById('profile-name');
+    if (profileNameEl) profileNameEl.value = user.name || '';
+    const profileEmailEl = document.getElementById('profile-email');
+    if (profileEmailEl) profileEmailEl.value = user.email || '';
+    const profilePhoneEl = document.getElementById('profile-phone');
+    if (profilePhoneEl) profilePhoneEl.value = user.mobile || '';
+    const profileAddressEl = document.getElementById('profile-address');
+    if (profileAddressEl) profileAddressEl.value = user.address || '';
+    const profileCityEl = document.getElementById('profile-city');
+    if (profileCityEl) profileCityEl.value = user.city || '';
+    const profileStateEl = document.getElementById('profile-state');
+    if (profileStateEl) profileStateEl.value = user.state || '';
+    const profilePincodeEl = document.getElementById('profile-pincode');
+    if (profilePincodeEl) profilePincodeEl.value = user.pincode || '';
     
+    const profileUserNameEl = document.getElementById('profile-user-name');
+    if (profileUserNameEl) profileUserNameEl.textContent = user.name || 'User';
+
     // Check if user is a seller and has a pincode set
     const isSeller = user.role === 'seller';
     const hasPincode = !!user.pincode;
@@ -2346,12 +2471,14 @@ async function loadProfilePage() {
         }
         const pincodeGroup = document.getElementById('pincode-input-group');
         if (pincodeGroup) {
-            // Add a small warning message for sellers
-            pincodeGroup.innerHTML += `
-                <div class="alert alert-warning p-2 mt-2 small">
-                    <i class="fas fa-lock me-1"></i> Your Seller Pincode is permanent for consistency. Contact support to change location.
-                </div>
-            `;
+            // Check if warning already exists to prevent duplication
+            if (!pincodeGroup.querySelector('.alert')) {
+                pincodeGroup.innerHTML += `
+                    <div class="alert alert-warning p-2 mt-2 small">
+                        <i class="fas fa-lock me-1"></i> Your Seller Pincode is permanent for consistency. Contact support to change location.
+                    </div>
+                `;
+            }
         }
     }
 
@@ -2361,20 +2488,27 @@ async function loadProfilePage() {
              await populateLocationFields('profile-pincode', 'profile-village', 'profile-city', 'profile-state', 'pincode-status-message');
              const villageSelect = document.getElementById('profile-village');
              if (villageSelect && user.village) {
-                 villageSelect.value = user.village; 
+                 // Delay slightly to ensure options are loaded by populateLocationFields
+                 setTimeout(() => {
+                    villageSelect.value = user.village; 
+                 }, 500);
              }
         })();
     }
     
     // Display joined date
-    if (user.createdAt && user.createdAt.toDate) {
-        document.getElementById('join-date').textContent = user.createdAt.toDate().toLocaleDateString();
-    } else if (user.createdAt) {
-        document.getElementById('join-date').textContent = new Date(user.createdAt).toLocaleDateString();
+    const joinDateEl = document.getElementById('join-date');
+    if (joinDateEl) {
+        if (user.createdAt && user.createdAt.toDate) {
+            joinDateEl.textContent = user.createdAt.toDate().toLocaleDateString();
+        } else if (user.createdAt) {
+            joinDateEl.textContent = new Date(user.createdAt).toLocaleDateString();
+        }
     }
     
     // Handle form submission
-    document.getElementById('profile-form').addEventListener('submit', handleProfileUpdate);
+    const profileForm = document.getElementById('profile-form');
+    if (profileForm) profileForm.addEventListener('submit', handleProfileUpdate);
 }
 
 // Handle profile form submission
@@ -2447,6 +2581,9 @@ async function loadOrdersPage() {
         return;
     }
     
+    const loadingEl = document.getElementById('loading');
+    if(loadingEl) loadingEl.style.display = 'block';
+
     try {
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
@@ -2457,10 +2594,10 @@ async function loadOrdersPage() {
             .get();
         
         const container = document.getElementById('orders-list');
-        container.innerHTML = '';
+        if (container) container.innerHTML = '';
         
         if (ordersSnapshot.empty) {
-            container.innerHTML = `
+            if (container) container.innerHTML = `
                 <div class="col-12 text-center py-5">
                     <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
                     <h4>You have no rental history</h4>
@@ -2473,18 +2610,21 @@ async function loadOrdersPage() {
         
         ordersSnapshot.forEach(doc => {
             const order = { id: doc.id, ...doc.data() };
-            container.innerHTML += createOrderCard(order);
+            if (container) container.innerHTML += createOrderCard(order);
         });
         
     } catch (error) {
         console.error('Error loading orders:', error);
-        document.getElementById('orders-list').innerHTML = `
+        const container = document.getElementById('orders-list');
+        if (container) container.innerHTML = `
             <div class="col-12 text-center py-5 text-danger">
                 <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
                 <h4>Error loading orders</h4>
                 <p>Please try again later.</p>
             </div>
         `;
+    } finally {
+        if(loadingEl) loadingEl.style.display = 'none';
     }
 }
 
@@ -2548,23 +2688,52 @@ async function viewOrderDetailsModal(orderId) {
 
 // Function to cancel an order
 async function cancelOrder(orderId) {
-    // Note: Use custom modal instead of built-in confirm in production
-    if (!window.confirm('Are you sure you want to cancel this order? Cancellation is subject to seller approval.')) return;
+    // NOTE: Use custom modal instead of built-in confirm in production. Temporarily using custom modal setup.
+    const modalHtml = `
+        <div class="modal fade" id="confirm-cancel-modal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title"><i class="fas fa-trash me-2"></i>Confirm Cancellation</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Are you sure you want to cancel this order? Cancellation is subject to seller approval and refund processing.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-danger" id="confirm-cancellation-btn">Yes, Cancel Order</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
     
-    try {
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const orderRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders').doc(orderId);
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modalElement = document.getElementById('confirm-cancel-modal');
+    const modalInstance = new bootstrap.Modal(modalElement);
+    modalInstance.show();
 
-        await orderRef.update({
-            status: 'cancelled',
-            cancellationRequestedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        window.firebaseHelpers.showAlert('Cancellation requested. Status will be updated shortly.', 'success');
-        loadOrdersPage();
-    } catch (error) {
-        console.error('Error cancelling order:', error);
-        window.firebaseHelpers.showAlert('Failed to cancel order. Please contact support.', 'danger');
-    }
+    document.getElementById('confirm-cancellation-btn').onclick = async () => {
+        modalInstance.hide();
+        try {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const orderRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders').doc(orderId);
+
+            await orderRef.update({
+                status: 'cancelled',
+                cancellationRequestedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            window.firebaseHelpers.showAlert('Cancellation requested. Status will be updated shortly.', 'success');
+            loadOrdersPage();
+        } catch (error) {
+            console.error('Error cancelling order:', error);
+            window.firebaseHelpers.showAlert('Failed to cancel order. Please contact support.', 'danger');
+        } finally {
+            // Remove the temporary modal element
+            modalElement.remove();
+        }
+    };
 }
 
 // Update cart count when script loads
