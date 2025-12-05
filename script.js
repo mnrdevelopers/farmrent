@@ -991,8 +991,217 @@ function createEquipmentCard(equipment, id, isBrowsePage = false) {
     `;
 }
 
-// Add item to cart from modal (UPDATED for Pincode consistency check)
+/**
+ * NEW: Fetches the full profile details for a seller.
+ * @param {string} sellerId 
+ * @returns {Promise<Object|null>} Seller data including full address fields.
+ */
+async function getSellerInfo(sellerId) {
+    try {
+        const doc = await window.FirebaseDB.collection('users').doc(sellerId).get();
+        if (doc.exists && doc.data().role === 'seller') {
+            return doc.data();
+        }
+        return null;
+    } catch (error) {
+        console.error('Error fetching seller info:', error);
+        return null;
+    }
+}
+
+// Show equipment details in a modal (MODIFIED to include seller info and date/time inputs)
+async function showEquipmentDetailsModal(id) {
+    try {
+        const equipment = allEquipmentData.find(e => e.id === id);
+        
+        if (!equipment) {
+            const doc = await window.FirebaseDB.collection('equipment').doc(id).get();
+            if (doc.exists) {
+                selectedEquipment = { id: doc.id, ...doc.data() };
+            } else {
+                window.firebaseHelpers.showAlert('Equipment details not found.', 'danger');
+                return;
+            }
+        } else {
+            selectedEquipment = equipment;
+        }
+
+        // NEW: Fetch full seller information
+        const sellerInfo = await getSellerInfo(selectedEquipment.sellerId);
+        selectedEquipment.sellerDetails = sellerInfo; // Attach seller details to selectedEquipment
+
+        document.getElementById('equipmentModalTitle').textContent = selectedEquipment.name;
+        
+        // Pass seller info to content builder
+        document.getElementById('modal-content-area').innerHTML = buildModalContent(selectedEquipment, sellerInfo);
+        
+        // Set up cart/rent buttons with item ID
+        const addToCartBtn = document.getElementById('add-to-cart-btn');
+        if (addToCartBtn) addToCartBtn.onclick = () => addToCartModal();
+        const rentNowBtn = document.getElementById('rent-now-btn');
+        if (rentNowBtn) rentNowBtn.onclick = () => rentNowModal();
+
+        // Calculate price dynamically in modal footer
+        const durationType = document.getElementById('rental-duration-type');
+        const durationValue = document.getElementById('rental-duration-value');
+        
+        if(durationType && durationValue) {
+             updateModalPrice(durationType.value, durationValue.value);
+
+             durationType.onchange = () => updateModalPrice(durationType.value, durationValue.value);
+             durationValue.oninput = () => updateModalPrice(durationType.value, durationValue.value);
+        } else {
+             // Set default rental details if inputs are missing (e.g., if the modal structure is simplified)
+            selectedEquipment.rentalDetails = {
+                durationType: 'acre',
+                durationValue: 1,
+                calculatedPrice: selectedEquipment.pricePerAcre || 0,
+                pickupDate: null, // NEW Default
+                pickupTime: null, // NEW Default
+            };
+        }
+
+        // Set min date for pickup date to today
+        const pickupDateInput = document.getElementById('pickup-date');
+        if (pickupDateInput) {
+            const today = new Date().toISOString().split('T')[0];
+            pickupDateInput.min = today;
+            // Also add change listeners to update rentalDetails object
+            pickupDateInput.onchange = () => updateRentalDetails();
+        }
+        const pickupTimeInput = document.getElementById('pickup-time');
+        if (pickupTimeInput) {
+             // Add change listeners to update rentalDetails object
+             pickupTimeInput.onchange = () => updateRentalDetails();
+        }
+        
+        // Initial call to ensure rentalDetails object has date/time (even if null)
+        updateRentalDetails();
+
+        const modal = new bootstrap.Modal(document.getElementById('equipmentDetailsModal'));
+        modal.show();
+
+    } catch (error) {
+        console.error('Error opening modal:', error);
+        window.firebaseHelpers.showAlert('Could not load equipment details.', 'danger');
+    }
+}
+
+// Helper to update selectedEquipment.rentalDetails with current modal inputs
+function updateRentalDetails() {
+    const durationType = document.getElementById('rental-duration-type')?.value;
+    const durationValue = parseInt(document.getElementById('rental-duration-value')?.value) || 0;
+    const calculatedPrice = (durationType === 'acre' ? (selectedEquipment.pricePerAcre || 0) : (selectedEquipment.pricePerHour || 0)) * durationValue;
+    
+    selectedEquipment.rentalDetails = {
+        durationType: durationType,
+        durationValue: durationValue,
+        calculatedPrice: calculatedPrice,
+        pickupDate: document.getElementById('pickup-date')?.value || null, // NEW
+        pickupTime: document.getElementById('pickup-time')?.value || null, // NEW
+    };
+    
+    updateModalPrice(durationType, durationValue);
+}
+
+// Helper to build rich modal content (MODIFIED)
+function buildModalContent(equipment, sellerInfo) {
+    const imageUrl = equipment.images && equipment.images[0] ? equipment.images[0] : 'https://placehold.co/500x300/2B5C2B/FFFFFF?text=Equipment';
+    const statusText = equipment.availability ? 'Available Now' : 'Currently Rented';
+    const statusClass = equipment.availability ? 'bg-success' : 'bg-danger';
+
+    // NEW: Detailed Seller Information
+    const sellerName = sellerInfo?.name || equipment.sellerName || 'Seller User';
+    const businessName = sellerInfo?.businessName || equipment.businessName || 'N/A';
+    const pickupAddress = sellerInfo 
+        ? `${sellerInfo.address || 'Seller Address Missing'}, ${sellerInfo.village || ''}, ${sellerInfo.city || ''}, ${sellerInfo.state || ''}`
+        : 'Address details are missing. Contact Seller.';
+    
+    return `
+        <div class="row">
+            <div class="col-md-6">
+                <img src="${imageUrl}" class="img-fluid rounded mb-3" alt="${equipment.name}" style="height: 300px; width: 100%; object-fit: cover;">
+                ${equipment.images && equipment.images.length > 1 ? `
+                    <div class="d-flex gap-2 mb-3 overflow-auto">
+                        ${equipment.images.slice(1).map(img => `
+                            <img src="${img}" class="img-thumbnail" style="width: 80px; height: 80px; object-fit: cover;">
+                        `).join('')}
+                    </div>
+                ` : ''}
+                
+                <h5 class="mt-4 text-warning"><i class="fas fa-user-tie me-2"></i>Seller Information</h5>
+                <ul class="list-unstyled">
+                    <li><strong>Business:</strong> ${businessName}</li>
+                    <li><strong>Contact Person:</strong> ${sellerName}</li>
+                    <li><i class="fas fa-map-marker-alt me-2 text-danger"></i> <strong>Pickup Pincode:</strong> ${equipment.pincode || 'N/A'}</li>
+                </ul>
+
+                <h5 class="mt-4 text-warning"><i class="fas fa-map-marked-alt me-2"></i>Clear Pickup Address</h5>
+                <div class="alert alert-light border small">
+                    <strong>Full Address:</strong> ${pickupAddress}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="badge ${statusClass} text-white p-2">${statusText}</span>
+                    <span class="text-muted small">Listed by: <strong>${businessName}</strong></span>
+                </div>
+                
+                <h3 class="text-primary mb-3">${window.firebaseHelpers.formatCurrency(equipment.pricePerAcre)}/Acre | ${window.firebaseHelpers.formatCurrency(equipment.pricePerHour)}/Hour</h3>
+                
+                <p>${equipment.description}</p>
+                
+                <ul class="list-unstyled">
+                    <li><i class="fas fa-tags me-2 text-warning"></i> <strong>Category:</strong> ${equipment.category}</li>
+                    <li><i class="fas fa-list-ol me-2 text-warning"></i> <strong>Quantity:</strong> ${equipment.quantity}</li>
+                </ul>
+                
+                ${equipment.specifications && Object.keys(equipment.specifications).length > 0 ? `
+                    <h5 class="mt-4">Specifications (Item Info)</h5>
+                    <div class="row">
+                        ${Object.entries(equipment.specifications).map(([key, value]) => `
+                            <div class="col-6 mb-2"><strong>${key}:</strong> ${value}</div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+// Update the total price displayed in the modal footer
+function updateModalPrice(type, value) {
+    const duration = parseInt(value);
+    const priceElement = document.getElementById('modal-total-price');
+    
+    if (isNaN(duration) || duration <= 0) {
+        if(priceElement) priceElement.textContent = '₹0';
+        // Ensure rentalDetails is updated (called via updateRentalDetails now)
+        updateRentalDetails(); 
+        return;
+    }
+
+    let price = 0;
+    if (type === 'acre') {
+        price = (selectedEquipment.pricePerAcre || 0) * duration;
+    } else { // 'hour'
+        price = (selectedEquipment.pricePerHour || 0) * duration;
+    }
+
+    // Ensure rentalDetails is updated (called via updateRentalDetails now)
+    // We only set the price here for immediate display logic.
+    selectedEquipment.rentalDetails = {
+        ...selectedEquipment.rentalDetails,
+        calculatedPrice: price
+    };
+    
+    if(priceElement) priceElement.textContent = window.firebaseHelpers.formatCurrency(price);
+}
+
+// Add item to cart from modal (UPDATED for Date/Time capture)
 async function addToCartModal() {
+    // Ensure rental details are up to date
+    updateRentalDetails();
     const item = selectedEquipment;
     const rentalDetails = item.rentalDetails;
     
@@ -1000,8 +1209,15 @@ async function addToCartModal() {
         window.firebaseHelpers.showAlert('Please select a valid rental duration.', 'warning');
         return;
     }
-
-    const { durationType, durationValue, calculatedPrice } = rentalDetails;
+    
+    // NEW VALIDATION: Check for required date/time
+    if (!rentalDetails.pickupDate || !rentalDetails.pickupTime) {
+        window.firebaseHelpers.showAlert('Please select the required **Pickup Date and Time**.', 'danger');
+        return;
+    }
+    // END NEW VALIDATION
+    
+    const { durationType, durationValue, calculatedPrice, pickupDate, pickupTime } = rentalDetails;
     
     let cart = await getCartFromFirestore(); 
     
@@ -1068,9 +1284,15 @@ async function addToCartModal() {
         rentalType: durationType,
         rentalValue: durationValue,
         imageUrl: item.images && item.images[0],
-        pincode: itemPincode 
+        pincode: itemPincode,
+        pickupDate: pickupDate, // NEW
+        pickupTime: pickupTime, // NEW
+        // NEW: Include seller address info for clarity in cart/checkout
+        sellerAddress: item.sellerDetails ? `${item.sellerDetails.address}, ${item.sellerDetails.village}, ${item.sellerDetails.city}, ${item.sellerDetails.state}` : 'Address Unavailable',
     };
     
+    // NOTE: For simplicity, when adding to cart, we replace any existing item with the same ID, 
+    // assuming the customer wants to update the rental terms (duration/date/time).
     const existingIndex = cart.findIndex(i => i.id === item.id);
     if (existingIndex > -1) {
         cart[existingIndex] = cartItem;
@@ -1087,8 +1309,10 @@ async function addToCartModal() {
     window.firebaseHelpers.showAlert(`${item.name} added to cart!`, 'success');
 }
 
-// Direct rent/checkout from modal (MODIFIED for Pincode check)
+// Direct rent/checkout from modal (MODIFIED for Date/Time capture)
 async function rentNowModal() {
+    // Ensure rental details are up to date
+    updateRentalDetails();
     const item = selectedEquipment;
     const rentalDetails = item.rentalDetails;
     
@@ -1097,7 +1321,14 @@ async function rentNowModal() {
         return;
     }
 
-    const { calculatedPrice } = rentalDetails;
+    // NEW VALIDATION: Check for required date/time
+    if (!rentalDetails.pickupDate || !rentalDetails.pickupTime) {
+        window.firebaseHelpers.showAlert('Please select the required **Pickup Date and Time**.', 'danger');
+        return;
+    }
+    // END NEW VALIDATION
+    
+    const { calculatedPrice, pickupDate, pickupTime } = rentalDetails;
 
     const itemPincode = item.pincode;
     if (!itemPincode) {
@@ -1148,10 +1379,14 @@ async function rentNowModal() {
             price: calculatedPrice,
             pricePerAcre: item.pricePerAcre, 
             pricePerHour: item.pricePerHour,
-            rentalType: item.rentalDetails.durationType,
-            rentalValue: item.rentalDetails.durationValue,
+            rentalType: rentalDetails.durationType,
+            rentalValue: rentalDetails.durationValue,
             imageUrl: item.images && item.images[0],
-            pincode: itemPincode 
+            pincode: itemPincode,
+            pickupDate: pickupDate, // NEW
+            pickupTime: pickupTime, // NEW
+            // NEW: Include seller address info for clarity in cart/checkout
+            sellerAddress: item.sellerDetails ? `${item.sellerDetails.address}, ${item.sellerDetails.village}, ${item.sellerDetails.city}, ${item.sellerDetails.state}` : 'Address Unavailable',
         }
     ];
 
@@ -1386,6 +1621,14 @@ async function startCheckout() {
         setTimeout(() => { window.location.href = 'browse.html'; }, 2000);
         return;
     }
+    
+    // NEW VALIDATION: Check if all items have pickup date/time set
+    const missingDetails = cart.some(item => !item.pickupDate || !item.pickupTime);
+    if (missingDetails) {
+        window.firebaseHelpers.showAlert('Please set the required **Pickup Date and Time** for all items in your cart.', 'danger');
+        return;
+    }
+    // END NEW VALIDATION
 
     // Check 1: Is user pincode set?
     if (!userPincode) {
@@ -1677,13 +1920,13 @@ function loadHowItWorks() {
         },
         {
             icon: 'fas fa-calendar-check',
-            title: 'Book & Confirm',
-            description: 'Select rental acres/hours, add to cart, and confirm your booking with easy payment options.' // Updated text
+            title: 'Book Date & Confirm', // UPDATED TITLE
+            description: 'Select rental acres/hours, **set your required pickup date/time**, add to cart, and confirm your booking with easy payment options.' // Updated text
         },
         {
             icon: 'fas fa-hand-paper', // Changed icon from truck to hand-paper for pickup
             title: 'Pickup & Use', // Changed title
-            description: 'Self-pickup the equipment from the seller\'s location. Fully serviced and ready for your farming needs.' // Changed description
+            description: 'Self-pickup the equipment from the seller\'s location on your selected date/time. Fully serviced and ready for your farming needs.' // Changed description
         }
     ];
     
@@ -2032,139 +2275,6 @@ function displayEquipmentGrid(equipmentList) {
     });
 }
 
-// Show equipment details in a modal
-async function showEquipmentDetailsModal(id) {
-    try {
-        const equipment = allEquipmentData.find(e => e.id === id);
-        
-        if (!equipment) {
-            const doc = await window.FirebaseDB.collection('equipment').doc(id).get();
-            if (doc.exists) {
-                selectedEquipment = { id: doc.id, ...doc.data() };
-            } else {
-                window.firebaseHelpers.showAlert('Equipment details not found.', 'danger');
-                return;
-            }
-        } else {
-            selectedEquipment = equipment;
-        }
-
-        document.getElementById('equipmentModalTitle').textContent = selectedEquipment.name;
-        document.getElementById('modal-content-area').innerHTML = buildModalContent(selectedEquipment);
-        
-        // Set up cart/rent buttons with item ID
-        const addToCartBtn = document.getElementById('add-to-cart-btn');
-        if (addToCartBtn) addToCartBtn.onclick = () => addToCartModal();
-        const rentNowBtn = document.getElementById('rent-now-btn');
-        if (rentNowBtn) rentNowBtn.onclick = () => rentNowModal();
-
-        // Calculate price dynamically in modal footer
-        const durationType = document.getElementById('rental-duration-type');
-        const durationValue = document.getElementById('rental-duration-value');
-        
-        if(durationType && durationValue) {
-             updateModalPrice(durationType.value, durationValue.value);
-
-             durationType.onchange = () => updateModalPrice(durationType.value, durationValue.value);
-             durationValue.oninput = () => updateModalPrice(durationType.value, durationValue.value);
-        } else {
-             // Set default rental details if inputs are missing (e.g., if the modal structure is simplified)
-            selectedEquipment.rentalDetails = {
-                durationType: 'acre',
-                durationValue: 1,
-                calculatedPrice: selectedEquipment.pricePerAcre || 0
-            };
-        }
-
-
-        const modal = new bootstrap.Modal(document.getElementById('equipmentDetailsModal'));
-        modal.show();
-
-    } catch (error) {
-        console.error('Error opening modal:', error);
-        window.firebaseHelpers.showAlert('Could not load equipment details.', 'danger');
-    }
-}
-
-// Helper to build rich modal content
-function buildModalContent(equipment) {
-    const imageUrl = equipment.images && equipment.images[0] ? equipment.images[0] : 'https://placehold.co/500x300/2B5C2B/FFFFFF?text=Equipment';
-    const statusText = equipment.availability ? 'Available Now' : 'Currently Rented';
-    const statusClass = equipment.availability ? 'bg-success' : 'bg-danger';
-
-    return `
-        <div class="row">
-            <div class="col-md-6">
-                <img src="${imageUrl}" class="img-fluid rounded mb-3" alt="${equipment.name}" style="height: 300px; width: 100%; object-fit: cover;">
-                ${equipment.images && equipment.images.length > 1 ? `
-                    <div class="d-flex gap-2 mb-3 overflow-auto">
-                        ${equipment.images.slice(1).map(img => `
-                            <img src="${img}" class="img-thumbnail" style="width: 80px; height: 80px; object-fit: cover;">
-                        `).join('')}
-                    </div>
-                ` : ''}
-            </div>
-            <div class="col-md-6">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <span class="badge ${statusClass} text-white p-2">${statusText}</span>
-                    <span class="text-muted small">Listed by: <strong>${equipment.businessName || 'Seller'}</strong></span>
-                </div>
-                
-                <h3 class="text-primary mb-3">${window.firebaseHelpers.formatCurrency(equipment.pricePerAcre)}/Acre | ${window.firebaseHelpers.formatCurrency(equipment.pricePerHour)}/Hour</h3>
-                
-                <p>${equipment.description}</p>
-                
-                <ul class="list-unstyled">
-                    <li><i class="fas fa-map-marker-alt me-2 text-warning"></i> <strong>Pickup Location Pincode:</strong> ${equipment.pincode || 'N/A'}</li>
-                    <li><i class="fas fa-tags me-2 text-warning"></i> <strong>Category:</strong> ${equipment.category}</li>
-                    <li><i class="fas fa-list-ol me-2 text-warning"></i> <strong>Quantity:</strong> ${equipment.quantity}</li>
-                </ul>
-                
-                ${equipment.specifications && Object.keys(equipment.specifications).length > 0 ? `
-                    <h5 class="mt-4">Specifications</h5>
-                    <div class="row">
-                        ${Object.entries(equipment.specifications).map(([key, value]) => `
-                            <div class="col-6 mb-2"><strong>${key}:</strong> ${value}</div>
-                        `).join('')}
-                    </div>
-                ` : ''}
-            </div>
-        </div>
-    `;
-}
-
-// Update the total price displayed in the modal footer
-function updateModalPrice(type, value) {
-    const duration = parseInt(value);
-    const priceElement = document.getElementById('modal-total-price');
-    
-    if (isNaN(duration) || duration <= 0) {
-        if(priceElement) priceElement.textContent = '₹0';
-        // Ensure rentalDetails is reset if invalid
-        selectedEquipment.rentalDetails = {
-            durationType: type,
-            durationValue: 0,
-            calculatedPrice: 0
-        };
-        return;
-    }
-
-    let price = 0;
-    if (type === 'acre') {
-        price = (selectedEquipment.pricePerAcre || 0) * duration;
-    } else { // 'hour'
-        price = (selectedEquipment.pricePerHour || 0) * duration;
-    }
-
-    selectedEquipment.rentalDetails = {
-        durationType: type,
-        durationValue: duration,
-        calculatedPrice: price
-    };
-    
-    if(priceElement) priceElement.textContent = window.firebaseHelpers.formatCurrency(price);
-}
-
 // Display items currently in the cart
 async function displayCartItems(cart) { 
     if (!window.currentUser && cart.length > 0) {
@@ -2209,6 +2319,11 @@ async function displayCartItems(cart) {
                         ${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'}
                         (@ ${window.firebaseHelpers.formatCurrency(item.rentalType === 'acre' ? item.pricePerAcre : item.pricePerHour)}/${item.rentalType})
                     </p>
+                    <!-- NEW: Display pickup date/time -->
+                    <p class="mb-0 small text-danger">
+                        <i class="fas fa-calendar-check me-1"></i> Pickup: ${item.pickupDate} at ${item.pickupTime}
+                    </p>
+                    <!-- END NEW -->
                 </div>
                 <div class="text-end">
                     <strong class="text-success h5">${window.firebaseHelpers.formatCurrency(item.price)}</strong>
@@ -2252,7 +2367,7 @@ function updateCartSummary(subtotal, fees, total, isDisabled) {
     if (checkoutEl) checkoutEl.disabled = isDisabled || total === 0;
 }
 
-// Display items and calculate total on the checkout page
+// Display items and calculate total on the checkout page (MODIFIED)
 function displayCheckoutSummary(cart) {
     const listContainer = document.getElementById('checkout-item-list');
     if (!listContainer) return;
@@ -2260,8 +2375,25 @@ function displayCheckoutSummary(cart) {
     listContainer.innerHTML = '';
     
     let subtotal = 0;
-    let totalRentalDetails = [];
     
+    // NEW: Collect all rental duration and pickup details for display/form pre-fill
+    const totalRentalDetails = [];
+    const pickupDateInput = document.getElementById('rental-dates'); // Renamed to rental-dates in HTML
+    const firstItem = cart[0];
+
+    // Pre-fill the single "Rental Duration" field with details from the first item
+    if (pickupDateInput && firstItem) {
+        pickupDateInput.value = `${firstItem.rentalValue} ${firstItem.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'} | Pickup: ${firstItem.pickupDate} @ ${firstItem.pickupTime}`;
+    }
+    
+    // NEW: Set pickup date/time in razorpayContext for order placement
+    window.razorpayContext = {
+        ...window.razorpayContext,
+        orderPickupDate: firstItem?.pickupDate,
+        orderPickupTime: firstItem?.pickupTime,
+    };
+    // END NEW
+
     const orderPincode = cart.length > 0 ? cart[0].pincode : 'N/A';
 
     cart.forEach(item => {
@@ -2272,17 +2404,14 @@ function displayCheckoutSummary(cart) {
                     <strong>${item.name}</strong>
                     <div class="small text-muted">
                         ${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'} | By: ${item.businessName} (Pincode: ${item.pincode})
+                        <br><i class="fas fa-calendar-check me-1"></i> Pickup: ${item.pickupDate} @ ${item.pickupTime}
+                        <br><i class="fas fa-map-marked-alt me-1"></i> Address: ${item.sellerAddress}
                     </div>
                 </div>
                 <strong class="text-success">${window.firebaseHelpers.formatCurrency(item.price)}</strong>
             </div>
         `;
-        
-        totalRentalDetails.push(`${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'}`);
     });
-    
-    const rentalDates = document.getElementById('rental-dates');
-    if (rentalDates) rentalDates.value = totalRentalDetails.join(', ');
 
     const fees = subtotal * platformFeeRate;
     const total = subtotal + fees;
@@ -2301,7 +2430,7 @@ function displayCheckoutSummary(cart) {
     const payAmount = document.getElementById('pay-button-amount');
     if (payAmount) payAmount.textContent = window.firebaseHelpers.formatCurrency(total);
 
-    window.razorpayContext = { subtotal, fees, total, orderPincode }; 
+    window.razorpayContext = { subtotal, fees, total, orderPincode, ...window.razorpayContext }; 
 }
 
 // Process payment using Razorpay (Simulated Escrow/Route)
@@ -2329,7 +2458,7 @@ async function processPayment() {
         return;
     }
 
-    const { total } = window.razorpayContext;
+    const { total, orderPickupDate, orderPickupTime } = window.razorpayContext; // NEW: Extract date/time
     const totalInPaise = Math.round(total * 100);
 
     const customerData = {
@@ -2339,6 +2468,9 @@ async function processPayment() {
         address: 'Self-Pickup Confirmed',
         notes: document.getElementById('additional-notes').value,
         isPickup: isPickup,
+        // NEW: Capture Pickup Date/Time in customer data/notes
+        pickupDate: orderPickupDate,
+        pickupTime: orderPickupTime,
     };
     
     const orderId = window.firebaseHelpers.generateId(); 
@@ -2372,7 +2504,7 @@ async function processPayment() {
     rzp.open();
 }
 
-// Final step: Save order to Firestore after (simulated) successful payment
+// Final step: Save order to Firestore after (simulated) successful payment (MODIFIED)
 async function placeOrderInFirestore(orderId, customerData, paymentId, totalAmount) {
     const cart = await getCartFromFirestore();
     
@@ -2397,6 +2529,10 @@ async function placeOrderInFirestore(orderId, customerData, paymentId, totalAmou
             notes: customerData.notes,
             isPickup: true, 
             
+            // NEW: Add pickup date and time to the order summary
+            pickupDate: customerData.pickupDate, 
+            pickupTime: customerData.pickupTime,
+
             equipmentNames: itemNames,
             sellerIds: sellerIds,
             sellerBusinessNames: businessNames,
@@ -2628,12 +2764,16 @@ async function loadOrdersPage() {
     }
 }
 
-// Create HTML card for an order
+// Create HTML card for an order (MODIFIED to include Pickup Date/Time)
 function createOrderCard(order) {
     const statusClass = `order-status-${order.status || 'pending'}`;
     const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
     const date = window.firebaseHelpers.formatDate(order.createdAt);
     const deliveryType = '<span class="badge bg-warning text-dark me-2"><i class="fas fa-hand-paper me-1"></i>Self-Pickup</span>';
+    
+    // NEW: Extract pickup details
+    const pickupDate = order.pickupDate || 'N/A';
+    const pickupTime = order.pickupTime || 'N/A';
     
     return `
         <div class="col-lg-12 mb-4">
@@ -2661,13 +2801,19 @@ function createOrderCard(order) {
                             </li>
                         `).join('')}
                     </ul>
-                    <div class="row">
+                    <div class="row border-top pt-2">
                         <div class="col-md-6">
                             <strong>Total Amount:</strong> <span class="text-primary">${window.firebaseHelpers.formatCurrency(order.totalAmount)}</span>
                         </div>
                         <div class="col-md-6 text-md-end">
                             <strong>Pickup Pincode:</strong> ${order.orderPincode || 'N/A'}
                         </div>
+                        <!-- NEW ROW for Pickup Details -->
+                        <div class="col-12 mt-2">
+                            <span class="badge bg-danger text-white"><i class="fas fa-calendar-check me-1"></i> Pickup Date/Time:</span> 
+                            <strong>${pickupDate} at ${pickupTime}</strong>
+                        </div>
+                        <!-- END NEW ROW -->
                     </div>
                 </div>
                 <div class="card-footer text-end">
