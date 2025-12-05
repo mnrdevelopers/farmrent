@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FarmRent - My Profile</title>
+    <title>FarmRent - User Profile</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- FontAwesome -->
@@ -15,19 +15,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-remote-config-compat.js"></script>
-    <style>
-        .profile-card {
-            background-color: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-            padding: 30px;
-        }
-        .info-panel {
-            background-color: var(--clean-white);
-            border-radius: 8px;
-            padding: 20px;
-        }
-    </style>
 </head>
 <body>
     <!-- Navigation (Placeholder for script.js to populate) -->
@@ -36,13 +23,31 @@
             <a class="navbar-brand" href="index.html">
                 <i class="fas fa-tractor me-2"></i>FarmRent
             </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item"><a class="nav-link" href="index.html">Home</a></li>
                     <li class="nav-item"><a class="nav-link" href="browse.html">Browse Equipment</a></li>
+                    <li class="nav-item"><a class="nav-link" href="about.html">About Us</a></li>
+                    <li class="nav-item"><a class="nav-link" href="contact.html">Contact</a></li>
                 </ul>
-                <ul class="navbar-nav" id="navbar-auth">
+                <ul class="navbar-nav align-items-center">
+                    <li class="nav-item d-none d-lg-block">
+                        <span class="nav-link pincode-indicator" id="navbar-pincode-display" onclick="showPincodeModal()" style="cursor: pointer;">
+                            <i class="fas fa-map-marker-alt me-1"></i> <strong id="current-pincode-value-nav">All Locations</strong>
+                        </span>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="cart.html">
+                            <i class="fas fa-shopping-cart"></i> Cart
+                            <span class="badge bg-warning text-dark" id="cart-count">0</span>
+                        </a>
+                    </li>
+                    <ul class="navbar-nav" id="navbar-auth">
                     <!-- Auth links loaded by script.js -->
+                    </ul>
                 </ul>
             </div>
         </div>
@@ -51,97 +56,75 @@
     <!-- Profile Section -->
     <section class="py-5">
         <div class="container">
-            <h1 class="section-title">My Profile</h1>
+            <h1 class="section-title">Your Profile</h1>
             <div class="row">
-                <!-- Profile Form -->
-                <div class="col-lg-8 mb-4">
-                    <div class="profile-card">
-                        <h4 class="mb-4 text-primary"><i class="fas fa-user-edit me-2"></i>Edit Personal Details</h4>
+                <div class="col-lg-4 mb-4">
+                    <div class="card p-4 text-center shadow-sm">
+                        <i class="fas fa-user-circle fa-5x text-primary mb-3"></i>
+                        <h4 id="profile-user-name">Loading...</h4>
+                        <p class="text-muted small">Member Since: <span id="join-date">N/A</span></p>
+                        <button class="btn btn-outline-danger mt-3" onclick="logout()">
+                            <i class="fas fa-sign-out-alt me-2"></i>Logout
+                        </button>
+                    </div>
+                </div>
+                <div class="col-lg-8">
+                    <div class="card p-4 shadow-sm">
+                        <h4 class="mb-4 text-primary">Update Details</h4>
                         <form id="profile-form">
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label for="profile-name" class="form-label">Full Name *</label>
+                                    <label for="profile-name" class="form-label">Full Name</label>
                                     <input type="text" class="form-control" id="profile-name" required>
                                 </div>
                                 <div class="col-md-6 mb-3">
-                                    <label for="profile-email" class="form-label">Email Address *</label>
-                                    <input type="email" class="form-control" id="profile-email" required readonly disabled>
-                                    <div class="form-text">Cannot change email address.</div>
+                                    <label for="profile-email" class="form-label">Email Address (Read-Only)</label>
+                                    <input type="email" class="form-control bg-light" id="profile-email" readonly>
                                 </div>
                             </div>
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label for="profile-phone" class="form-label">Phone Number *</label>
-                                    <input type="tel" class="form-control" id="profile-phone" pattern="[0-9]{10}" required>
+                                    <label for="profile-phone" class="form-label">Phone Number</label>
+                                    <input type="tel" class="form-control" id="profile-phone" pattern="[0-9]{10}">
                                 </div>
                                 <div class="col-md-6 mb-3">
-                                    <label for="profile-pincode" class="form-label">Pincode (For Local Equipment Search) *</label>
-                                    <input type="text" class="form-control" id="profile-pincode" pattern="[0-9]{6}" maxlength="6" required>
-                                    <div class="form-text text-danger" id="pincode-status-message">
-                                        <!-- Placeholder for dynamic Pincode status/lookup info -->
-                                    </div>
+                                    <label for="profile-address" class="form-label">Street Address</label>
+                                    <input type="text" class="form-control" id="profile-address">
                                 </div>
                             </div>
                             
-                            <!-- NEW LOCATION FIELDS -->
+                            <!-- Location Fields (Pincode is mandatory for sellers) -->
+                            <h5 class="mt-4 mb-3 text-secondary"><i class="fas fa-map-marker-alt me-2"></i>Location</h5>
+
                             <div class="row">
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-4 mb-3" id="pincode-input-group">
+                                    <label for="profile-pincode" class="form-label">Pincode *</label>
+                                    <input type="text" class="form-control" id="profile-pincode" pattern="[0-9]{6}" maxlength="6" required>
+                                    <!-- Warning message for sellers added by JS if pincode exists -->
+                                </div>
+                                <div class="col-md-8 mb-3">
                                     <label for="profile-village" class="form-label">Village/Post Office *</label>
                                     <select class="form-select" id="profile-village" required disabled>
                                         <option value="">Enter Pincode Above</option>
                                     </select>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="profile-city" class="form-label">City/District *</label>
-                                    <input type="text" class="form-control" id="profile-city" readonly required>
+                                    <small id="pincode-status-message" class="text-muted mt-1 d-block"></small>
                                 </div>
                             </div>
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label for="profile-state" class="form-label">State *</label>
-                                    <input type="text" class="form-control" id="profile-state" readonly required>
+                                    <label for="profile-city" class="form-label">City/District</label>
+                                    <input type="text" class="form-control bg-light" id="profile-city" readonly>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="profile-state" class="form-label">State</label>
+                                    <input type="text" class="form-control bg-light" id="profile-state" readonly>
                                 </div>
                             </div>
-                            <!-- END NEW LOCATION FIELDS -->
 
-                            <div class="mb-3">
-                                <label for="profile-address" class="form-label">Default Address (Street/House Number) *</label>
-                                <textarea class="form-control" id="profile-address" rows="3" placeholder="Primary delivery address details (House/Street)" required></textarea>
-                            </div>
-                            
-                            <button type="submit" class="btn btn-primary btn-lg">
+                            <button type="submit" class="btn btn-primary btn-lg mt-4">
                                 <i class="fas fa-save me-2"></i>Save Changes
                             </button>
                         </form>
-                        
-                        <hr class="my-4">
-                        <p class="text-muted">Need to change your password? use the "Forgot Password" link on the login page.</p>
-                    </div>
-                </div>
-
-                <!-- Account Info -->
-                <div class="col-lg-4">
-                    <div class="info-panel">
-                        <h4 class="mb-3 text-warning"><i class="fas fa-info-circle me-2"></i>Account Status</h4>
-                        
-                        <div class="mb-4">
-                            <h6>Role</h6>
-                            <span class="badge bg-primary fs-6">Customer</span>
-                        </div>
-
-                        <div class="mb-4">
-                            <h6>Member Since</h6>
-                            <p id="join-date">Loading...</p>
-                        </div>
-                        
-                        <div class="alert alert-success">
-                            <i class="fas fa-check-circle me-2"></i>
-                            Your email is verified and account is active.
-                        </div>
-
-                        <a href="orders.html" class="btn btn-outline-primary w-100">
-                            <i class="fas fa-clipboard-list me-2"></i>View My Orders
-                        </a>
                     </div>
                 </div>
             </div>
@@ -154,6 +137,93 @@
             <p class="text-center">&copy; 2025 FarmRent. All rights reserved.</p>
         </div>
     </footer>
+
+    <!-- Pincode Prompt Modal (Needed for global showPincodeModal function) -->
+    <div class="modal fade pincode-modal" id="pincodeModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-map-marker-alt me-2"></i>
+                        Choose Your Location
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="pincode-form">
+                    <div class="modal-body">
+                        <div class="mb-4">
+                            <p class="mb-2">Enter your pincode to see equipment available in your area</p>
+                            
+                            <!-- Current Location Button -->
+                            <div class="d-grid mb-3">
+                                <button type="button" class="btn btn-outline-primary" id="location-access-btn" 
+                                        onclick="getCurrentLocationPincode()">
+                                    <i class="fas fa-location-arrow me-2"></i>
+                                    Use Current Location
+                                </button>
+                                <small class="text-muted mt-1 text-center" id="location-status"></small>
+                            </div>
+                            
+                            <!-- Divider -->
+                            <div class="divider text-center mb-3">
+                                <span class="text-muted small">OR ENTER PINCODE</span>
+                            </div>
+                            
+                            <!-- Pincode Input -->
+                            <div class="input-group input-group-lg">
+                                <input type="text" 
+                                        class="form-control" 
+                                        id="pincode-input"
+                                        placeholder="Enter 6-digit pincode"
+                                        maxlength="6"
+                                        pattern="[0-9]{6}"
+                                        inputmode="numeric">
+                                <button class="btn btn-primary" type="submit">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                            </div>
+                            
+                            <!-- Pincode Help -->
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    We'll show equipment from sellers in your area
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <!-- Popular Cities (Optional) -->
+                        <div id="popular-cities">
+                            <h6 class="text-muted mb-2">Popular Locations (Demo):</h6>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="savePincode('500001')">
+                                    Hyderabad
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="savePincode('110001')">
+                                    Delhi
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="savePincode('400001')">
+                                    Mumbai
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="savePincode('600001')">
+                                    Chennai
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" onclick="skipPincode()">
+                            Skip for now
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            Apply Location
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-- End Pincode Prompt Modal -->
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
