@@ -331,7 +331,7 @@ window.firebaseHelpers = {
     },
     
     // Show alert message
-    showAlert: (message, type = 'info') => {
+    showAlert: (message, type = 'info', isHtml = false) => {
         // Remove existing alerts
         const existingAlert = document.querySelector('.firebase-alert');
         if (existingAlert) {
@@ -342,24 +342,30 @@ window.firebaseHelpers = {
         const alertDiv = document.createElement('div');
         alertDiv.className = `alert alert-${type} alert-dismissible fade show firebase-alert position-fixed top-0 end-0 m-3`;
         alertDiv.style.zIndex = '9999';
-        alertDiv.style.maxWidth = '400px';
-        alertDiv.innerHTML = `
-            <div class="d-flex align-items-center">
-                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
-                <div>${message}</div>
-            </div>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
+        alertDiv.style.maxWidth = '500px';
+        
+        if (isHtml) {
+            alertDiv.innerHTML = message;
+        } else {
+            alertDiv.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
+                    <div>${message}</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+        }
         
         // Add to body
         document.body.appendChild(alertDiv);
         
-        // Auto remove after 5 seconds
+        // Auto remove after 8 seconds for warnings, 5 for others
+        const timeout = type === 'warning' ? 8000 : 5000;
         setTimeout(() => {
             if (alertDiv.parentElement) {
                 alertDiv.remove();
             }
-        }, 5000);
+        }, timeout);
     },
 
     // --- COMPREHENSIVE PINCODE SYSTEM ---
@@ -380,6 +386,12 @@ window.firebaseHelpers = {
          * Set pincode across all storage systems
          */
         setPincode: async (pincode) => {
+            // Store previous pincode before updating
+            const oldPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
+            if (oldPincode) {
+                localStorage.setItem('previousPincode', oldPincode);
+            }
+            
             // Set global variable (This should be done by the calling script, but included for completeness)
             window.customerPincode = pincode;
             
@@ -427,7 +439,77 @@ window.firebaseHelpers = {
         clearPincode: () => {
             window.customerPincode = null;
             localStorage.removeItem('customerPincode');
+            localStorage.removeItem('previousPincode'); // Also clear previous when clearing current
             // Note: Clearing from Firestore profile is handled by setPincode(null) if needed.
+        },
+        
+        /**
+         * Track pincode changes and check cart compatibility
+         */
+        checkPincodeCompatibility: async () => {
+            const oldPincode = localStorage.getItem('previousPincode'); // Use explicitly stored previous
+            const newPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
+            
+            // If pincode hasn't changed, return
+            if (!oldPincode || oldPincode === newPincode) return { changed: false };
+            
+            // Get cart items (relies on getCartFromFirestore being globally available/imported in script.js scope)
+            let cart = [];
+            if (window.getCartFromFirestore) {
+                try {
+                    // Ensure global function exists before calling
+                    cart = await window.getCartFromFirestore(); 
+                } catch (error) {
+                    cart = JSON.parse(localStorage.getItem('cart') || '[]');
+                }
+            } else {
+                cart = JSON.parse(localStorage.getItem('cart') || '[]');
+            }
+            
+            // Check if cart has items from old pincode (or any pincode different from the new one)
+            const incompatibleItems = cart.filter(item => 
+                item.pincode && item.pincode !== newPincode
+            );
+            
+            return {
+                changed: true,
+                oldPincode,
+                newPincode,
+                hasCartItems: cart.length > 0,
+                incompatibleItems: incompatibleItems,
+                allItemsCompatible: incompatibleItems.length === 0
+            };
+        },
+        
+        /**
+         * Show pincode change warning
+         */
+        showPincodeChangeWarning: (compatibilityResult) => {
+            if (!compatibilityResult.changed || compatibilityResult.allItemsCompatible || compatibilityResult.incompatibleItems.length === 0) {
+                // Do not show warning if no incompatible items exist, even if pincode changed
+                return;
+            }
+            
+            const warningMessage = `
+                <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Location Changed!</strong> Your cart contains items from **Pincode ${compatibilityResult.oldPincode}**, 
+                    but your current location is **${compatibilityResult.newPincode}**. 
+                    <br><small>These items may not be available in your new location.</small>
+                    <div class="mt-2">
+                        <button class="btn btn-sm btn-outline-warning me-2" onclick="updateCartForNewPincode()">
+                            Clear Cart & Shop Local
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="revertToPreviousPincode()">
+                            Revert to Previous Location (${compatibilityResult.oldPincode})
+                        </button>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            // Show alert (isHtml=true)
+            window.firebaseHelpers.showAlert(warningMessage, 'warning', true);
         }
     }
 };
