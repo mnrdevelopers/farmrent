@@ -81,38 +81,52 @@ async function updateCartInFirestore(cart) {
 
 
 // Initialize page
+// Update the DOMContentLoaded event listener in script.js:
 document.addEventListener('DOMContentLoaded', async () => {
-    // We await initializeAuth() before proceeding to ensure currentUser is correctly set.
-    await initializeAuth(); 
-    
-    // Check which page we are on
-    const path = window.location.pathname.split('/').pop();
-    if (path === 'browse.html') {
-        loadBrowsePageData();
-    } else if (path === 'cart.html') {
-        loadCartPage();
-        updateNavbarPincodeDisplay();
-    } else if (path === 'checkout.html') {
-        loadCheckoutPage();
-        updateNavbarPincodeDisplay();
-    } else if (path === 'profile.html') {
-        loadProfilePage();
-        updateNavbarPincodeDisplay();
-    } else if (path === 'orders.html') {
-        loadOrdersPage();
-        updateNavbarPincodeDisplay();
-    } else if (path === 'seller.html' || path === 'seller-pending.html') {
-        loadSellerDashboard();
-        updateNavbarPincodeDisplay();
-    } else if (path === 'index.html' || path === '') { // Handles index.html
-        loadHomepageData();
-        checkAndPromptForPincode(); // Initiates the pincode flow
-    } else {
-        updateNavbarPincodeDisplay();
-    }
+    try {
+        // We await initializeAuth() before proceeding to ensure currentUser is correctly set.
+        await initializeAuth(); 
+        
+        // Check which page we are on
+        const path = window.location.pathname.split('/').pop();
+        
+        // Wait a moment for any Firebase initialization to complete
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        if (path === 'browse.html') {
+            loadBrowsePageData();
+        } else if (path === 'cart.html') {
+            loadCartPage();
+            updateNavbarPincodeDisplay();
+        } else if (path === 'checkout.html') {
+            loadCheckoutPage();
+            updateNavbarPincodeDisplay();
+        } else if (path === 'profile.html') {
+            loadProfilePage();
+            updateNavbarPincodeDisplay();
+        } else if (path === 'orders.html') {
+            loadOrdersPage();
+            updateNavbarPincodeDisplay();
+        } else if (path === 'seller.html') {
+            // Don't call loadSellerDashboard here since seller.html has its own script
+            // Just update the navbar if needed
+            updateNavbarPincodeDisplay();
+        } else if (path === 'seller-pending.html') {
+            // Don't call loadSellerDashboard here since seller-pending.html has its own script
+            updateNavbarPincodeDisplay();
+        } else if (path === 'index.html' || path === '') { // Handles index.html
+            loadHomepageData();
+            checkAndPromptForPincode(); // Initiates the pincode flow
+        } else {
+            updateNavbarPincodeDisplay();
+        }
 
-    initializeEventListeners();
-    await getPlatformFeeRate(); 
+        initializeEventListeners();
+        await getPlatformFeeRate(); 
+        
+    } catch (error) {
+        console.error('Error during page initialization:', error);
+    }
 });
 
 // --- NEW FUNCTION: Fetch Platform Fee Rate ---
@@ -654,10 +668,14 @@ async function initializeAuthInternal() {
                         window.currentUser = { uid: user.uid, ...doc.data() };
                         
                         // NEW PINCODE LOGIC: Set global pincode based on precedence
-                        // Note: Setting customerPincode here will correctly update firebase-config.js's getter
                         window.customerPincode = window.currentUser.pincode || localStorage.getItem('customerPincode') || null;
                         
-                        updateNavbarForLoggedInUser(window.currentUser);
+                        try {
+                            updateNavbarForLoggedInUser(window.currentUser);
+                        } catch (navError) {
+                            console.warn('Could not update navbar:', navError);
+                        }
+                        
                         updateCartCount(); 
                         
                         const path = window.location.pathname.split('/').pop();
@@ -680,7 +698,12 @@ async function initializeAuthInternal() {
                 // NEW PINCODE LOGIC: Set customerPincode from local storage only
                 window.customerPincode = localStorage.getItem('customerPincode') || null;
 
-                updateNavbarForLoggedOutUser();
+                try {
+                    updateNavbarForLoggedOutUser();
+                } catch (navError) {
+                    console.warn('Could not update navbar:', navError);
+                }
+                
                 updateCartCount();
                 isAuthInitialized = true;
                 
@@ -1447,8 +1470,15 @@ async function loadCheckoutPage() {
 // --- REST OF EXISTING FUNCTIONS ---
 
 // Update navbar for logged in user
+// In script.js, update the updateNavbarForLoggedInUser function:
 function updateNavbarForLoggedInUser(userData) {
     const navbarAuth = document.getElementById('navbar-auth');
+    
+    // Check if the element exists
+    if (!navbarAuth) {
+        console.log('Navbar auth element not found on this page');
+        return;
+    }
     
     let dropdownHtml = `
         <li class="nav-item dropdown">
