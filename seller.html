@@ -1383,44 +1383,68 @@
     });
 
     // Update seller information in UI
-    function updateSellerInfo() {
-        if (sellerData) {
-            const sellerNameElement = document.getElementById('seller-name');
-            const welcomeMessageElement = document.getElementById('welcome-message');
-            const pageTitleElement = document.getElementById('page-title');
-            const registeredPincodeDisplay = document.getElementById('registered-pincode-display');
-            
-            if (sellerNameElement) sellerNameElement.textContent = sellerData.name || 'Seller';
-            if (welcomeMessageElement) welcomeMessageElement.textContent = `Welcome back, ${sellerData.name || 'Seller'}!`;
-            
-            if (sellerData.businessName && pageTitleElement) {
-                pageTitleElement.textContent = `${sellerData.businessName} - Dashboard`;
-            }
+   function updateSellerInfo() {
+    if (sellerData) {
+        const sellerNameElement = document.getElementById('seller-name');
+        const welcomeMessageElement = document.getElementById('welcome-message');
+        const pageTitleElement = document.getElementById('page-title');
+        const registeredPincodeDisplay = document.getElementById('registered-pincode-display');
+        
+        // Add null checks before setting textContent
+        if (sellerNameElement) sellerNameElement.textContent = sellerData.name || 'Seller';
+        if (welcomeMessageElement) welcomeMessageElement.textContent = `Welcome back, ${sellerData.name || 'Seller'}!`;
+        
+        if (sellerData.businessName && pageTitleElement) {
+            pageTitleElement.textContent = `${sellerData.businessName} - Dashboard`;
+        }
 
-            // Update Pincode display in Dashboard header and Add Equipment section
-            if (registeredPincodeDisplay) {
-                registeredPincodeDisplay.textContent = sellerData.pincode || 'N/A (Update Profile)';
-            }
+        // Update Pincode display in Dashboard header and Add Equipment section
+        if (registeredPincodeDisplay) {
+            registeredPincodeDisplay.textContent = sellerData.pincode || 'N/A (Update Profile)';
+        }
+        
+        // FIX: Check if elements exist before manipulating
+        const profilePincodeInput = document.getElementById('profile-pincode');
+        const pincodeGroup = document.getElementById('pincode-input-group');
+        
+        if (profilePincodeInput && sellerData.pincode) {
+            profilePincodeInput.readOnly = true;
+            profilePincodeInput.classList.add('bg-light', 'text-muted');
             
-            // FIX: Enforce readonly Pincode in profile if set
-            const profilePincodeInput = document.getElementById('profile-pincode');
-            const pincodeGroup = document.getElementById('pincode-input-group');
-            if (profilePincodeInput && sellerData.pincode) {
-                profilePincodeInput.readOnly = true;
-                profilePincodeInput.classList.add('bg-light', 'text-muted');
-                if (pincodeGroup && !pincodeGroup.querySelector('.alert')) {
-                    pincodeGroup.innerHTML += `
-                        <div class="alert alert-info p-2 mt-2 small">
-                            <i class="fas fa-lock me-1"></i> Your Seller Pincode is permanent for consistency.
-                        </div>
-                    `;
-                }
-            } else if (profilePincodeInput) {
-                 profilePincodeInput.readOnly = false;
-                 profilePincodeInput.classList.remove('bg-light', 'text-muted');
+            // Check if warning already exists
+            if (pincodeGroup && !pincodeGroup.querySelector('.alert')) {
+                const warningDiv = document.createElement('div');
+                warningDiv.className = 'alert alert-info p-2 mt-2 small';
+                warningDiv.innerHTML = '<i class="fas fa-lock me-1"></i> Your Seller Pincode is permanent for consistency.';
+                pincodeGroup.appendChild(warningDiv);
             }
+        } else if (profilePincodeInput) {
+            profilePincodeInput.readOnly = false;
+            profilePincodeInput.classList.remove('bg-light', 'text-muted');
         }
     }
+}
+
+    // Load seller dashboard logic
+async function loadSellerDashboard() {
+    // This function is called from script.js for seller.html
+    // The actual seller dashboard logic is in seller.html itself
+    // So we don't need to do anything here
+    console.log('Seller dashboard page loaded');
+    
+    // Ensure Firebase is initialized
+    if (!window.FirebaseDB) {
+        console.error('Firebase not initialized yet');
+        return;
+    }
+    
+    // Check authentication
+    const user = await window.firebaseHelpers.getCurrentUser();
+    if (!user) {
+        window.location.href = 'auth.html?role=seller';
+        return;
+    }
+}
 
     // Pincode location lookup function for seller profile
     async function populateSellerLocationFields() {
