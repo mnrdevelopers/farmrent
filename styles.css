@@ -364,3 +364,42 @@ html, body {
     overflow-y: scroll;
     min-height: 100vh;
 }
+
+/* --- NEW PINCODE SYSTEM STYLES --- */
+.pincode-indicator {
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 5px 15px !important;
+    transition: all 0.3s;
+}
+
+.pincode-indicator:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.pincode-modal .modal-dialog {
+    max-width: 400px;
+}
+
+.location-option {
+    padding: 10px 15px;
+    border-radius: 8px;
+    margin-bottom: 5px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.location-option:hover {
+    background-color: #f8f9fa;
+}
+
+.location-option.active {
+    background-color: #e7f1ff;
+    border-left: 3px solid #0d6efd;
+}
+
+.recent-pincodes {
+    max-height: 200px;
+    overflow-y: auto;
+}
+/* --- END NEW PINCODE SYSTEM STYLES --- */
