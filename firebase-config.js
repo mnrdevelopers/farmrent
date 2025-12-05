@@ -360,5 +360,74 @@ window.firebaseHelpers = {
                 alertDiv.remove();
             }
         }, 5000);
+    },
+
+    // --- COMPREHENSIVE PINCODE SYSTEM ---
+    pincodeSystem: {
+        /**
+         * Get current pincode from all possible sources
+         * Priority: 1. Global variable (window.customerPincode) 2. Local storage 3. User profile 4. null
+         */
+        getCurrentPincode: () => {
+            // Note: window.currentUser is set in script.js's initializeAuthInternal
+            return window.customerPincode || 
+                    localStorage.getItem('customerPincode') || 
+                    window.currentUser?.pincode || 
+                    null;
+        },
+        
+        /**
+         * Set pincode across all storage systems
+         */
+        setPincode: async (pincode) => {
+            // Set global variable (This should be done by the calling script, but included for completeness)
+            window.customerPincode = pincode;
+            
+            // Store in localStorage for session persistence
+            if (pincode) {
+                localStorage.setItem('customerPincode', pincode);
+            } else {
+                localStorage.removeItem('customerPincode');
+            }
+            
+            // If user is logged in, update profile in Firestore
+            if (window.currentUser && window.FirebaseDB) {
+                try {
+                    // Path: users/{userId}
+                    await window.FirebaseDB.collection('users')
+                        .doc(window.currentUser.uid)
+                        .update({
+                            pincode: pincode,
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    
+                    // Update local currentUser object
+                    window.currentUser.pincode = pincode;
+                } catch (error) {
+                    console.warn('Could not save pincode to user profile:', error);
+                    // This is usually okay, user might not have a profile document yet or a firestore rule blocks it
+                }
+            }
+            
+            return pincode;
+        },
+        
+        // Validate pincode format
+        validatePincode: (pincode) => {
+            return /^[1-9][0-9]{5}$/.test(pincode);
+        },
+        
+        // Get pincode display text
+        getDisplayText: () => {
+            const pincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
+            return pincode ? `Pincode: ${pincode}` : 'Select Location';
+        },
+        
+        // Clear pincode (logout or manual clear)
+        clearPincode: () => {
+            window.customerPincode = null;
+            localStorage.removeItem('customerPincode');
+            // Note: Clearing from Firestore profile is handled by setPincode(null) if needed.
+        }
     }
 };
