@@ -44,6 +44,8 @@ async function getCartFromFirestore() {
         return JSON.parse(localStorage.getItem('cart') || '[]');
     }
 }
+// Make getCartFromFirestore globally accessible for firebase-config.js (via window.getCartFromFirestore)
+window.getCartFromFirestore = getCartFromFirestore;
 
 /**
  * Updates the user's cart data in Firestore or local storage.
@@ -98,6 +100,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateNavbarPincodeDisplay();
     } else if (path === 'orders.html') {
         loadOrdersPage();
+        updateNavbarPincodeDisplay();
+    } else if (path === 'seller.html' || path === 'seller-pending.html') {
+        loadSellerDashboard();
         updateNavbarPincodeDisplay();
     } else if (path === 'index.html' || path === '') { // Handles index.html
         loadHomepageData();
@@ -417,11 +422,15 @@ async function handlePincodeSubmit(e) {
     }
 }
 
-// Save the Pincode to system and trigger data reload
+// Save the Pincode to system and trigger data reload (UPDATED)
 async function savePincode(pincode) {
+    // 1. Check compatibility BEFORE setting the new pincode globally
+    const compatibilityResult = await window.firebaseHelpers.pincodeSystem.checkPincodeCompatibility();
+    
+    // 2. Save the new pincode
     await window.firebaseHelpers.pincodeSystem.setPincode(pincode);
     
-    // Check Post Office API for location info to display better success message
+    // 3. Check Post Office API for location info to display better success message
     const postOffices = await getPostOfficeData(pincode);
     let locationInfo = pincode;
     if (postOffices.length > 0) {
@@ -430,7 +439,7 @@ async function savePincode(pincode) {
 
     window.firebaseHelpers.showAlert(`Location set to ${locationInfo}. Filtering results.`, 'success');
     
-    // Update the UI and reload content
+    // 4. Update the UI and reload content
     updateHomepagePincodeDisplay();
     updateNavbarPincodeDisplay();
 
@@ -438,8 +447,16 @@ async function savePincode(pincode) {
     if (path === 'browse.html') {
         updatePincodeDisplay();
         loadAllEquipment(); 
+    } else if (path === 'cart.html') {
+        // If on cart page, load the cart page logic which handles compatibility warnings
+        loadCartPage();
     } else {
         loadFeaturedEquipment(); // Reload data on the homepage
+    }
+    
+    // 5. Show warning if cart has incompatible items (compatibilityResult is based on PREVIOUS state)
+    if (compatibilityResult.changed && !compatibilityResult.allItemsCompatible) {
+        window.firebaseHelpers.pincodeSystem.showPincodeChangeWarning(compatibilityResult);
     }
 }
 
@@ -485,13 +502,97 @@ function updateNavbarPincodeDisplay() {
         navPincodeValueElement.textContent = window.customerPincode ? window.customerPincode : 'All Locations';
     }
 }
-
 // --- END PINCODE SYSTEM INTEGRATION FUNCTIONS ---
+
+// --- NEW PINCODE WARNING RESOLUTION HELPERS (CALLED FROM FIREBASE-CONFIG.JS HTML) ---
+
+// Clear cart and shop in new location
+async function updateCartForNewPincode() {
+    // Note: Since we are using a custom modal style warning in firebase-config.js, 
+    // we use a standard JS confirm here as a secondary confirmation layer before clearing critical data.
+    if (!window.confirm('This will clear your cart and show equipment available in your new location. Continue?')) {
+        return;
+    }
+    
+    await updateCartInFirestore([]);
+    window.firebaseHelpers.showAlert('Cart cleared. Showing equipment for your new location.', 'success');
+    
+    // Reload appropriate page
+    const path = window.location.pathname.split('/').pop();
+    if (path === 'cart.html') {
+        loadCartPage();
+    } else if (path === 'browse.html') {
+        loadAllEquipment();
+    }
+}
+
+// Revert to previous pincode
+async function revertToPreviousPincode() {
+    const oldPincode = localStorage.getItem('previousPincode');
+    if (oldPincode) {
+        // Call savePincode to handle setting it and subsequent UI reloads/checks
+        await savePincode(oldPincode); 
+        localStorage.removeItem('previousPincode'); // Clear after successful revert
+    }
+}
+
+// Helper function to change pincode to match equipment (used in addToCartModal warning)
+async function changePincodeToMatchEquipment(equipmentPincode) {
+    await savePincode(equipmentPincode);
+    
+    // Re-try adding to cart after pincode change
+    // Find and hide the custom warning modal first
+    const modalElement = document.getElementById('custom-warning-modal');
+    if (modalElement) {
+        const modalInstance = bootstrap.Modal.getInstance(modalElement);
+        if (modalInstance) modalInstance.hide();
+    }
+    
+    // Delay slightly to ensure savePincode async operations complete before re-triggering modal
+    setTimeout(() => {
+        addToCartModal();
+    }, 500);
+}
+
+// Show custom warning modal (used for item-level mismatch)
+function showCustomWarningModal(content) {
+    // Remove existing custom modals
+    const existingModal = document.getElementById('custom-warning-modal');
+    if (existingModal) existingModal.remove();
+    
+    const modalHtml = `
+        <div class="modal fade" id="custom-warning-modal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-warning text-dark">
+                        <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>Attention Required</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        ${content}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    // Use setTimeout to ensure the modal element is in the DOM before initializing Bootstrap
+    setTimeout(() => {
+        const modalElement = document.getElementById('custom-warning-modal');
+        if (modalElement) {
+             const modal = new bootstrap.Modal(modalElement);
+             modal.show();
+        }
+    }, 0);
+}
+
+// --- END NEW PINCODE WARNING RESOLUTION HELPERS ---
 
 
 // --- EXISTING FUNCTIONS MODIFIED FOR PINCODE FILTERING ---
 
-// Initialize authentication (Modified to rely on firebaseHelpers.pincodeSystem)
+// Initialize authentication (No changes needed, as it relies on updated firebase-config.js)
 function initializeAuth() {
     if (!window.firebaseHelpers || !window.FirebaseDB) {
         console.log("Waiting for Firebase initialization...");
@@ -532,6 +633,7 @@ async function initializeAuthInternal() {
                         window.currentUser = { uid: user.uid, ...doc.data() };
                         
                         // NEW PINCODE LOGIC: Set global pincode based on precedence
+                        // Note: Setting customerPincode here will correctly update firebase-config.js's getter
                         window.customerPincode = window.currentUser.pincode || localStorage.getItem('customerPincode') || null;
                         
                         updateNavbarForLoggedInUser(window.currentUser);
@@ -591,7 +693,7 @@ async function logout() {
     }
 }
 
-// Load data specifically for the Browse page (MODIFIED to rely on firebaseHelpers.pincodeSystem)
+// Load data specifically for the Browse page (Modified to rely on firebaseHelpers.pincodeSystem)
 async function loadBrowsePageData() {
     // Ensure window.customerPincode is set from precedence logic in initializeAuth
     window.customerPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode(); 
@@ -779,7 +881,54 @@ async function loadFeaturedEquipment() {
     }
 }
 
-// Add item to cart from modal (MODIFIED for Pincode consistency check)
+// Create equipment card HTML (UPDATED)
+function createEquipmentCard(equipment, id, isBrowsePage = false) {
+    const imageUrl = equipment.images && equipment.images[0] ? equipment.images[0] : 'https://placehold.co/300x200/2B5C2B/FFFFFF?text=Equipment';
+    const currentPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
+    const equipmentPincode = equipment.pincode;
+    
+    // Check if equipment matches current pincode (only if currentPincode is set)
+    // If currentPincode is null, we show all, so pincodeMatches is effectively true.
+    const pincodeMatches = currentPincode ? equipmentPincode === currentPincode : true; 
+    
+    const pincodeWarning = !pincodeMatches && currentPincode ? `
+        <div class="alert alert-warning p-2 mt-2 mb-2 small">
+            <i class="fas fa-exclamation-triangle me-1"></i>
+            <small>Located in ${equipmentPincode} (Your filter: ${currentPincode})</small>
+        </div>
+    ` : '';
+    
+    const cardClass = `card equipment-card h-100 ${!pincodeMatches && currentPincode ? 'border-warning' : ''}`;
+    
+    const actionButtonHtml = isBrowsePage 
+        ? `<button class="btn btn-primary w-100" onclick="showEquipmentDetailsModal('${id}')">View Details</button>`
+        : `<a href="item.html?id=${id}" class="btn btn-primary w-100">View Details</a>`;
+
+    return `
+        <div class="${cardClass}">
+            ${!pincodeMatches && currentPincode ? '<div class="card-header bg-warning text-dark small py-1"><i class="fas fa-map-marker-alt me-1"></i>Different Location</div>' : ''}
+            <div class="position-relative">
+                <img src="${imageUrl}" class="card-img-top" alt="${equipment.name}" style="height: 200px; object-fit: cover;">
+                <span class="category-badge">${equipment.category || 'Equipment'}</span>
+                ${equipment.onSale || equipment.featured ? '<span class="sale-badge position-absolute" style="top:15px; left:15px;">' + (equipment.featured ? 'Featured' : 'Special Offer') + '</span>' : ''}
+            </div>
+            <div class="card-body d-flex flex-column">
+                <h5 class="card-title">${equipment.name}</h5>
+                ${pincodeWarning}
+                <div class="mt-auto">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="price-tag">₹${equipment.pricePerAcre || 0}/acre</div>
+                        <small class="text-muted">or ₹${equipment.pricePerHour || 0}/hour</small>
+                    </div>
+                    <p class="mb-2 small text-muted"><i class="fas fa-map-marker-alt me-1"></i> Pincode: ${equipment.pincode || 'N/A'}</p>
+                    ${actionButtonHtml}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Add item to cart from modal (UPDATED for Pincode consistency check)
 async function addToCartModal() {
     const item = selectedEquipment;
     const { durationType, durationValue, calculatedPrice } = item.rentalDetails;
@@ -797,13 +946,51 @@ async function addToCartModal() {
         return;
     }
     
+    // Get current customer's preferred pincode
+    const currentPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
+    
+    // Check if pincode is set
+    if (!currentPincode) {
+        window.firebaseHelpers.showAlert('Please set your location first to ensure equipment availability.', 'warning');
+        showPincodeModal();
+        return;
+    }
+    
+    // Check for Pincode mismatch (Item Location vs Customer Location Filter)
+    if (itemPincode !== currentPincode) {
+        const warningHtml = `
+            <div class="alert alert-warning">
+                <h6><i class="fas fa-map-marker-alt me-2"></i>Location Mismatch</h6>
+                <p>This equipment is located in Pincode <strong>${itemPincode}</strong>, 
+                but your current location filter is <strong>${currentPincode}</strong>.</p>
+                <p class="mb-2"><small>Items must match your active location filter to proceed to checkout.</small></p>
+                <div class="d-flex gap-2 mt-2">
+                    <button class="btn btn-sm btn-warning" onclick="changePincodeToMatchEquipment('${itemPincode}')">
+                        Change My Location to ${itemPincode} & Continue
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="bootstrap.Modal.getInstance(document.getElementById('custom-warning-modal')).hide();">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        // Create and show a modal for this specific warning
+        showCustomWarningModal(warningHtml);
+        return;
+    }
+    
+    // Check for Cart inconsistency (Item Location vs existing Cart Location)
     if (cart.length > 0) {
         const cartPincode = cart[0].pincode;
-        if (cartPincode && cartPincode !== itemPincode) {
+        // Since we already ensured itemPincode === currentPincode, 
+        // we only need to check cartPincode against currentPincode (which is itemPincode)
+        if (cartPincode && cartPincode !== currentPincode) { 
              window.firebaseHelpers.showAlert(`Cannot add equipment from Pincode ${itemPincode}. Your cart contains items from ${cartPincode}. Clear your cart to order from a different Pincode.`, 'danger');
              return;
         }
     }
+
 
     const cartItem = {
         id: item.id,
@@ -828,6 +1015,7 @@ async function addToCartModal() {
 
     await updateCartInFirestore(cart); 
     
+    // Hide original equipment details modal
     const modal = bootstrap.Modal.getInstance(document.getElementById('equipmentDetailsModal'));
     if (modal) modal.hide();
     
@@ -861,6 +1049,25 @@ async function rentNowModal() {
     // Enforce consistency between user's filter and item's location
     if (userPincode !== itemPincode) {
         window.firebaseHelpers.showAlert(`The selected equipment is in Pincode ${itemPincode}, but your current location filter is set to ${userPincode}. Please change your filter to match the equipment location.`, 'danger');
+        
+        const warningHtml = `
+            <div class="alert alert-danger">
+                <h6><i class="fas fa-map-marker-alt me-2"></i>Checkout Blocked: Location Mismatch</h6>
+                <p>This equipment is located in Pincode <strong>${itemPincode}</strong>, 
+                but your current location filter is <strong>${userPincode}</strong>.</p>
+                <p class="mb-2"><small>You must set your location to match the equipment location to rent now.</small></p>
+                <div class="d-flex gap-2 mt-2">
+                    <button class="btn btn-sm btn-warning" onclick="changePincodeToMatchEquipment('${itemPincode}'); window.location.href='checkout.html'">
+                        Change My Location to ${itemPincode} & Checkout
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="$('#equipmentDetailsModal .btn-close').click()">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        showCustomWarningModal(warningHtml);
         return;
     }
 
@@ -889,6 +1096,217 @@ async function rentNowModal() {
     window.location.href = 'checkout.html';
 }
 
+// Load logic for Cart page (cart.html) (UPDATED)
+async function loadCartPage() {
+    await new Promise(resolve => {
+        const checkAuth = setInterval(() => {
+            if (isAuthInitialized) {
+                clearInterval(checkAuth);
+                resolve();
+            }
+        }, 100);
+    });
+
+    await updateCartCount();
+    await getPlatformFeeRate(); 
+    const cart = await getCartFromFirestore(); 
+    
+    // NEW: Check cart compatibility with current pincode
+    await checkCartPincodeCompatibility(cart);
+    
+    displayCartItems(cart); 
+}
+
+// NEW: Check cart compatibility on cart.html
+async function checkCartPincodeCompatibility(cart) {
+    const warningContainer = document.getElementById('cart-pincode-warning');
+    const checkoutBtn = document.getElementById('checkout-btn');
+    if (!warningContainer || !checkoutBtn) return;
+    
+    warningContainer.innerHTML = '';
+    checkoutBtn.disabled = false; // Enable by default
+    
+    if (cart.length === 0) return;
+    
+    const currentPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
+    
+    // Group items by pincode
+    const itemsByPincode = {};
+    cart.forEach(item => {
+        const pincode = item.pincode || 'Unknown';
+        if (!itemsByPincode[pincode]) {
+            itemsByPincode[pincode] = [];
+        }
+        itemsByPincode[pincode].push(item);
+    });
+    
+    const pincodes = Object.keys(itemsByPincode).filter(p => p !== 'Unknown');
+    
+    // Case 1: Cart has items from multiple valid pincodes
+    if (pincodes.length > 1) {
+        warningContainer.innerHTML = `
+            <div class="alert alert-danger">
+                <h6><i class="fas fa-exclamation-circle me-2"></i>Cart Contains Mixed Locations</h6>
+                <p>Your cart has equipment from different locations:</p>
+                <ul class="mb-2">
+                    ${pincodes.map(pincode => 
+                        `<li>${itemsByPincode[pincode].length} item(s) from Pincode ${pincode}</li>`
+                    ).join('')}
+                </ul>
+                <p><strong>You can only checkout items from one location at a time.</strong></p>
+                <button class="btn btn-sm btn-danger" onclick="resolveMixedPincodeCart()">
+                    <i class="fas fa-sync-alt me-1"></i>Resolve Location Conflict
+                </button>
+            </div>
+        `;
+        checkoutBtn.disabled = true;
+        return;
+    }
+    
+    // Case 2: Cart items don't match current customer pincode
+    const cartPincode = pincodes[0];
+    if (cartPincode && currentPincode && cartPincode !== currentPincode) {
+        warningContainer.innerHTML = `
+            <div class="alert alert-warning">
+                <h6><i class="fas fa-map-marker-alt me-2"></i>Location Mismatch</h6>
+                <p>Your cart items are from <strong>Pincode ${cartPincode}</strong>, 
+                but your current location filter is <strong>${currentPincode}</strong>.</p>
+                <div class="d-flex gap-2 mt-2">
+                    <button class="btn btn-sm btn-warning" onclick="changePincodeToMatchCart('${cartPincode}')">
+                        Change My Location to ${cartPincode}
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="clearCartForCurrentLocation()">
+                        Clear Cart & Shop in ${currentPincode}
+                    </button>
+                </div>
+            </div>
+        `;
+        checkoutBtn.disabled = true;
+        return;
+    } else if (cartPincode && !currentPincode) {
+        // Case 3: Cart has items from one location, but no filter is set
+        warningContainer.innerHTML = `
+            <div class="alert alert-info">
+                <h6><i class="fas fa-info-circle me-2"></i>Location Required</h6>
+                <p>Your cart is for <strong>Pincode ${cartPincode}</strong>. Please set your location to match to proceed.</p>
+                <button class="btn btn-sm btn-primary" onclick="showPincodeModal()">
+                    <i class="fas fa-map-marker-alt me-1"></i>Set Location
+                </button>
+            </div>
+        `;
+        checkoutBtn.disabled = true;
+        return;
+    } else if (!cartPincode && cart.length > 0) {
+        // Case 4: Cart items are missing pincode data (System/Data error)
+        warningContainer.innerHTML = `
+            <div class="alert alert-danger">
+                <h6><i class="fas fa-exclamation-circle me-2"></i>Data Error</h6>
+                <p>Some items in your cart are missing location data. Please remove and re-add them.</p>
+            </div>
+        `;
+        checkoutBtn.disabled = true;
+        return;
+    }
+    
+    // Case 5: All checks pass (Pincode is set AND matches cart Pincode, or cart is empty/non-location specific).
+    // Checkout button remains enabled.
+}
+
+// NEW: Helper functions for cart resolution on cart.html
+
+async function resolveMixedPincodeCart() {
+    const cart = await getCartFromFirestore();
+    
+    // Build the content for the custom warning modal
+    const itemsByPincode = {};
+    cart.forEach(item => {
+        const pincode = item.pincode || 'Unknown';
+        if (!itemsByPincode[pincode]) {
+            itemsByPincode[pincode] = [];
+        }
+        itemsByPincode[pincode].push(item);
+    });
+    
+    const optionsHtml = Object.entries(itemsByPincode).map(([pincode, items]) => `
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="radio" name="selectedPincode" 
+                    id="pincode-${pincode}" value="${pincode}">
+            <label class="form-check-label" for="pincode-${pincode}">
+                <strong>Pincode ${pincode}</strong> - ${items.length} item(s)
+                <br><small>${items.map(item => item.name).join(', ')}</small>
+            </label>
+        </div>
+    `).join('');
+    
+    const modalContent = `
+        <h5>Resolve Location Conflict</h5>
+        <p>Your cart contains items from multiple locations. Please choose which location to keep:</p>
+        
+        <div id="pincode-options" class="my-3">
+            ${optionsHtml}
+        </div>
+        
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            Items from other locations will be removed from your cart. Your current location filter will be updated to match your choice.
+        </div>
+        
+        <div class="modal-footer justify-content-between">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" id="confirm-pincode-choice">
+                Keep Selected Location
+            </button>
+        </div>
+    `;
+    
+    // Use raw modal structure to insert footer logic correctly
+    showCustomWarningModal(modalContent);
+    
+    // Add logic to the dynamic confirm button after the modal is shown
+    setTimeout(() => {
+        const confirmBtn = document.getElementById('confirm-pincode-choice');
+        if (confirmBtn) {
+            confirmBtn.onclick = async () => {
+                const selected = document.querySelector('input[name="selectedPincode"]:checked');
+                if (selected) {
+                    const selectedPincode = selected.value;
+                    // 1. Keep only items from selected pincode
+                    const newCart = cart.filter(item => item.pincode === selectedPincode);
+                    await updateCartInFirestore(newCart);
+                    
+                    // 2. Update customer location filter
+                    await savePincode(selectedPincode); 
+                    
+                    // 3. Reload the cart page
+                    loadCartPage();
+                    
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('custom-warning-modal'));
+                    if (modal) modal.hide();
+                } else {
+                    window.firebaseHelpers.showAlert('Please select a pincode to resolve the conflict.', 'warning');
+                }
+            };
+        }
+    }, 100);
+}
+
+async function changePincodeToMatchCart(cartPincode) {
+    // Save pincode automatically handles the check and update/reload
+    await savePincode(cartPincode);
+    loadCartPage();
+}
+
+async function clearCartForCurrentLocation() {
+    if (!window.confirm('Clear your cart and show equipment available in your current location?')) {
+        return;
+    }
+    
+    await updateCartInFirestore([]);
+    window.firebaseHelpers.showAlert('Cart cleared. Now showing equipment for your location.', 'success');
+    loadCartPage();
+}
+// --- END NEW CART RESOLUTION HELPERS ---
+
 // Start checkout (MODIFIED for mandatory Pincode check)
 async function startCheckout() {
     if (!window.currentUser) {
@@ -898,25 +1316,35 @@ async function startCheckout() {
     }
     
     const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
+    const cart = await getCartFromFirestore();
+
+    if (cart.length === 0) {
+        window.firebaseHelpers.showAlert('Your cart is empty. Please add items to proceed.', 'warning');
+        setTimeout(() => { window.location.href = 'browse.html'; }, 2000);
+        return;
+    }
+
+    // Check 1: Is user pincode set?
     if (!userPincode) {
         window.firebaseHelpers.showAlert('Location required! Please set your Pincode to finalize the rental location.', 'danger');
         showPincodeModal();
         return;
     }
     
-    const cart = await getCartFromFirestore();
-    if (cart.length > 0) {
-        const cartPincode = cart[0].pincode;
-        if (cartPincode !== userPincode) {
-            window.firebaseHelpers.showAlert(`Your cart items are from Pincode ${cartPincode}, but your current Pincode is ${userPincode}. Please clear your cart or update your location.`, 'danger');
-            return;
-        }
+    // Check 2: Does cart match user pincode? (Assumes cart is consistent due to checkCartPincodeCompatibility on load)
+    const cartPincode = cart[0]?.pincode; 
+    
+    if (cartPincode !== userPincode) {
+        // This should ideally not happen if cart.html was loaded correctly, but acts as a final safety check
+        window.firebaseHelpers.showAlert(`Your cart items are from Pincode ${cartPincode}, but your current Pincode is ${userPincode}. Please resolve the location mismatch in your cart.`, 'danger');
+        setTimeout(() => { window.location.href = 'cart.html'; }, 1500);
+        return;
     }
     
     window.location.href = 'checkout.html';
 }
 
-// Load logic for Checkout page (MODIFIED for mandatory Pincode check)
+// Load logic for Checkout page (UPDATED)
 async function loadCheckoutPage() {
     await new Promise(resolve => {
         const checkAuth = setInterval(() => {
@@ -944,20 +1372,45 @@ async function loadCheckoutPage() {
     }
 
     const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
+    const checkoutSummaryElement = document.querySelector('.checkout-summary');
+
+    // Final Pincode Validation
     if (!userPincode || cart[0].pincode !== userPincode) {
-        let message = 'Pincode mismatch or missing: ';
+        let message = 'Location Mismatch: ';
         if (!userPincode) {
-             message += 'Customer Pincode is not set in your profile.';
-        } else if (cart[0].pincode !== userPincode) {
-             message += `Cart items (${cart[0].pincode}) do not match your current Pincode (${userPincode}).`;
+            message += 'Please set your location.';
+        } else {
+            message += `Cart items (${cart[0].pincode}) don't match your location (${userPincode}).`;
         }
-        window.firebaseHelpers.showAlert(message + ' Please set location and ensure cart consistency to continue.', 'danger');
+        
+        const warningHtml = `
+            <div class="alert alert-danger p-4">
+                <h6><i class="fas fa-exclamation-triangle me-2"></i>Checkout Blocked</h6>
+                <p>${message}</p>
+                <div class="d-flex gap-2 mt-3">
+                    ${!userPincode ? `
+                        <button class="btn btn-sm btn-primary" onclick="showPincodeModal()">
+                            <i class="fas fa-map-marker-alt me-2"></i>Set Location Now
+                        </button>
+                    ` : `
+                        <button class="btn btn-sm btn-warning" onclick="changePincodeToMatchCart('${cart[0].pincode}')">
+                            Change Location to ${cart[0].pincode}
+                        </button>
+                    `}
+                    <button class="btn btn-sm btn-outline-secondary" onclick="window.location.href='cart.html'">
+                        <i class="fas fa-shopping-cart me-2"></i>Back to Cart
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        // Replace the checkout summary content with the warning
+        if (checkoutSummaryElement) {
+            checkoutSummaryElement.innerHTML = warningHtml;
+        }
+        
         document.getElementById('pay-now-btn').disabled = true;
         document.getElementById('pay-button-amount').textContent = 'Error';
-        
-        // Show Pincode modal if missing, otherwise redirect to cart/browse
-        if (!userPincode) showPincodeModal();
-        else setTimeout(() => { window.location.href = 'cart.html'; }, 2000);
         return;
     }
     
@@ -1084,35 +1537,6 @@ async function loadCategories() {
     }
 }
 
-// Create equipment card HTML - Modified for Browse page action
-function createEquipmentCard(equipment, id, isBrowsePage = false) {
-    const imageUrl = equipment.images && equipment.images[0] ? equipment.images[0] : 'https://placehold.co/300x200/2B5C2B/FFFFFF?text=Equipment';
-    
-    const actionButtonHtml = isBrowsePage 
-        ? `<button class="btn btn-primary w-100" onclick="showEquipmentDetailsModal('${id}')">View Details</button>`
-        : `<a href="item.html?id=${id}" class="btn btn-primary w-100">View Details</a>`;
-
-    return `
-        <div class="card equipment-card h-100">
-            <div class="position-relative">
-                <img src="${imageUrl}" class="card-img-top" alt="${equipment.name}" style="height: 200px; object-fit: cover;">
-                <span class="category-badge">${equipment.category || 'Equipment'}</span>
-                ${equipment.onSale || equipment.featured ? '<span class="sale-badge position-absolute" style="top:15px; left:15px;">' + (equipment.featured ? 'Featured' : 'Special Offer') + '</span>' : ''}
-            </div>
-            <div class="card-body d-flex flex-column">
-                <h5 class="card-title">${equipment.name}</h5>
-                <div class="mt-auto">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <div class="price-tag">₹${equipment.pricePerAcre || 0}/acre</div>
-                        <small class="text-muted">or ₹${equipment.pricePerHour || 0}/hour</small>
-                    </div>
-                    <p class="mb-2 small text-muted"><i class="fas fa-map-marker-alt me-1"></i> Pincode: ${equipment.pincode || 'N/A'}</p>
-                    ${actionButtonHtml}
-                </div>
-            </div>
-        </div>
-    `;
-}
 
 // Load stats
 async function loadStats() {
@@ -1416,6 +1840,11 @@ function initializeEventListeners() {
         const pincodeInput = document.getElementById('profile-pincode');
         if (pincodeInput) {
             pincodeInput.addEventListener('input', () => {
+                // If the user is a seller and already has a pincode, they cannot edit it
+                if (window.currentUser && window.currentUser.role === 'seller' && window.currentUser.pincode) {
+                    return;
+                }
+
                 document.getElementById('profile-city').value = '';
                 document.getElementById('profile-state').value = '';
                 const villageSelect = document.getElementById('profile-village');
@@ -1512,7 +1941,8 @@ function displayEquipmentGrid(equipmentList) {
     equipmentList.forEach(equipment => {
         const col = document.createElement('div');
         col.className = 'col-lg-4 col-md-6 mb-4';
-        col.innerHTML = createEquipmentCard(equipment, equipment.id, true);
+        // Note: The createEquipmentCard function now handles its own internal Pincode warning logic
+        col.innerHTML = createEquipmentCard(equipment, equipment.id, true); 
         container.appendChild(col);
     });
 }
@@ -1632,23 +2062,6 @@ function updateModalPrice(type, value) {
     priceElement.textContent = window.firebaseHelpers.formatCurrency(price);
 }
 
-// Load logic for Cart page (cart.html)
-async function loadCartPage() {
-    await new Promise(resolve => {
-        const checkAuth = setInterval(() => {
-            if (isAuthInitialized) {
-                clearInterval(checkAuth);
-                resolve();
-            }
-        }, 100);
-    });
-
-    await updateCartCount();
-    await getPlatformFeeRate(); 
-    const cart = await getCartFromFirestore(); 
-    displayCartItems(cart); 
-}
-
 // Display items currently in the cart
 async function displayCartItems(cart) { 
     if (!window.currentUser && cart.length > 0) {
@@ -1676,15 +2089,9 @@ async function displayCartItems(cart) {
 
     let subtotal = 0;
     
-    // NEW: Check for cart consistency with current location
-    const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
-    const cartPincode = cart[0].pincode;
-
-    if (userPincode && cartPincode && userPincode !== cartPincode) {
-        window.firebaseHelpers.showAlert(`Your cart items are for Pincode ${cartPincode}, but your current location filter is ${userPincode}. The checkout button is disabled until your location matches the cart items.`, 'danger');
-        updateCartSummary(0, 0, 0, true); 
-        return;
-    }
+    // Check if checkout should be disabled (based on checkCartPincodeCompatibility result)
+    const checkoutBtn = document.getElementById('checkout-btn');
+    const isDisabled = checkoutBtn && checkoutBtn.disabled;
 
 
     cart.forEach((item, index) => {
@@ -1713,7 +2120,7 @@ async function displayCartItems(cart) {
     const fees = subtotal * platformFeeRate; 
     const total = subtotal + fees;
 
-    updateCartSummary(subtotal, fees, total, false);
+    updateCartSummary(subtotal, fees, total, isDisabled);
 }
 
 // Remove item from cart
@@ -1724,7 +2131,7 @@ async function removeItemFromCart(index) {
     await updateCartInFirestore(cart); 
     
     window.firebaseHelpers.showAlert('Item removed from cart.', 'info');
-    displayCartItems(cart); 
+    loadCartPage(); // Reload the cart page completely to re-run compatibility checks
 }
 
 // Update the summary section on the cart page
@@ -1754,7 +2161,7 @@ function displayCheckoutSummary(cart) {
                 <div>
                     <strong>${item.name}</strong>
                     <div class="small text-muted">
-                        ${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'} | By: ${item.businessName}
+                        ${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'} | By: ${item.businessName} (Pincode: ${item.pincode})
                     </div>
                 </div>
                 <strong class="text-success">${window.firebaseHelpers.formatCurrency(item.price)}</strong>
@@ -1927,6 +2334,27 @@ async function loadProfilePage() {
     document.getElementById('profile-state').value = user.state || '';
     document.getElementById('profile-pincode').value = user.pincode || '';
     
+    // Check if user is a seller and has a pincode set
+    const isSeller = user.role === 'seller';
+    const hasPincode = !!user.pincode;
+
+    if (isSeller && hasPincode) {
+        const pincodeInput = document.getElementById('profile-pincode');
+        if (pincodeInput) {
+            pincodeInput.readOnly = true;
+            pincodeInput.classList.add('bg-light', 'text-muted'); // Visual cue for non-editable
+        }
+        const pincodeGroup = document.getElementById('pincode-input-group');
+        if (pincodeGroup) {
+            // Add a small warning message for sellers
+            pincodeGroup.innerHTML += `
+                <div class="alert alert-warning p-2 mt-2 small">
+                    <i class="fas fa-lock me-1"></i> Your Seller Pincode is permanent for consistency. Contact support to change location.
+                </div>
+            `;
+        }
+    }
+
     // Load villages if pincode and saved village exist
     if (user.pincode) {
         (async () => {
@@ -1957,6 +2385,7 @@ async function handleProfileUpdate(e) {
     const pincodeInput = document.getElementById('profile-pincode').value.trim();
     const villageSelect = document.getElementById('profile-village');
     
+    // Mandatory check even if readOnly, in case of client-side bypass
     if (!pincodeInput || !window.firebaseHelpers.pincodeSystem.validatePincode(pincodeInput)) {
         window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
         return;
@@ -1977,9 +2406,15 @@ async function handleProfileUpdate(e) {
         city: document.getElementById('profile-city').value,
         state: document.getElementById('profile-state').value, 
         village: villageSelect ? villageSelect.value : '', 
-        pincode: pincodeInput, 
+        pincode: pincodeInput, // Seller Pincode is non-editable here but still saved
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
+    
+    // Seller Pincode enforcement: If they are a seller and already had a pincode, ensure we don't try to change it if they cleared the field (though it's readonly)
+    if (window.currentUser.role === 'seller' && window.currentUser.pincode) {
+        updates.pincode = window.currentUser.pincode; // Revert to original pincode if somehow modified
+    }
+
 
     try {
         await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(updates);
