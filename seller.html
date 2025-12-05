@@ -115,7 +115,6 @@
         
         .dashboard-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
         }
         
         .card-icon {
@@ -204,7 +203,7 @@
         
         .status-available {
             background-color: #E2E3E5;
-            color: #383341;
+            color: #383D41;
         }
         
         .order-status-pending {
@@ -248,11 +247,6 @@
             padding: 8px 20px;
             border-radius: 6px;
             font-weight: 600;
-        }
-        
-        .btn-warning:hover {
-            background-color: #f0b537;
-            border-color: #f0b537;
         }
         
         .btn-outline-primary {
@@ -920,14 +914,14 @@
                 <!-- Notifications/Alerts -->
                 <div class="col-md-6 mb-4">
                     <div class="table-container">
-                        <h5 class="mb-3"><i class="fas fa-exclamation-triangle me-2 text-warning"></i>Actionable Alerts</h5>
-                        <div id="seller-alerts-list" class="list-group list-group-flush">
+                         <h5 class="mb-3"><i class="fas fa-exclamation-triangle me-2 text-warning"></i>Actionable Alerts</h5>
+                         <div id="seller-alerts-list" class="list-group list-group-flush">
                             <div class="text-center py-4">
                                 <div class="spinner-border spinner-border-sm text-primary"></div>
                                 <p class="mt-2 mb-0">Loading alerts...</p>
                             </div>
-                        </div>
-                        <small class="text-muted d-block mt-3">Alerts refresh whenever you load the dashboard or notification page.</small>
+                         </div>
+                         <small class="text-muted d-block mt-3">Alerts refresh whenever you load the dashboard or notification page.</small>
                     </div>
                 </div>
 
@@ -992,328 +986,327 @@
         </div>
 
         <!-- Profile Section -->
-        <div class="section" id="profile-section" style="display: none;">
-            <div class="page-header">
-                <h1>Profile Settings</h1>
-                <p class="text-muted">Manage your seller account</p>
-            </div>
-            
-            <div class="row">
-                <div class="col-lg-8">
-                    <div class="table-container">
-                        <form id="profile-form">
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="profile-name" class="form-label">Full Name *</label>
-                                    <input type="text" class="form-control" id="profile-name" required>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="profile-email" class="form-label">Email Address *</label>
-                                    <input type="email" class="form-control" id="profile-email" required readonly>
-                                </div>
-                            </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="profile-phone" class="form-label">Phone Number *</label>
-                                    <input type="tel" class="form-control" id="profile-phone" required>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="profile-business" class="form-label">Business Name *</label>
-                                    <input type="text" class="form-control" id="profile-business" required>
-                                </div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="profile-address" class="form-label">Business Address (Street/House Number) *</label>
-                                <textarea class="form-control" id="profile-address" rows="3" required placeholder="Primary pickup address (must include House/Street details)"></textarea>
-                            </div>
-                            
-                            <!-- UPDATED: Pincode and Location Fields -->
-                            <div class="row">
-                                <div class="col-md-6 mb-3" id="pincode-input-group">
-                                    <label for="profile-pincode" class="form-label">Pincode (Primary Operating Area) *</label>
-                                    <input type="text" class="form-control" id="profile-pincode" pattern="[0-9]{6}" maxlength="6" required placeholder="e.g., 503001">
-                                    <small id="pincode-status-message" class="form-text text-muted"></small>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="profile-village" class="form-label">Village/Post Office *</label>
-                                    <select class="form-select" id="profile-village" required disabled>
-                                        <option value="">Enter Pincode Above</option>
-                                    </select>
-                                </div>
-                            </div>
+<div class="section" id="profile-section" style="display: none;">
+    <div class="page-header">
+        <h1>Profile Settings</h1>
+        <p class="text-muted">Manage your seller account</p>
+    </div>
+    
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="table-container">
+                <form id="profile-form">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-name" class="form-label">Full Name *</label>
+                            <input type="text" class="form-control" id="profile-name" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-email" class="form-label">Email Address *</label>
+                            <input type="email" class="form-control" id="profile-email" required readonly>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-phone" class="form-label">Phone Number *</label>
+                            <input type="tel" class="form-control" id="profile-phone" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-business" class="form-label">Business Name *</label>
+                            <input type="text" class="form-control" id="profile-business" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="profile-address" class="form-label">Business Address (Street/House Number) *</label>
+                        <textarea class="form-control" id="profile-address" rows="3" required placeholder="Primary pickup address (must include House/Street details)"></textarea>
+                    </div>
+                    
+                    <!-- UPDATED: Pincode and Location Fields -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-pincode" class="form-label">Pincode (Primary Operating Area) *</label>
+                            <input type="text" class="form-control" id="profile-pincode" pattern="[0-9]{6}" maxlength="6" required placeholder="e.g., 503001">
+                            <small id="pincode-status-message" class="form-text text-muted"></small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-village" class="form-label">Village/Post Office *</label>
+                            <select class="form-select" id="profile-village" required disabled>
+                                <option value="">Enter Pincode Above</option>
+                            </select>
+                        </div>
+                    </div>
 
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="profile-city" class="form-label">City/District *</label>
-                                    <input type="text" class="form-control" id="profile-city" readonly required>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="profile-state" class="form-label">State *</label>
-                                    <input type="text" class="form-control" id="profile-state" readonly required>
-                                </div>
-                            </div>
-                            <!-- END UPDATED -->
-                            
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="profile-gst" class="form-label">GST Number (Optional)</label>
-                                    <input type="text" class="form-control" id="profile-gst">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="profile-bio" class="form-label">Business Description</label>
-                                    <textarea class="form-control" id="profile-bio" rows="2" placeholder="Tell customers about your business"></textarea>
-                                </div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label class="form-label">Profile Picture</label>
-                                <div class="d-flex align-items-center gap-3">
-                                    <img src="https://via.placeholder.com/100" alt="Profile" class="rounded-circle" id="profile-picture" width="100" height="100">
-                                    <div>
-                                        <input type="file" class="form-control d-none" id="profile-picture-upload" accept="image/*">
-                                        <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('profile-picture-upload').click()">
-                                            <i class="fas fa-upload me-2"></i>Upload New Picture
-                                        </button>
-                                        <small class="text-muted d-block mt-1">Recommended: Square image, max 2MB</small>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <hr>
-                            
-                            <h5 class="mb-3">Change Password</h5>
-                            <div class="row">
-                                <div class="col-md-4 mb-3">
-                                    <label for="current-password" class="form-label">Current Password</label>
-                                    <input type="password" class="form-control" id="current-password">
-                                </div>
-                                <div class="col-md-4 mb-3">
-                                    <label for="new-password" class="form-label">New Password</label>
-                                    <input type="password" class="form-control" id="new-password">
-                                </div>
-                                <div class="col-md-4 mb-3">
-                                    <label for="confirm-password" class="form-label">Confirm Password</label>
-                                    <input type="password" class="form-control" id="confirm-password">
-                                </div>
-                            </div>
-                            
-                            <div class="d-flex justify-content-between">
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-save me-2"></i>Save Changes
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-city" class="form-label">City/District *</label>
+                            <input type="text" class="form-control" id="profile-city" readonly required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-state" class="form-label">State *</label>
+                            <input type="text" class="form-control" id="profile-state" readonly required>
+                        </div>
+                    </div>
+                    <!-- END UPDATED -->
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-gst" class="form-label">GST Number (Optional)</label>
+                            <input type="text" class="form-control" id="profile-gst">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="profile-bio" class="form-label">Business Description</label>
+                            <textarea class="form-control" id="profile-bio" rows="2" placeholder="Tell customers about your business"></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Profile Picture</label>
+                        <div class="d-flex align-items-center gap-3">
+                            <img src="https://via.placeholder.com/100" alt="Profile" class="rounded-circle" id="profile-picture" width="100" height="100">
+                            <div>
+                                <input type="file" class="form-control d-none" id="profile-picture-upload" accept="image/*">
+                                <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('profile-picture-upload').click()">
+                                    <i class="fas fa-upload me-2"></i>Upload New Picture
                                 </button>
-                                <button type="button" class="btn btn-outline-danger" onclick="showDeleteAccountModal()">
-                                    <i class="fas fa-trash me-2"></i>Delete Account
-                                </button>
+                                <small class="text-muted d-block mt-1">Recommended: Square image, max 2MB</small>
                             </div>
-                        </form>
-                    </div>
-                </div>
-                <div class="col-lg-4">
-                    <div class="table-container">
-                        <h5 class="mb-3">Account Status</h5>
-                        <div class="alert alert-success">
-                            <i class="fas fa-check-circle me-2"></i>
-                            <strong>Verified Seller</strong>
-                            <p class="mb-0 mt-1">Your account is active and verified</p>
-                        </div>
-                        
-                        <div class="mb-4">
-                            <h6>Seller Since</h6>
-                            <p id="join-date">Loading...</p>
-                        </div>
-                        
-                        <div class="mb-4">
-                            <h6>Account Verification</h6>
-                            <ul class="list-group list-group-flush">
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    Email Verified
-                                    <span class="badge bg-success" id="email-verified">Yes</span>
-                                </li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    Phone Verified
-                                    <span class="badge bg-success" id="phone-verified">Yes</span>
-                                </li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    Business Verified
-                                    <span class="badge bg-success" id="business-verified">Yes</span>
-                                </li>
-                            </ul>
-                        </div>
-                        
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle me-2"></i>
-                            Need help? Contact our seller support team at <strong>support@farmrent.com</strong>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Equipment Details Modal (View Only) -->
-        <div class="modal fade" id="equipmentModal" tabindex="-1">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Equipment Details</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    
+                    <hr>
+                    
+                    <h5 class="mb-3">Change Password</h5>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="current-password" class="form-label">Current Password</label>
+                            <input type="password" class="form-control" id="current-password">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="new-password" class="form-label">New Password</label>
+                            <input type="password" class="form-control" id="new-password">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="confirm-password" class="form-label">Confirm Password</label>
+                            <input type="password" class="form-control" id="confirm-password">
+                        </div>
                     </div>
-                    <div class="modal-body" id="equipment-modal-body">
-                        <!-- Equipment details will be loaded here -->
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <!-- UPDATED: Replaced original Edit button with a dynamic one to call editEquipment -->
-                        <button type="button" class="btn btn-warning" id="view-edit-equipment-btn">Edit</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- NEW: Equipment Edit Modal -->
-        <div class="modal fade" id="equipmentEditModal" tabindex="-1">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header bg-warning text-dark">
-                        <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Edit Equipment Listing</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <form id="edit-equipment-form">
-                            <input type="hidden" id="edit-equipment-id">
-                            
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="edit-equipment-name" class="form-label">Equipment Name *</label>
-                                    <input type="text" class="form-control" id="edit-equipment-name" required>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="edit-equipment-category" class="form-label">Category *</label>
-                                    <select class="form-select" id="edit-equipment-category" required>
-                                        <option value="tractor">Tractor</option>
-                                        <option value="harvester">Harvester</option>
-                                        <option value="cultivator">Cultivator</option>
-                                        <option value="drone">Agricultural Drone</option>
-                                        <option value="spray">Spray Machine</option>
-                                        <option value="crane">Crane</option>
-                                        <option value="jcb">JCB</option>
-                                        <option value="grass-cutter">Grass Cutter</option>
-                                        <option value="trolley">Trolley</option>
-                                        <option value="water-tanker">Water Tanker</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div class="row">
-                                <!-- UPDATED ID to edit-acre-price -->
-                                <div class="col-md-6 mb-3">
-                                    <label for="edit-acre-price" class="form-label">Per Acre Rental Price (₹) *</label>
-                                    <input type="number" class="form-control" id="edit-acre-price" min="0" required>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="edit-hourly-price" class="form-label">Hourly Rental Price (₹) *</label>
-                                    <input type="number" class="form-control" id="edit-hourly-price" min="0" required>
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="edit-equipment-description" class="form-label">Description *</label>
-                                <textarea class="form-control" id="edit-equipment-description" rows="3" required></textarea>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-4 mb-3">
-                                    <label for="edit-equipment-location" class="form-label">Location (Descriptive)</label>
-                                    <input type="text" class="form-control" id="edit-equipment-location" required>
-                                </div>
-                                <!-- START FIX: Added Pincode input field for editing, will be readonly -->
-                                <div class="col-md-4 mb-3">
-                                    <label for="edit-equipment-pincode" class="form-label">Pincode *</label>
-                                    <input type="text" class="form-control bg-light" id="edit-equipment-pincode" pattern="[0-9]{6}" maxlength="6" readonly required>
-                                    <small class="text-muted">Set in Profile for consistency.</small>
-                                </div>
-                                <!-- END FIX -->
-                                <div class="col-md-4 mb-3">
-                                    <label for="edit-equipment-quantity" class="form-label">Quantity Available *</label>
-                                    <input type="number" class="form-control" id="edit-equipment-quantity" min="1" required>
-                                </div>
-                                <div class="col-md-4 mb-3">
-                                    <label for="edit-equipment-availability" class="form-label">Availability Status</label>
-                                    <select class="form-select" id="edit-equipment-availability">
-                                        <option value="true">Available</option>
-                                        <option value="false">Rented</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <h6 class="mt-3 mb-2">Specifications (Key-Value Pairs)</h6>
-                            <div id="edit-specs-container">
-                                <!-- Specs populated dynamically by JS -->
-                            </div>
-                            <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="addEditSpecField()">
-                                <i class="fas fa-plus me-1"></i>Add Specification
-                            </button>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-warning" id="save-equipment-btn" form="edit-equipment-form">
+                    
+                    <div class="d-flex justify-content-between">
+                        <button type="submit" class="btn btn-primary">
                             <i class="fas fa-save me-2"></i>Save Changes
                         </button>
+                        <button type="button" class="btn btn-outline-danger" onclick="showDeleteAccountModal()">
+                            <i class="fas fa-trash me-2"></i>Delete Account
+                        </button>
                     </div>
+                </form>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="table-container">
+                <h5 class="mb-3">Account Status</h5>
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <strong>Verified Seller</strong>
+                    <p class="mb-0 mt-1">Your account is active and verified</p>
+                </div>
+                
+                <div class="mb-4">
+                    <h6>Seller Since</h6>
+                    <p id="join-date">Loading...</p>
+                </div>
+                
+                <div class="mb-4">
+                    <h6>Account Verification</h6>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Email Verified
+                            <span class="badge bg-success" id="email-verified">Yes</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Phone Verified
+                            <span class="badge bg-success" id="phone-verified">Yes</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Business Verified
+                            <span class="badge bg-success" id="business-verified">Yes</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Need help? Contact our seller support team at <strong>support@farmrent.com</strong>
                 </div>
             </div>
         </div>
-        <!-- END NEW: Equipment Edit Modal -->
+    </div>
+</div>
 
-        <!-- Order Details Modal -->
-        <div class="modal fade" id="orderModal" tabindex="-1">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Order Details</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body" id="order-modal-body">
-                        <!-- Order details will be loaded here -->
-                    </div>
+    <!-- Equipment Details Modal (View Only) -->
+    <div class="modal fade" id="equipmentModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Equipment Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="equipment-modal-body">
+                    <!-- Equipment details will be loaded here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <!-- UPDATED: Replaced original Edit button with a dynamic one to call editEquipment -->
+                    <button type="button" class="btn btn-warning" id="view-edit-equipment-btn">Edit</button>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Delete Account Modal -->
-        <div class="modal fade" id="deleteAccountModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header bg-danger text-white">
-                        <h5 class="modal-title">Delete Account</h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="alert alert-danger">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            <strong>Warning: This action cannot be undone!</strong>
+    <!-- NEW: Equipment Edit Modal -->
+    <div class="modal fade" id="equipmentEditModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Edit Equipment Listing</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="edit-equipment-form">
+                        <input type="hidden" id="edit-equipment-id">
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-equipment-name" class="form-label">Equipment Name *</label>
+                                <input type="text" class="form-control" id="edit-equipment-name" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-equipment-category" class="form-label">Category *</label>
+                                <select class="form-select" id="edit-equipment-category" required>
+                                    <option value="tractor">Tractor</option>
+                                    <option value="harvester">Harvester</option>
+                                    <option value="cultivator">Cultivator</option>
+                                    <option value="drone">Agricultural Drone</option>
+                                    <option value="spray">Spray Machine</option>
+                                    <option value="crane">Crane</option>
+                                    <option value="jcb">JCB</option>
+                                    <option value="grass-cutter">Grass Cutter</option>
+                                    <option value="trolley">Trolley</option>
+                                    <option value="water-tanker">Water Tanker</option>
+                                </select>
+                            </div>
                         </div>
-                        <p>Are you sure you want to delete your seller account? This will:</p>
-                        <ul>
-                            <li>Remove all your equipment listings</li>
-                            <li>Cancel all pending orders</li>
-                            <li>Delete your profile and business information</li>
-                            <li>Remove you from the FarmRent platform</li>
-                        </ul>
+
+                        <div class="row">
+                            <!-- UPDATED ID to edit-acre-price -->
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-acre-price" class="form-label">Per Acre Rental Price (₹) *</label>
+                                <input type="number" class="form-control" id="edit-acre-price" min="0" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-hourly-price" class="form-label">Hourly Rental Price (₹) *</label>
+                                <input type="number" class="form-control" id="edit-hourly-price" min="0" required>
+                            </div>
+                        </div>
+
                         <div class="mb-3">
-                            <label for="delete-confirmation" class="form-label">Type "DELETE" to confirm:</label>
-                            <input type="text" class="form-control" id="delete-confirmation" placeholder="Type DELETE here">
+                            <label for="edit-equipment-description" class="form-label">Description *</label>
+                            <textarea class="form-control" id="edit-equipment-description" rows="3" required></textarea>
                         </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-danger" onclick="deleteAccount()" id="delete-account-btn" disabled>Delete Account</button>
-                    </div>
+
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="edit-equipment-location" class="form-label">Location (Descriptive)</label>
+                                <input type="text" class="form-control" id="edit-equipment-location" required>
+                            </div>
+                            <!-- START FIX: Added Pincode input field -->
+                            <div class="col-md-4 mb-3">
+                                <label for="edit-equipment-pincode" class="form-label">Pincode *</label>
+                                <input type="text" class="form-control" id="edit-equipment-pincode" pattern="[0-9]{6}" maxlength="6" required>
+                            </div>
+                            <!-- END FIX -->
+                            <div class="col-md-4 mb-3">
+                                <label for="edit-equipment-quantity" class="form-label">Quantity Available *</label>
+                                <input type="number" class="form-control" id="edit-equipment-quantity" min="1" required>
+                            </div>
+                             <div class="col-md-4 mb-3">
+                                <label for="edit-equipment-availability" class="form-label">Availability Status</label>
+                                <select class="form-select" id="edit-equipment-availability">
+                                    <option value="true">Available</option>
+                                    <option value="false">Rented</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <h6 class="mt-3 mb-2">Specifications (Key-Value Pairs)</h6>
+                        <div id="edit-specs-container">
+                            <!-- Specs populated dynamically by JS -->
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="addEditSpecField()">
+                            <i class="fas fa-plus me-1"></i>Add Specification
+                        </button>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning" id="save-equipment-btn" form="edit-equipment-form">
+                        <i class="fas fa-save me-2"></i>Save Changes
+                    </button>
                 </div>
             </div>
         </div>
+    </div>
+    <!-- END NEW: Equipment Edit Modal -->
+
+    <!-- Order Details Modal -->
+    <div class="modal fade" id="orderModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Order Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="order-modal-body">
+                    <!-- Order details will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Account Modal -->
+    <div class="modal fade" id="deleteAccountModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Delete Account</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Warning: This action cannot be undone!</strong>
+                    </div>
+                    <p>Are you sure you want to delete your seller account? This will:</p>
+                    <ul>
+                        <li>Remove all your equipment listings</li>
+                        <li>Cancel all pending orders</li>
+                        <li>Delete your profile and business information</li>
+                        <li>Remove you from the FarmRent platform</li>
+                    </ul>
+                    <div class="mb-3">
+                        <label for="delete-confirmation" class="form-label">Type "DELETE" to confirm:</label>
+                        <input type="text" class="form-control" id="delete-confirmation" placeholder="Type DELETE here">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" onclick="deleteAccount()" id="delete-account-btn" disabled>Delete Account</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
@@ -1326,10 +1319,10 @@
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-remote-config-compat.js"></script>
     <!-- REMOVED: <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-storage-compat.js"></script> -->
     <script src="firebase-config.js"></script>
-    <script src="script.js"></script>
+        <script src="script.js"></script>
 <script>
     // Global variables
-    let sellerData = null;
+    let sellerData = null; // FIX: Removed 'let currentUser = null;' to prevent SyntaxError
     let equipmentData = [];
     let ordersData = [];
     let earningsChart = null;
@@ -1382,124 +1375,125 @@
         document.getElementById('loading').classList.remove('active');
     });
 
-    // Update seller information in UI
-   function updateSellerInfo() {
+    // Add Pincode input event listener
+document.addEventListener('DOMContentLoaded', function() {
+    // This will be called after the page loads
+    const pincodeInput = document.getElementById('profile-pincode');
+    if (pincodeInput) {
+        pincodeInput.addEventListener('input', function() {
+            // Clear previous city/state/village on change
+            document.getElementById('profile-city').value = '';
+            document.getElementById('profile-state').value = '';
+            const villageSelect = document.getElementById('profile-village');
+            villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
+            villageSelect.disabled = true;
+
+            if (this.value.length === 6) {
+                populateSellerLocationFields();
+            }
+        });
+    }
+});
+
+   // Update seller information in UI
+function updateSellerInfo() {
     if (sellerData) {
-        const sellerNameElement = document.getElementById('seller-name');
-        const welcomeMessageElement = document.getElementById('welcome-message');
-        const pageTitleElement = document.getElementById('page-title');
-        const registeredPincodeDisplay = document.getElementById('registered-pincode-display');
+        document.getElementById('seller-name').textContent = sellerData.name || 'Seller';
+        document.getElementById('welcome-message').textContent = `Welcome back, ${sellerData.name || 'Seller'}!`;
         
-        // Add null checks before setting textContent
-        if (sellerNameElement) sellerNameElement.textContent = sellerData.name || 'Seller';
-        if (welcomeMessageElement) welcomeMessageElement.textContent = `Welcome back, ${sellerData.name || 'Seller'}!`;
-        
-        if (sellerData.businessName && pageTitleElement) {
-            pageTitleElement.textContent = `${sellerData.businessName} - Dashboard`;
+        if (sellerData.businessName) {
+            document.getElementById('page-title').textContent = `${sellerData.businessName} - Dashboard`;
         }
 
-        // Update Pincode display in Dashboard header and Add Equipment section
-        if (registeredPincodeDisplay) {
-            registeredPincodeDisplay.textContent = sellerData.pincode || 'N/A (Update Profile)';
+        // Update Pincode display in Add Equipment and Edit Modal sections
+        const pincodeDisplay = document.getElementById('registered-pincode-display');
+        if (pincodeDisplay) {
+            pincodeDisplay.textContent = sellerData.pincode || 'N/A (Update Profile)';
         }
         
-        // FIX: Check if elements exist before manipulating
-        const profilePincodeInput = document.getElementById('profile-pincode');
-        const pincodeGroup = document.getElementById('pincode-input-group');
-        
-        if (profilePincodeInput && sellerData.pincode) {
-            profilePincodeInput.readOnly = true;
-            profilePincodeInput.classList.add('bg-light', 'text-muted');
-            
-            // Check if warning already exists
-            if (pincodeGroup && !pincodeGroup.querySelector('.alert')) {
-                const warningDiv = document.createElement('div');
-                warningDiv.className = 'alert alert-info p-2 mt-2 small';
-                warningDiv.innerHTML = '<i class="fas fa-lock me-1"></i> Your Seller Pincode is permanent for consistency.';
-                pincodeGroup.appendChild(warningDiv);
-            }
-        } else if (profilePincodeInput) {
-            profilePincodeInput.readOnly = false;
-            profilePincodeInput.classList.remove('bg-light', 'text-muted');
+        // Update location info in UI if elements exist
+        if (document.getElementById('seller-location-info')) {
+            document.getElementById('seller-location-info').textContent = 
+                `${sellerData.city || ''}, ${sellerData.state || ''} - ${sellerData.pincode || ''}`;
         }
     }
 }
 
     // Pincode location lookup function for seller profile
-    async function populateSellerLocationFields() {
-        const pincodeInput = document.getElementById('profile-pincode');
-        const villageSelect = document.getElementById('profile-village');
-        const cityInput = document.getElementById('profile-city');
-        const stateInput = document.getElementById('profile-state');
-        const statusElement = document.getElementById('pincode-status-message');
-        
-        if (!pincodeInput || !villageSelect || !cityInput || !stateInput) return;
+async function populateSellerLocationFields() {
+    const pincodeInput = document.getElementById('profile-pincode');
+    const villageSelect = document.getElementById('profile-village');
+    const cityInput = document.getElementById('profile-city');
+    const stateInput = document.getElementById('profile-state');
+    const statusElement = document.getElementById('pincode-status-message');
+    
+    if (!pincodeInput || !villageSelect || !cityInput || !stateInput) return;
 
-        villageSelect.innerHTML = '<option value="">Loading...</option>';
-        villageSelect.disabled = true;
-        cityInput.value = '';
-        stateInput.value = '';
-        if (statusElement) {
-            statusElement.textContent = 'Verifying Pincode...';
-            statusElement.classList.remove('text-danger', 'text-success');
-            statusElement.classList.add('text-muted');
-        }
+    villageSelect.innerHTML = '<option value="">Loading...</option>';
+    villageSelect.disabled = true;
+    cityInput.value = '';
+    stateInput.value = '';
+    if (statusElement) {
+        statusElement.textContent = 'Verifying Pincode...';
+        statusElement.classList.remove('text-danger', 'text-success');
+        statusElement.classList.add('text-muted');
+    }
 
-        const pincode = pincodeInput.value;
+    const pincode = pincodeInput.value;
 
-        if (!/^[0-9]{6}$/.test(pincode)) {
-            villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
-            if (statusElement) statusElement.textContent = '';
-            return;
-        }
+    if (!/^[0-9]{6}$/.test(pincode)) {
+        villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
+        if (statusElement) statusElement.textContent = '';
+        return;
+    }
 
-        try {
-            // Use the function from script.js (make sure script.js is loaded before seller.html script)
-            const postOffices = await window.getPostOfficeData(pincode);
+    try {
+        // Use the function from script.js (make sure script.js is loaded before seller.html script)
+        const postOffices = await getPostOfficeData(pincode);
 
-            if (postOffices.length > 0) {
-                const firstOffice = postOffices[0];
-                cityInput.value = firstOffice.District || '';
-                stateInput.value = firstOffice.State || '';
+        if (postOffices.length > 0) {
+            const firstOffice = postOffices[0];
+            cityInput.value = firstOffice.District || '';
+            stateInput.value = firstOffice.State || '';
 
-                // Populate village dropdown
-                villageSelect.innerHTML = '<option value="">Select your Village/Post Office *</option>';
-                
-                // Remove duplicates and populate
-                const uniquePostOffices = [...new Set(postOffices.map(office => office.Name))];
-                uniquePostOffices.forEach(name => {
-                    const option = document.createElement('option');
-                    option.value = name; 
-                    option.textContent = name;
-                    villageSelect.appendChild(option);
-                });
+            // Populate village dropdown
+            villageSelect.innerHTML = '<option value="">Select your Village/Post Office *</option>';
+            
+            // Remove duplicates and populate
+            const uniquePostOffices = [...new Set(postOffices.map(office => office.Name))];
+            uniquePostOffices.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name; 
+                option.textContent = name;
+                villageSelect.appendChild(option);
+            });
 
-                villageSelect.disabled = false;
-                if (statusElement) {
-                    statusElement.textContent = `Location confirmed: ${cityInput.value}, ${stateInput.value}. Select your village.`;
-                    statusElement.classList.remove('text-muted');
-                    statusElement.classList.add('text-success');
-                }
-            } else {
-                villageSelect.innerHTML = '<option value="">Pincode not found or no post offices</option>';
-                villageSelect.disabled = true;
-                if (statusElement) {
-                    statusElement.textContent = 'Pincode not found. Please check and try again.';
-                    statusElement.classList.remove('text-muted');
-                    statusElement.classList.add('text-danger');
-                }
+            villageSelect.disabled = false;
+            if (statusElement) {
+                statusElement.textContent = `Location confirmed: ${cityInput.value}, ${stateInput.value}. Select your village.`;
+                statusElement.classList.remove('text-muted');
+                statusElement.classList.add('text-success');
             }
-        } catch (error) {
-            console.error('Error in Pincode lookup:', error);
-            villageSelect.innerHTML = '<option value="">Error fetching location data</option>';
+        } else {
+            villageSelect.innerHTML = '<option value="">Pincode not found or no post offices</option>';
             villageSelect.disabled = true;
             if (statusElement) {
-                statusElement.textContent = 'Error fetching location data. Please try again.';
+                statusElement.textContent = 'Pincode not found. Please check and try again.';
                 statusElement.classList.remove('text-muted');
                 statusElement.classList.add('text-danger');
             }
         }
+    } catch (error) {
+        console.error('Error in Pincode lookup:', error);
+        villageSelect.innerHTML = '<option value="">Error fetching location data</option>';
+        villageSelect.disabled = true;
+        if (statusElement) {
+            statusElement.textContent = 'Error fetching location data. Please try again.';
+            statusElement.classList.remove('text-muted');
+            statusElement.classList.add('text-danger');
+        }
     }
+}
 
     // Show section function
     function showSection(sectionId) {
@@ -1514,10 +1508,7 @@
         });
         
         // Show selected section
-        const sectionElement = document.getElementById(`${sectionId}-section`);
-        if (sectionElement) {
-            sectionElement.style.display = 'block';
-        }
+        document.getElementById(`${sectionId}-section`).style.display = 'block';
         
         // Update active nav link
         const navLink = Array.from(document.querySelectorAll('.nav-link')).find(link => 
@@ -1787,8 +1778,6 @@
                 .get();
             
             const ordersTable = document.getElementById('recent-orders-table');
-            if (!ordersTable) return;
-            
             ordersTable.innerHTML = '';
             
             ordersData = [];
@@ -1843,7 +1832,7 @@
         const date = window.firebaseHelpers.formatDate(order.createdAt);
         
         // Use consolidated equipment name if available, otherwise default to first item's name
-        const equipmentName = order.equipmentNames ? order.equipmentNames.split(',')[0] : (order.items && order.items[0]?.name) || 'Equipment';
+        const equipmentName = order.equipmentNames.split(',')[0] || order.items[0]?.name || 'Equipment';
 
         return `
             <tr>
@@ -1858,7 +1847,7 @@
                         <i class="fas fa-eye"></i>
                     </button>
                     ${order.status === 'pending' ? `
-                        <button class="btn btn-sm btn-success ms-1" onclick="updateOrderStatus('${order.id}', 'active')">
+                        <button class="btn btn-sm btn-success ms-1" onclick="updateOrderStatus('${order.id}', 'approved')">
                             <i class="fas fa-check"></i>
                         </button>
                     ` : ''}
@@ -1869,18 +1858,14 @@
 
     // Initialize earnings chart
     function initializeEarningsChart() {
-        const ctx = document.getElementById('earningsChart');
-        if (!ctx) return;
-        
-        const ctx2d = ctx.getContext('2d');
-        if (!ctx2d) return;
+        const ctx = document.getElementById('earningsChart').getContext('2d');
         
         if (earningsChart) {
             earningsChart.destroy();
         }
         
         // REMOVED: Mock data. Chart will initialize with empty data and be populated by loadEarningsData.
-        earningsChart = new Chart(ctx2d, {
+        earningsChart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
@@ -1926,8 +1911,6 @@
                 .get();
             
             const equipmentGrid = document.getElementById('equipment-grid');
-            if (!equipmentGrid) return;
-            
             equipmentGrid.innerHTML = '';
             
             if (equipmentSnapshot.empty) {
@@ -1955,16 +1938,13 @@
         } catch (error) {
             console.error('Error loading equipment:', error);
             window.firebaseHelpers.showAlert('Error loading equipment list', 'danger');
-            const equipmentGrid = document.getElementById('equipment-grid');
-            if (equipmentGrid) {
-                equipmentGrid.innerHTML = `
-                    <div class="col-12 text-center py-5 text-danger">
-                        <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
-                        <h4>Error loading equipment</h4>
-                        <p>Please try again later</p>
-                    </div>
-                `;
-            }
+            equipmentGrid.innerHTML = `
+                <div class="col-12 text-center py-5 text-danger">
+                    <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
+                    <h4>Error loading equipment</h4>
+                    <p>Please try again later</p>
+                </div>
+            `;
         }
     }
 
@@ -2009,11 +1989,11 @@
 
     // Search equipment
     function searchEquipment() {
-        const searchTerm = document.getElementById('equipment-search')?.value.toLowerCase() || '';
+        const searchTerm = document.getElementById('equipment-search').value.toLowerCase();
         const filteredEquipment = equipmentData.filter(equipment => 
             equipment.name.toLowerCase().includes(searchTerm) ||
-            (equipment.category && equipment.category.toLowerCase().includes(searchTerm)) ||
-            (equipment.description && equipment.description.toLowerCase().includes(searchTerm))
+            equipment.category.toLowerCase().includes(searchTerm) ||
+            equipment.description.toLowerCase().includes(searchTerm)
         );
         
         displayFilteredEquipment(filteredEquipment);
@@ -2021,7 +2001,7 @@
 
     // Filter equipment
     function filterEquipment() {
-        const filterValue = document.getElementById('equipment-filter')?.value || 'all';
+        const filterValue = document.getElementById('equipment-filter').value;
         let filteredEquipment = equipmentData;
         
         if (filterValue === 'available') {
@@ -2038,8 +2018,6 @@
     // Display filtered equipment
     function displayFilteredEquipment(equipmentList) {
         const equipmentGrid = document.getElementById('equipment-grid');
-        if (!equipmentGrid) return;
-        
         equipmentGrid.innerHTML = '';
         
         if (equipmentList.length === 0) {
@@ -2071,8 +2049,6 @@
                 .get();
             
             const ordersTable = document.getElementById('orders-table');
-            if (!ordersTable) return;
-            
             ordersTable.innerHTML = '';
             
             ordersData = [];
@@ -2117,7 +2093,7 @@
             : 'N/A';
         
         // Use consolidated equipment name if available, otherwise default to first item's name
-        const equipmentName = order.equipmentNames ? order.equipmentNames.split(',')[0] : (order.items && order.items[0]?.name) || 'Equipment';
+        const equipmentName = order.equipmentNames.split(',')[0] || order.items[0]?.name || 'Equipment';
 
         return `
             <tr>
@@ -2155,7 +2131,7 @@
         buttons.forEach(btn => btn.classList.remove('active'));
         
         const activeButton = Array.from(buttons).find(btn => 
-            btn.getAttribute('onclick')?.includes(`'${status}'`)
+            btn.getAttribute('onclick').includes(`'${status}'`)
         );
         if (activeButton) {
             activeButton.classList.add('active');
@@ -2174,7 +2150,7 @@
 
     // Filter by date (NOTE: This filter is based on creation date, not rental period)
     function filterByDate() {
-        const dateFilter = document.getElementById('order-date-filter')?.value;
+        const dateFilter = document.getElementById('order-date-filter').value;
         if (!dateFilter) {
             loadOrders();
             return;
@@ -2188,8 +2164,6 @@
         });
 
         const ordersTable = document.getElementById('orders-table');
-        if (!ordersTable) return;
-        
         ordersTable.innerHTML = '';
 
         if (filteredOrders.length === 0) {
@@ -2216,110 +2190,104 @@
     }
 
     // Add equipment form submission
-    const addEquipmentForm = document.getElementById('add-equipment-form');
-    if (addEquipmentForm) {
-        addEquipmentForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            if (!window.currentUser) {
-                window.firebaseHelpers.showAlert('Please login again', 'danger');
-                return;
-            }
+    document.getElementById('add-equipment-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        if (!window.currentUser) {
+            window.firebaseHelpers.showAlert('Please login again', 'danger');
+            return;
+        }
 
-            // UPDATED: Check for mandatory seller details (especially pincode)
-            if (!sellerData.pincode || !sellerData.businessName || !sellerData.address) {
-                window.firebaseHelpers.showAlert('Please complete your profile details (Pincode, Business Name, Address) before listing equipment.', 'danger');
-                showSection('profile');
-                return;
-            }
-            // END UPDATED
+        // UPDATED: Check for mandatory seller details (especially pincode)
+        if (!sellerData.pincode || !sellerData.businessName || !sellerData.address) {
+            window.firebaseHelpers.showAlert('Please complete your profile details (Pincode, Business Name, Address) before listing equipment.', 'danger');
+            showSection('profile');
+            return;
+        }
+        // END UPDATED
+        
+        const submitBtn = document.getElementById('submit-equipment-btn');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+        submitBtn.disabled = true;
+        
+        try {
+            // Get form values (UPDATED to use 'acre-price' instead of 'daily-price')
+            const equipmentData = {
+                name: document.getElementById('equipment-name').value,
+                category: document.getElementById('equipment-category').value,
+                pricePerAcre: parseFloat(document.getElementById('acre-price').value), // UPDATED ID
+                pricePerHour: parseFloat(document.getElementById('hourly-price').value),
+                description: document.getElementById('equipment-description').value,
+                location: document.getElementById('equipment-location').value, // Descriptive location
+                quantity: parseInt(document.getElementById('equipment-quantity').value),
+                pincode: sellerData.pincode, // UPDATED: Automatically use seller's registered Pincode
+                sellerId: window.currentUser.uid,
+                sellerName: sellerData.name,
+                businessName: sellerData.businessName || '',
+                availability: true,
+                status: 'pending', // Needs admin approval
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                images: []
+            };
             
-            const submitBtn = document.getElementById('submit-equipment-btn');
-            const originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
-            submitBtn.disabled = true;
-            
-            try {
-                // Get form values (UPDATED to use 'acre-price' instead of 'daily-price')
-                const equipmentData = {
-                    name: document.getElementById('equipment-name').value,
-                    category: document.getElementById('equipment-category').value,
-                    pricePerAcre: parseFloat(document.getElementById('acre-price').value), // UPDATED ID
-                    pricePerHour: parseFloat(document.getElementById('hourly-price').value),
-                    description: document.getElementById('equipment-description').value,
-                    location: document.getElementById('equipment-location').value, // Descriptive location
-                    quantity: parseInt(document.getElementById('equipment-quantity').value),
-                    pincode: sellerData.pincode, // UPDATED: Automatically use seller's registered Pincode
-                    sellerId: window.currentUser.uid,
-                    sellerName: sellerData.name,
-                    businessName: sellerData.businessName || '',
-                    availability: true,
-                    status: 'pending', // Needs admin approval
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    images: []
-                };
-                
-                // Add specifications
-                const specs = {};
-                const specInputs = document.querySelectorAll('#specs-container input');
-                for (let i = 0; i < specInputs.length; i += 2) {
-                    // Ensure spec name and value are present
-                    if (specInputs[i].value && specInputs[i + 1]?.value) {
-                        specs[specInputs[i].value] = specInputs[i + 1].value;
-                    }
+            // Add specifications
+            const specs = {};
+            const specInputs = document.querySelectorAll('#specs-container input');
+            for (let i = 0; i < specInputs.length; i += 2) {
+                // Ensure spec name and value are present
+                if (specInputs[i].value && specInputs[i + 1]?.value) {
+                    specs[specInputs[i].value] = specInputs[i + 1].value;
                 }
-                equipmentData.specifications = specs;
-                
-                // Save initial document to Firestore
-                const docRef = await window.FirebaseDB.collection('equipment').add(equipmentData);
-                
-                // Upload images using the new ImgBB helper
-                const imageFiles = document.getElementById('image-upload').files;
-                if (imageFiles.length > 0) {
-                    const imageUrls = [];
-                    for (let i = 0; i < imageFiles.length; i++) {
-                        const file = imageFiles[i];
-                        // The path argument is still passed but ignored in the new helper
-                        const downloadURL = await window.firebaseHelpers.uploadFile(
-                            `equipment/${docRef.id}`, // Path is ignored by new helper
-                            file
-                        );
-                        imageUrls.push(downloadURL);
-                    }
-                    
-                    // Update equipment with image URLs
-                    await window.FirebaseDB.collection('equipment').doc(docRef.id).update({
-                        images: imageUrls
-                    });
+            }
+            equipmentData.specifications = specs;
+            
+            // Save initial document to Firestore
+            const docRef = await window.FirebaseDB.collection('equipment').add(equipmentData);
+            
+            // Upload images using the new ImgBB helper
+            const imageFiles = document.getElementById('image-upload').files;
+            if (imageFiles.length > 0) {
+                const imageUrls = [];
+                for (let i = 0; i < imageFiles.length; i++) {
+                    const file = imageFiles[i];
+                    // The path argument is still passed but ignored in the new helper
+                    const downloadURL = await window.firebaseHelpers.uploadFile(
+                        `equipment/${docRef.id}`, // Path is ignored by new helper
+                        file
+                    );
+                    imageUrls.push(downloadURL);
                 }
                 
-                window.firebaseHelpers.showAlert('Equipment added successfully! Waiting for admin approval.', 'success');
-                
-                // Reset form
-                this.reset();
-                const imagePreview = document.getElementById('image-preview');
-                if (imagePreview) imagePreview.innerHTML = '';
-                
-                // Go back to equipment list
-                setTimeout(() => {
-                    showSection('equipment');
-                }, 2000);
-                
-            } catch (error) {
-                console.error('Error adding equipment:', error);
-                window.firebaseHelpers.showAlert('Error adding equipment: ' + error.message, 'danger');
-            } finally {
-                submitBtn.innerHTML = originalText;
-                submitBtn.disabled = false;
+                // Update equipment with image URLs
+                await window.FirebaseDB.collection('equipment').doc(docRef.id).update({
+                    images: imageUrls
+                });
             }
-        });
-    }
+            
+            window.firebaseHelpers.showAlert('Equipment added successfully! Waiting for admin approval.', 'success');
+            
+            // Reset form
+            this.reset();
+            document.getElementById('image-preview').innerHTML = '';
+            
+            // Go back to equipment list
+            setTimeout(() => {
+                showSection('equipment');
+            }, 2000);
+            
+        } catch (error) {
+            console.error('Error adding equipment:', error);
+            window.firebaseHelpers.showAlert('Error adding equipment: ' + error.message, 'danger');
+        } finally {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    });
 
     // Add specification field for Add Equipment form
     function addSpecField() {
         const specsContainer = document.getElementById('specs-container');
-        if (!specsContainer) return;
-        
         const newRow = document.createElement('div');
         newRow.className = 'row g-2';
         newRow.innerHTML = `
@@ -2393,16 +2361,12 @@
                 
                 document.getElementById('equipment-modal-body').innerHTML = modalBody;
                 // Set handler for the edit button within the view modal
-                const editBtn = document.getElementById('view-edit-equipment-btn');
-                if (editBtn) {
-                    editBtn.onclick = () => {
-                        // Hide view modal
-                        const modalInstance = bootstrap.Modal.getInstance(document.getElementById('equipmentModal'));
-                        if (modalInstance) modalInstance.hide();
-                        // Open edit modal
-                        editEquipment(equipmentId);
-                    };
-                }
+                document.getElementById('view-edit-equipment-btn').onclick = () => {
+                    // Hide view modal
+                    bootstrap.Modal.getInstance(document.getElementById('equipmentModal')).hide();
+                    // Open edit modal
+                    editEquipment(equipmentId);
+                };
                 
                 const modal = new bootstrap.Modal(document.getElementById('equipmentModal'));
                 modal.show();
@@ -2437,11 +2401,9 @@
             document.getElementById('edit-equipment-quantity').value = equipment.quantity || 1;
             document.getElementById('edit-equipment-availability').value = String(equipment.availability);
             
-            // FIX: Set the value of the new Pincode input field, which is READONLY
-            const editPincodeInput = document.getElementById('edit-equipment-pincode');
-            if (editPincodeInput) {
-                editPincodeInput.value = sellerData.pincode || '';
-            }
+            // FIX: Set the value of the new Pincode input field
+            document.getElementById('edit-equipment-pincode').value = equipment.pincode || '';
+
 
             // Clear existing specs and populate
             const specsContainer = document.getElementById('edit-specs-container');
@@ -2467,8 +2429,6 @@
     // Add specification field to Edit form
     function addEditSpecField(key = '', value = '') {
         const specsContainer = document.getElementById('edit-specs-container');
-        if (!specsContainer) return;
-        
         const newRow = document.createElement('div');
         newRow.className = 'row g-2 align-items-center mb-2';
         newRow.innerHTML = `
@@ -2488,75 +2448,70 @@
     }
 
     // Handle form submission for editing equipment
-    const editEquipmentForm = document.getElementById('edit-equipment-form');
-    if (editEquipmentForm) {
-        editEquipmentForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
+    document.getElementById('edit-equipment-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
 
-            const equipmentId = document.getElementById('edit-equipment-id').value;
-            const submitBtn = document.getElementById('save-equipment-btn');
-            const originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
-            submitBtn.disabled = true;
+        const equipmentId = document.getElementById('edit-equipment-id').value;
+        const submitBtn = document.getElementById('save-equipment-btn');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+        submitBtn.disabled = true;
 
-            try {
-                // Gather updated data
-                // FIX: Retrieve Pincode directly from sellerData (which is already enforced in profile)
-                const pincodeFromProfile = sellerData.pincode; 
-
-                if (!pincodeFromProfile) {
-                     window.firebaseHelpers.showAlert('Seller Pincode missing. Please update your Profile first.', 'danger');
-                     submitBtn.innerHTML = originalText;
-                     submitBtn.disabled = false;
-                     return;
-                }
-
-                const updatedData = {
-                    name: document.getElementById('edit-equipment-name').value,
-                    category: document.getElementById('edit-equipment-category').value,
-                    pricePerAcre: parseFloat(document.getElementById('edit-acre-price').value),
-                    pricePerHour: parseFloat(document.getElementById('edit-hourly-price').value),
-                    description: document.getElementById('edit-equipment-description').value,
-                    location: document.getElementById('edit-equipment-location').value,
-                    quantity: parseInt(document.getElementById('edit-equipment-quantity').value),
-                    availability: document.getElementById('edit-equipment-availability').value === 'true',
-                    pincode: pincodeFromProfile, // FIX: Use the Pincode from sellerData
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                };
-
-                // Gather specifications
-                const specs = {};
-                const specRows = document.querySelectorAll('#edit-specs-container .row');
-                specRows.forEach(row => {
-                    const keyInput = row.querySelector('.col-5:nth-child(1) input');
-                    const valueInput = row.querySelector('.col-5:nth-child(2) input');
-                    if (keyInput && valueInput && keyInput.value.trim() && valueInput.value.trim()) {
-                        specs[keyInput.value.trim()] = valueInput.value.trim();
-                    }
-                });
-                updatedData.specifications = specs;
-                
-                // NOTE: Changing images requires a separate file upload process which is not implemented in this quick edit form.
-                
-                // Update Firestore
-                await window.FirebaseDB.collection('equipment').doc(equipmentId).update(updatedData);
-
-                window.firebaseHelpers.showAlert('Equipment updated successfully!', 'success');
-                
-                // Hide modal and reload list
-                const modal = bootstrap.Modal.getInstance(document.getElementById('equipmentEditModal'));
-                if (modal) modal.hide();
-                loadEquipmentList(); // Reload the equipment grid
-
-            } catch (error) {
-                console.error('Error saving equipment:', error);
-                window.firebaseHelpers.showAlert('Error saving equipment: ' + error.message, 'danger');
-            } finally {
+        try {
+            // Gather updated data
+            const pincodeInput = document.getElementById('edit-equipment-pincode').value; // FIX: Get Pincode
+            if (!pincodeInput || !/^[0-9]{6}$/.test(pincodeInput)) {
+                window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
                 submitBtn.innerHTML = originalText;
                 submitBtn.disabled = false;
+                return;
             }
-        });
-    }
+
+            const updatedData = {
+                name: document.getElementById('edit-equipment-name').value,
+                category: document.getElementById('edit-equipment-category').value,
+                pricePerAcre: parseFloat(document.getElementById('edit-acre-price').value),
+                pricePerHour: parseFloat(document.getElementById('edit-hourly-price').value),
+                description: document.getElementById('edit-equipment-description').value,
+                location: document.getElementById('edit-equipment-location').value,
+                quantity: parseInt(document.getElementById('edit-equipment-quantity').value),
+                availability: document.getElementById('edit-equipment-availability').value === 'true',
+                pincode: pincodeInput, // FIX: Save the updated Pincode
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            // Gather specifications
+            const specs = {};
+            const specRows = document.querySelectorAll('#edit-specs-container .row');
+            specRows.forEach(row => {
+                const keyInput = row.querySelector('.col-5:nth-child(1) input');
+                const valueInput = row.querySelector('.col-5:nth-child(2) input');
+                if (keyInput && valueInput && keyInput.value.trim() && valueInput.value.trim()) {
+                    specs[keyInput.value.trim()] = valueInput.value.trim();
+                }
+            });
+            updatedData.specifications = specs;
+            
+            // NOTE: Changing images requires a separate file upload process which is not implemented in this quick edit form.
+            
+            // Update Firestore
+            await window.FirebaseDB.collection('equipment').doc(equipmentId).update(updatedData);
+
+            window.firebaseHelpers.showAlert('Equipment updated successfully!', 'success');
+            
+            // Hide modal and reload list
+            const modal = bootstrap.Modal.getInstance(document.getElementById('equipmentEditModal'));
+            modal.hide();
+            loadEquipmentList(); // Reload the equipment grid
+
+        } catch (error) {
+            console.error('Error saving equipment:', error);
+            window.firebaseHelpers.showAlert('Error saving equipment: ' + error.message, 'danger');
+        } finally {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    });
 
     // END NEW/UPDATED EDIT LOGIC
 
@@ -2719,11 +2674,8 @@
             document.getElementById('last-month-earnings').textContent = window.firebaseHelpers.formatCurrency(lastMonthEarnings);
             
             const growth = lastMonthEarnings > 0 ? ((thisMonthEarnings - lastMonthEarnings) / lastMonthEarnings * 100).toFixed(1) : (thisMonthEarnings > 0 ? 100 : 0);
-            const monthGrowthElement = document.getElementById('month-growth');
-            if (monthGrowthElement) {
-                monthGrowthElement.textContent = `${growth}% from last month`;
-                monthGrowthElement.className = parseFloat(growth) >= 0 ? 'text-success' : 'text-danger';
-            }
+            document.getElementById('month-growth').textContent = `${growth}% from last month`;
+            document.getElementById('month-growth').className = parseFloat(growth) >= 0 ? 'text-success' : 'text-danger';
             
             // Update chart
             updateDetailedEarningsChart(monthlyEarnings);
@@ -2738,11 +2690,7 @@
 
     // Update detailed earnings chart
     function updateDetailedEarningsChart(monthlyEarnings) {
-        const ctx = document.getElementById('detailedEarningsChart');
-        if (!ctx) return;
-        
-        const ctx2d = ctx.getContext('2d');
-        if (!ctx2d) return;
+        const ctx = document.getElementById('detailedEarningsChart').getContext('2d');
         
         if (detailedEarningsChart) {
             detailedEarningsChart.destroy();
@@ -2750,7 +2698,7 @@
         
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         
-        detailedEarningsChart = new Chart(ctx2d, {
+        detailedEarningsChart = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: months,
@@ -2810,14 +2758,12 @@
             // Aggregate earnings per equipment
             ordersSnapshot.forEach(orderDoc => {
                 const order = orderDoc.data();
-                if (order.items) {
-                    order.items.forEach(item => {
-                        // Only count earnings for equipment belonging to this seller
-                        if (item.sellerId === window.currentUser.uid && equipmentEarnings[item.id] !== undefined) {
-                            equipmentEarnings[item.id] += item.price || 0; // Item price is the amount paid for that item rental
-                        }
-                    });
-                }
+                order.items.forEach(item => {
+                    // Only count earnings for equipment belonging to this seller
+                    if (item.sellerId === window.currentUser.uid && equipmentEarnings[item.id] !== undefined) {
+                        equipmentEarnings[item.id] += item.price || 0; // Item price is the amount paid for that item rental
+                    }
+                });
             });
             
             // Format for display
@@ -2832,8 +2778,6 @@
             
             // Update UI
             const topEquipmentList = document.getElementById('top-equipment-list');
-            if (!topEquipmentList) return;
-            
             if (topEquipment.length === 0) {
                 topEquipmentList.innerHTML = `
                     <div class="text-center py-3">
@@ -2869,8 +2813,6 @@
         const notifications = notificationData.recentNotifications; // All notifications found
         
         const listContainer = document.getElementById('seller-alerts-list');
-        if (!listContainer) return;
-        
         listContainer.innerHTML = ''; // Clear previous content
 
         if (notifications.length === 0) {
@@ -2948,8 +2890,6 @@
             let totalRating = 0;
             let ratingCount = 0;
             const reviewsList = document.getElementById('reviews-list');
-            if (!reviewsList) return;
-            
             reviewsList.innerHTML = '';
             
             if (reviewsSnapshot.empty) {
@@ -2992,16 +2932,14 @@
             
             // Update star icons based on average rating
             const starContainer = document.querySelector('#reviews-section .table-container .mb-2');
-            if (starContainer) {
-                const fullStars = Math.round(averageRating);
-                const emptyStars = 5 - fullStars;
-                starContainer.innerHTML = '';
-                for (let i = 0; i < fullStars; i++) {
-                    starContainer.innerHTML += '<i class="fas fa-star text-warning"></i>';
-                }
-                for (let i = 0; i < emptyStars; i++) {
-                    starContainer.innerHTML += '<i class="far fa-star text-warning"></i>';
-                }
+            const fullStars = Math.round(averageRating);
+            const emptyStars = 5 - fullStars;
+            starContainer.innerHTML = '';
+            for (let i = 0; i < fullStars; i++) {
+                starContainer.innerHTML += '<i class="fas fa-star text-warning"></i>';
+            }
+            for (let i = 0; i < emptyStars; i++) {
+                starContainer.innerHTML += '<i class="far fa-star text-warning"></i>';
             }
 
             document.getElementById('total-reviews').textContent = `${ratingCount} reviews`;
@@ -3012,143 +2950,137 @@
     }
 
    // Load profile data
-    async function loadProfileData() {
-        if (!sellerData) return;
-        
-        // Populate form fields
-        document.getElementById('profile-name').value = sellerData.name || '';
-        document.getElementById('profile-email').value = sellerData.email || '';
-        document.getElementById('profile-phone').value = sellerData.mobile || '';
-        document.getElementById('profile-business').value = sellerData.businessName || '';
-        document.getElementById('profile-address').value = sellerData.address || '';
-        document.getElementById('profile-gst').value = sellerData.gstNumber || '';
-        document.getElementById('profile-bio').value = sellerData.bio || '';
-        document.getElementById('profile-pincode').value = sellerData.pincode || '';
-        document.getElementById('profile-city').value = sellerData.city || '';
-        document.getElementById('profile-state').value = sellerData.state || '';
-        
-        // Update profile picture if exists
-        if (sellerData.profilePicture) {
-            document.getElementById('profile-picture').src = sellerData.profilePicture;
-        }
-        
-        // Update join date
-        if (sellerData.createdAt) {
-            const joinDate = window.firebaseHelpers.formatDate(sellerData.createdAt);
-            document.getElementById('join-date').textContent = joinDate;
-        }
-        
-        // If seller has pincode, populate the village dropdown
-        if (sellerData.pincode) {
-            await populateSellerLocationFields();
-            // Select the saved village if it exists
-            const villageSelect = document.getElementById('profile-village');
-            if (villageSelect && sellerData.village) {
-                // Wait a moment for the options to be populated
-                setTimeout(() => {
-                    villageSelect.value = sellerData.village;
-                }, 500);
-            }
-        }
-        
-        // Re-run updateSellerInfo to apply readonly status on Pincode input
-        updateSellerInfo();
+async function loadProfileData() {
+    if (!sellerData) return;
+    
+    // Populate form fields
+    document.getElementById('profile-name').value = sellerData.name || '';
+    document.getElementById('profile-email').value = sellerData.email || '';
+    document.getElementById('profile-phone').value = sellerData.mobile || '';
+    document.getElementById('profile-business').value = sellerData.businessName || '';
+    document.getElementById('profile-address').value = sellerData.address || '';
+    document.getElementById('profile-gst').value = sellerData.gstNumber || '';
+    document.getElementById('profile-bio').value = sellerData.bio || '';
+    document.getElementById('profile-pincode').value = sellerData.pincode || '';
+    document.getElementById('profile-city').value = sellerData.city || '';
+    document.getElementById('profile-state').value = sellerData.state || '';
+    
+    // Update profile picture if exists
+    if (sellerData.profilePicture) {
+        document.getElementById('profile-picture').src = sellerData.profilePicture;
     }
     
-   // Profile form submission
-    const profileForm = document.getElementById('profile-form');
-    if (profileForm) {
-        profileForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            if (!window.currentUser) return;
-
-            // Validate Pincode and location fields
-            const pincodeInput = document.getElementById('profile-pincode').value;
-            const villageSelect = document.getElementById('profile-village');
-            const cityInput = document.getElementById('profile-city').value;
-            const stateInput = document.getElementById('profile-state').value;
-            
-            if (!pincodeInput || !/^[0-9]{6}$/.test(pincodeInput)) {
-                window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
-                return;
-            }
-            
-            if (!villageSelect.value) {
-                window.firebaseHelpers.showAlert('Please select your Village/Post Office.', 'danger');
-                return;
-            }
-            
-            if (!cityInput || !stateInput) {
-                window.firebaseHelpers.showAlert('Please verify your Pincode to load city and state information.', 'danger');
-                return;
-            }
-            
-            try {
-                const updates = {
-                    name: document.getElementById('profile-name').value,
-                    mobile: document.getElementById('profile-phone').value,
-                    businessName: document.getElementById('profile-business').value,
-                    address: document.getElementById('profile-address').value,
-                    gstNumber: document.getElementById('profile-gst').value,
-                    city: cityInput,
-                    state: stateInput,
-                    village: villageSelect.value,
-                    pincode: pincodeInput,
-                    bio: document.getElementById('profile-bio').value,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                };
-                
-                // Update password if provided
-                const currentPassword = document.getElementById('current-password').value;
-                const newPassword = document.getElementById('new-password').value;
-                const confirmPassword = document.getElementById('confirm-password').value;
-                
-                if (newPassword || currentPassword || confirmPassword) {
-                    if (!currentPassword) {
-                        window.firebaseHelpers.showAlert('Please enter your current password to change it.', 'danger');
-                        return;
-                    }
-                    if (newPassword !== confirmPassword) {
-                        window.firebaseHelpers.showAlert('New passwords do not match', 'danger');
-                        return;
-                    }
-                    if (newPassword.length < 6) {
-                        window.firebaseHelpers.showAlert('New password must be at least 6 characters long', 'danger');
-                        return;
-                    }
-                    
-                    // Reauthenticate user
-                    const credential = firebase.auth.EmailAuthProvider.credential(
-                        window.currentUser.email,
-                        currentPassword
-                    );
-                    
-                    await window.currentUser.reauthenticateWithCredential(credential);
-                    await window.currentUser.updatePassword(newPassword);
-                    window.firebaseHelpers.showAlert('Password updated successfully', 'success');
-                    
-                    // Clear password fields
-                    document.getElementById('current-password').value = '';
-                    document.getElementById('new-password').value = '';
-                    document.getElementById('confirm-password').value = '';
-                }
-                
-                // Update Firestore
-                await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(updates);
-                
-                // Update local seller data
-                sellerData = { ...sellerData, ...updates };
-                updateSellerInfo(); // Re-render Pincode display everywhere
-                
-                window.firebaseHelpers.showAlert('Profile updated successfully', 'success');
-                
-            } catch (error) {
-                console.error('Error updating profile:', error);
-                window.firebaseHelpers.showAlert('Error updating profile: ' + error.message, 'danger');
-            }
-        });
+    // Update join date
+    if (sellerData.createdAt) {
+        const joinDate = window.firebaseHelpers.formatDate(sellerData.createdAt);
+        document.getElementById('join-date').textContent = joinDate;
     }
+    
+    // If seller has pincode, populate the village dropdown
+    if (sellerData.pincode) {
+        await populateSellerLocationFields();
+        // Select the saved village if it exists
+        const villageSelect = document.getElementById('profile-village');
+        if (villageSelect && sellerData.village) {
+            // Wait a moment for the options to be populated
+            setTimeout(() => {
+                villageSelect.value = sellerData.village;
+            }, 500);
+        }
+    }
+}
+    
+   // Profile form submission
+document.getElementById('profile-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    if (!window.currentUser) return;
+
+    // Validate Pincode and location fields
+    const pincodeInput = document.getElementById('profile-pincode').value;
+    const villageSelect = document.getElementById('profile-village');
+    const cityInput = document.getElementById('profile-city').value;
+    const stateInput = document.getElementById('profile-state').value;
+    
+    if (!pincodeInput || !/^[0-9]{6}$/.test(pincodeInput)) {
+        window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
+        return;
+    }
+    
+    if (!villageSelect.value) {
+        window.firebaseHelpers.showAlert('Please select your Village/Post Office.', 'danger');
+        return;
+    }
+    
+    if (!cityInput || !stateInput) {
+        window.firebaseHelpers.showAlert('Please verify your Pincode to load city and state information.', 'danger');
+        return;
+    }
+    
+    try {
+        const updates = {
+            name: document.getElementById('profile-name').value,
+            mobile: document.getElementById('profile-phone').value,
+            businessName: document.getElementById('profile-business').value,
+            address: document.getElementById('profile-address').value,
+            gstNumber: document.getElementById('profile-gst').value,
+            city: cityInput,
+            state: stateInput,
+            village: villageSelect.value,
+            pincode: pincodeInput,
+            bio: document.getElementById('profile-bio').value,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        // Update password if provided
+        const currentPassword = document.getElementById('current-password').value;
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+        
+        if (newPassword || currentPassword || confirmPassword) {
+            if (!currentPassword) {
+                window.firebaseHelpers.showAlert('Please enter your current password to change it.', 'danger');
+                return;
+            }
+            if (newPassword !== confirmPassword) {
+                window.firebaseHelpers.showAlert('New passwords do not match', 'danger');
+                return;
+            }
+            if (newPassword.length < 6) {
+                window.firebaseHelpers.showAlert('New password must be at least 6 characters long', 'danger');
+                return;
+            }
+            
+            // Reauthenticate user
+            const credential = firebase.auth.EmailAuthProvider.credential(
+                window.currentUser.email,
+                currentPassword
+            );
+            
+            await window.currentUser.reauthenticateWithCredential(credential);
+            await window.currentUser.updatePassword(newPassword);
+            window.firebaseHelpers.showAlert('Password updated successfully', 'success');
+            
+            // Clear password fields
+            document.getElementById('current-password').value = '';
+            document.getElementById('new-password').value = '';
+            document.getElementById('confirm-password').value = '';
+        }
+        
+        // Update Firestore
+        await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(updates);
+        
+        // Update local seller data
+        sellerData = { ...sellerData, ...updates };
+        updateSellerInfo(); // Re-render Pincode display everywhere
+        
+        window.firebaseHelpers.showAlert('Profile updated successfully', 'success');
+        
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        window.firebaseHelpers.showAlert('Error updating profile: ' + error.message, 'danger');
+    }
+});
     
     // Show delete account modal
     function showDeleteAccountModal() {
@@ -3156,13 +3088,10 @@
         modal.show();
         
         // Enable/disable delete button based on confirmation
-        const deleteConfirmation = document.getElementById('delete-confirmation');
-        if (deleteConfirmation) {
-            deleteConfirmation.addEventListener('input', function() {
-                document.getElementById('delete-account-btn').disabled = 
-                    this.value !== 'DELETE';
-            });
-        }
+        document.getElementById('delete-confirmation').addEventListener('input', function() {
+            document.getElementById('delete-account-btn').disabled = 
+                this.value !== 'DELETE';
+        });
     }
 
     // Delete account
@@ -3211,76 +3140,68 @@
     }
 
     // Handle image upload preview
-    const imageUpload = document.getElementById('image-upload');
-    if (imageUpload) {
-        imageUpload.addEventListener('change', function(e) {
-            const preview = document.getElementById('image-preview');
-            if (!preview) return;
+    document.getElementById('image-upload').addEventListener('change', function(e) {
+        const preview = document.getElementById('image-preview');
+        preview.innerHTML = '';
+        
+        for (let i = 0; i < this.files.length; i++) {
+            const file = this.files[i];
+            const reader = new FileReader();
             
-            preview.innerHTML = '';
-            
-            for (let i = 0; i < this.files.length; i++) {
-                const file = this.files[i];
-                const reader = new FileReader();
-                
-                reader.onload = function(e) {
-                    const img = document.createElement('img');
-                    img.src = e.target.result;
-                    img.style.width = '100px';
-                    img.style.height = '100px';
-                    img.style.objectFit = 'cover';
-                    img.style.margin = '5px';
-                    img.style.borderRadius = '5px';
-                    preview.appendChild(img);
-                }
-                
-                reader.readAsDataURL(file);
+            reader.onload = function(e) {
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                img.style.width = '100px';
+                img.style.height = '100px';
+                img.style.objectFit = 'cover';
+                img.style.margin = '5px';
+                img.style.borderRadius = '5px';
+                preview.appendChild(img);
             }
-        });
-    }
+            
+            reader.readAsDataURL(file);
+        }
+    });
 
     // Handle profile picture upload
-    const profilePictureUpload = document.getElementById('profile-picture-upload');
-    if (profilePictureUpload) {
-        profilePictureUpload.addEventListener('change', async function(e) {
-            if (this.files[0]) {
-                try {
-                    const file = this.files[0];
-                    
-                    // Show loading placeholder
-                    const profilePic = document.getElementById('profile-picture');
-                    profilePic.src = 'https://via.placeholder.com/100?text=Uploading...';
-                    
-                    // Use the new ImgBB helper
-                    const downloadURL = await window.firebaseHelpers.uploadFile(
-                        `profile_pictures/${window.currentUser.uid}`, // Path is passed but ignored by the new helper
-                        file
-                    );
-                    
-                    // Update profile picture in Firestore
-                    await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update({
-                        profilePicture: downloadURL,
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                    
-                    // Update local data and UI
-                    sellerData.profilePicture = downloadURL;
-                    profilePic.src = downloadURL;
-                    
-                    window.firebaseHelpers.showAlert('Profile picture updated successfully', 'success');
-                    
-                } catch (error) {
-                    console.error('Error uploading profile picture:', error);
-                    window.firebaseHelpers.showAlert('Error uploading profile picture. ' + error.message, 'danger');
-                    
-                    // Restore original picture or default placeholder on failure
-                    const currentSellerData = await window.FirebaseDB.collection('users').doc(window.currentUser.uid).get();
-                    const restoredSrc = currentSellerData.data()?.profilePicture || 'https://via.placeholder.com/100';
-                    document.getElementById('profile-picture').src = restoredSrc;
-                }
+    document.getElementById('profile-picture-upload').addEventListener('change', async function(e) {
+        if (this.files[0]) {
+            try {
+                const file = this.files[0];
+                
+                // Show loading placeholder
+                const profilePic = document.getElementById('profile-picture');
+                profilePic.src = 'https://via.placeholder.com/100?text=Uploading...';
+                
+                // Use the new ImgBB helper
+                const downloadURL = await window.firebaseHelpers.uploadFile(
+                    `profile_pictures/${window.currentUser.uid}`, // Path is passed but ignored by the new helper
+                    file
+                );
+                
+                // Update profile picture in Firestore
+                await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update({
+                    profilePicture: downloadURL,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // Update local data and UI
+                sellerData.profilePicture = downloadURL;
+                profilePic.src = downloadURL;
+                
+                window.firebaseHelpers.showAlert('Profile picture updated successfully', 'success');
+                
+            } catch (error) {
+                console.error('Error uploading profile picture:', error);
+                window.firebaseHelpers.showAlert('Error uploading profile picture. ' + error.message, 'danger');
+                
+                // Restore original picture or default placeholder on failure
+                const currentSellerData = await window.FirebaseDB.collection('users').doc(window.currentUser.uid).get();
+                const restoredSrc = currentSellerData.data()?.profilePicture || 'https://via.placeholder.com/100';
+                document.getElementById('profile-picture').src = restoredSrc;
             }
-        });
-    }
+        }
+    });
 
     // Initialize dashboard on load
     showSection('dashboard');
