@@ -358,6 +358,35 @@
             background-color: #fffdf7;
         }
         
+        /* Image Selection Styles (NEW) */
+        .image-option {
+            cursor: pointer;
+            border: 2px solid transparent;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: all 0.2s;
+            padding: 5px;
+            height: 100%;
+        }
+
+        .image-option.selected {
+            border-color: var(--farm-green);
+            box-shadow: 0 0 8px rgba(43, 92, 43, 0.5);
+            background-color: #E8F5E9; /* Light green background */
+        }
+
+        .image-option img {
+            width: 100%;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 5px;
+        }
+        
+        .upload-tab-btn.active {
+            background-color: var(--farm-green);
+            color: white;
+        }
+
         /* Mobile Responsive */
         @media (max-width: 768px) {
             .sidebar {
@@ -724,7 +753,7 @@
             </div>
         </div>
 
-        <!-- Add Equipment Section -->
+        <!-- Add Equipment Section (MODIFIED FOR IMAGE LIBRARY) -->
         <div class="section" id="add-equipment-section" style="display: none;">
             <div class="page-header">
                 <h1>Add New Equipment</h1>
@@ -759,7 +788,7 @@
                             </div>
 
                             <div class="row">
-                                <!-- UPDATED: Changed from daily-price to acre-price and label to 'Per Acre' -->
+                                <!-- UPDATED: Changed from daily-price to acre-price to match embedded script logic -->
                                 <div class="col-md-6 mb-3">
                                     <label for="acre-price" class="form-label">Per Acre Rental Price (₹) *</label>
                                     <input type="number" class="form-control" id="acre-price" placeholder="e.g., 2500" min="0" required>
@@ -786,17 +815,42 @@
                                     <input type="number" class="form-control" id="equipment-quantity" value="1" min="1" required>
                                 </div>
                             </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Upload Images *</label>
-                                <div class="border rounded p-3 text-center" id="image-upload-area" onclick="document.getElementById('image-upload').click()" style="cursor: pointer;">
-                                    <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
-                                    <p>Click to upload images or drag & drop</p>
-                                    <input type="file" class="form-control d-none" id="image-upload" multiple accept="image/*">
-                                    <div class="mt-3" id="image-preview"></div>
+                            
+                            <!-- START NEW IMAGE SELECTION SECTION -->
+                            <div class="mb-4 p-3 border rounded">
+                                <h5 class="mb-3 text-primary"><i class="fas fa-image me-2"></i>Equipment Image *</h5>
+                                
+                                <div class="btn-group w-100 mb-3" role="group">
+                                    <button type="button" class="btn upload-tab-btn btn-outline-primary active" onclick="switchImageTab('upload')">
+                                        <i class="fas fa-cloud-upload-alt me-1"></i> Upload Custom Image
+                                    </button>
+                                    <button type="button" class="btn upload-tab-btn btn-outline-primary" onclick="switchImageTab('library')">
+                                        <i class="fas fa-database me-1"></i> Select from Library
+                                    </button>
                                 </div>
-                                <small class="text-muted">Upload clear images of your equipment. First image will be used as thumbnail.</small>
+
+                                <!-- Custom Upload Tab -->
+                                <div id="image-upload-tab" class="image-tab active">
+                                    <div class="border rounded p-3 text-center" id="image-upload-area" onclick="document.getElementById('image-upload').click()" style="cursor: pointer;">
+                                        <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                                        <p>Click to upload your own image(s) or drag & drop</p>
+                                        <input type="file" class="form-control d-none" id="image-upload" multiple accept="image/*">
+                                        <div class="mt-3 d-flex flex-wrap gap-2 justify-content-center" id="image-preview"></div>
+                                    </div>
+                                    <small class="text-muted mt-1 d-block">Custom images will be hosted on ImgBB.</small>
+                                </div>
+
+                                <!-- Library Selection Tab -->
+                                <div id="image-library-tab" class="image-tab" style="display: none;">
+                                    <input type="hidden" id="selected-library-image">
+                                    <small class="text-muted mb-2 d-block">Select a high-quality placeholder image below:</small>
+                                    <div class="row g-2" id="library-image-grid">
+                                        <!-- Library images loaded by JS -->
+                                        <div class="col-12 text-center text-muted">Loading library...</div>
+                                    </div>
+                                </div>
                             </div>
+                            <!-- END NEW IMAGE SELECTION SECTION -->
 
                             <div class="mb-3">
                                 <label for="equipment-specs" class="form-label">Specifications (Optional)</label>
@@ -837,7 +891,7 @@
                         <ul class="list-group list-group-flush">
                             <li class="list-group-item">
                                 <i class="fas fa-check-circle text-success me-2"></i>
-                                Use clear, high-quality images
+                                Use clear, high-quality images OR choose from our Library.
                             </li>
                             <li class="list-group-item">
                                 <i class="fas fa-check-circle text-success me-2"></i>
@@ -1335,6 +1389,17 @@
     let earningsChart = null;
     let detailedEarningsChart = null;
     let sellerNotifications = []; // NEW: Global for seller notifications
+    // NEW: List of available placeholder images (paths relative to index.html)
+    const libraryImages = [
+        'images/Farm_Tractor_45HP.png',
+        'images/Combine_Harvester.png',
+        'images/Farm_Cultivator.png',
+        'images/Agricultural_Drone.png',
+        'images/Power_Spray_Machine.png',
+        'images/Water_Tanker_5000L.png'
+    ];
+    let currentImageTab = 'upload'; // Tracks the active tab: 'upload' or 'library'
+
 
     // Helper to get the Firestore document reference for public orders
     function getPublicCollectionRef(collectionName) {
@@ -1392,6 +1457,9 @@
         
         // Ensure dashboard is shown by default
         showSection('dashboard');
+
+        // NEW: Load library images once
+        loadLibraryImages();
     }
 
     // Add Pincode input event listener
@@ -1591,6 +1659,8 @@ async function populateSellerLocationFields() {
                 if (registeredPincodeDisplay) {
                      registeredPincodeDisplay.textContent = sellerData?.pincode || 'N/A';
                 }
+                // Reset image selection when entering the add-equipment section
+                resetImageSelection(); 
                 break;
             case 'earnings':
                 loadEarningsData();
@@ -2039,6 +2109,7 @@ async function populateSellerLocationFields() {
     function createEquipmentCard(equipment) {
         const statusClass = equipment.availability ? 'status-available' : 'status-rented';
         const statusText = equipment.availability ? 'Available' : 'Rented';
+        // FIX: Ensure placeholder image is used if images array is empty or undefined
         const imageUrl = equipment.images && equipment.images[0] ? equipment.images[0] : 'https://via.placeholder.com/300x200/2B5C2B/FFFFFF?text=Equipment';
         
         return `
@@ -2283,7 +2354,7 @@ async function populateSellerLocationFields() {
         window.firebaseHelpers.showAlert('Export feature coming soon!', 'info');
     }
 
-    // Add equipment form submission
+    // Add equipment form submission (MODIFIED FOR IMAGE SELECTION)
     document.getElementById('add-equipment-form')?.addEventListener('submit', async function(e) {
         e.preventDefault();
         
@@ -2306,10 +2377,50 @@ async function populateSellerLocationFields() {
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
             submitBtn.disabled = true;
         }
+
+        let imageUrls = [];
+        let imageUploadSuccess = false;
         
         try {
+            // --- IMAGE HANDLING LOGIC (NEW) ---
+            const imageFiles = document.getElementById('image-upload')?.files;
+            const selectedLibraryImage = document.getElementById('selected-library-image')?.value;
+
+            if (currentImageTab === 'upload' && imageFiles && imageFiles.length > 0) {
+                // Option 1: Upload custom image(s)
+                for (let i = 0; i < imageFiles.length; i++) {
+                    const file = imageFiles[i];
+                    const downloadURL = await window.firebaseHelpers.uploadFile(
+                        `equipment/${window.currentUser.uid}`, 
+                        file
+                    );
+                    imageUrls.push(downloadURL);
+                }
+                imageUploadSuccess = true;
+
+            } else if (currentImageTab === 'library' && selectedLibraryImage) {
+                // Option 2: Use library image
+                // Since this image is hosted on GitHub, we can use the direct URL from the file structure
+                // We assume the local file path is the URL path for GitHub Pages/local hosting
+                imageUrls.push(selectedLibraryImage);
+                imageUploadSuccess = true;
+
+            } else {
+                // No image selected in either tab
+                 window.firebaseHelpers.showAlert('Please select or upload at least one equipment image.', 'danger');
+                 return;
+            }
+            
+            // Basic validation check after image process
+            if (imageUrls.length === 0 && !imageUploadSuccess) {
+                 window.firebaseHelpers.showAlert('Failed to process image. Please try uploading again or select a library image.', 'danger');
+                 return;
+            }
+            // --- END IMAGE HANDLING LOGIC ---
+
+            
             // Get form values (UPDATED to use 'acre-price' instead of 'daily-price')
-            const equipmentData = {
+            const equipmentDocData = {
                 name: document.getElementById('equipment-name')?.value,
                 category: document.getElementById('equipment-category')?.value,
                 pricePerAcre: parseFloat(document.getElementById('acre-price')?.value || 0), // UPDATED ID
@@ -2324,11 +2435,12 @@ async function populateSellerLocationFields() {
                 availability: true,
                 status: 'pending', // Needs admin approval
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                images: []
+                images: imageUrls, // Save the collected image URLs
+                rentalCount: 0 // Initialize rental count for featured logic
             };
 
             // Basic validation check
-            if (!equipmentData.name || !equipmentData.category || equipmentData.pricePerAcre === 0) {
+            if (!equipmentDocData.name || !equipmentDocData.category || equipmentDocData.pricePerAcre === 0) {
                  window.firebaseHelpers.showAlert('Please fill in all required equipment details.', 'warning');
                  return;
             }
@@ -2342,33 +2454,10 @@ async function populateSellerLocationFields() {
                     specs[specInputs[i].value] = specInputs[i + 1].value;
                 }
             }
-            equipmentData.specifications = specs;
+            equipmentDocData.specifications = specs;
             
             // Save initial document to Firestore
-            const docRef = await window.FirebaseDB.collection('equipment').add(equipmentData);
-            
-            // Upload images using the new ImgBB helper
-            const imageFiles = document.getElementById('image-upload')?.files;
-            if (imageFiles && imageFiles.length > 0) {
-                const imageUrls = [];
-                for (let i = 0; i < imageFiles.length; i++) {
-                    const file = imageFiles[i];
-                    // The path argument is still passed but ignored in the new helper
-                    const downloadURL = await window.firebaseHelpers.uploadFile(
-                        `equipment/${docRef.id}`, // Path is ignored by new helper
-                        file
-                    );
-                    imageUrls.push(downloadURL);
-                }
-                
-                // Update equipment with image URLs
-                await window.FirebaseDB.collection('equipment').doc(docRef.id).update({
-                    images: imageUrls
-                });
-            } else {
-                 // Check if images are mandatory (assuming yes)
-                 window.firebaseHelpers.showAlert('Warning: No images uploaded. Listing may be rejected by admin.', 'warning');
-            }
+            await window.FirebaseDB.collection('equipment').add(equipmentDocData);
             
             window.firebaseHelpers.showAlert('Equipment added successfully! Waiting for admin approval.', 'success');
             
@@ -2376,6 +2465,7 @@ async function populateSellerLocationFields() {
             this.reset();
             const imagePreview = document.getElementById('image-preview');
             if (imagePreview) imagePreview.innerHTML = '';
+            resetImageSelection(); // Ensure library selection is also cleared
             
             // Go back to equipment list
             setTimeout(() => {
@@ -3411,6 +3501,7 @@ document.getElementById('profile-form')?.addEventListener('submit', async functi
     // Handle image upload preview
     document.getElementById('image-upload')?.addEventListener('change', function(e) {
         const preview = document.getElementById('image-preview');
+        const librarySelection = document.getElementById('selected-library-image');
         if (!preview) return;
         
         preview.innerHTML = '';
@@ -3431,6 +3522,12 @@ document.getElementById('profile-form')?.addEventListener('submit', async functi
             }
             
             reader.readAsDataURL(file);
+        }
+        
+        // If files are selected in the Upload tab, clear the Library selection
+        if (this.files.length > 0 && librarySelection) {
+            librarySelection.value = '';
+            document.querySelectorAll('.image-option').forEach(el => el.classList.remove('selected'));
         }
     });
 
@@ -3479,6 +3576,98 @@ document.getElementById('profile-form')?.addEventListener('submit', async functi
             }
         }
     });
+
+    // NEW IMAGE LIBRARY LOGIC
+    
+    /**
+     * Loads the static library images into the selection grid.
+     */
+    function loadLibraryImages() {
+        const grid = document.getElementById('library-image-grid');
+        if (!grid) return;
+
+        grid.innerHTML = ''; 
+
+        libraryImages.forEach(path => {
+            const col = document.createElement('div');
+            col.className = 'col-4 col-md-3 col-lg-2';
+            col.innerHTML = `
+                <div class="image-option" data-image-path="${path}" onclick="selectLibraryImage(this, '${path}')">
+                    <img src="${path}" alt="Library Image" onerror="this.onerror=null; this.src='https://placehold.co/100x80/EEEEEE/333333?text=N/A'">
+                    <p class="text-center small text-muted mt-1 mb-0" style="font-size:0.75rem;">${path.split('/').pop().replace(/\.[^/.]+$/, '').replace(/_/g, ' ')}</p>
+                </div>
+            `;
+            grid.appendChild(col);
+        });
+    }
+
+    /**
+     * Handles selection of a library image.
+     * @param {HTMLElement} element The clicked element.
+     * @param {string} path The path of the selected image.
+     */
+    window.selectLibraryImage = function(element, path) {
+        // Clear all selected states
+        document.querySelectorAll('.image-option').forEach(el => el.classList.remove('selected'));
+        
+        // Set selected state on clicked element
+        element.classList.add('selected');
+
+        // Set value in hidden input
+        const hiddenInput = document.getElementById('selected-library-image');
+        if (hiddenInput) hiddenInput.value = path;
+        
+        // Clear any files selected in the upload input
+        const fileInput = document.getElementById('image-upload');
+        if (fileInput) fileInput.value = '';
+        
+        // Clear image preview area
+        const preview = document.getElementById('image-preview');
+        if (preview) preview.innerHTML = '';
+        
+        window.firebaseHelpers.showAlert('Library image selected!', 'info');
+    }
+
+    /**
+     * Switches between the 'upload' and 'library' tabs.
+     * @param {string} tabName 'upload' or 'library'.
+     */
+    window.switchImageTab = function(tabName) {
+        currentImageTab = tabName;
+
+        document.querySelectorAll('.image-tab').forEach(tab => {
+            tab.style.display = 'none';
+        });
+
+        document.getElementById(`image-${tabName}-tab`).style.display = 'block';
+
+        document.querySelectorAll('.upload-tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        document.querySelector(`.upload-tab-btn[onclick*="${tabName}"]`).classList.add('active');
+
+        // Reset image selection when switching tabs
+        resetImageSelection(); 
+    }
+
+    /**
+     * Resets image input fields and selections across both tabs.
+     */
+    function resetImageSelection() {
+        // Reset upload tab
+        const fileInput = document.getElementById('image-upload');
+        if (fileInput) fileInput.value = '';
+        const preview = document.getElementById('image-preview');
+        if (preview) preview.innerHTML = '';
+
+        // Reset library tab
+        const hiddenInput = document.getElementById('selected-library-image');
+        if (hiddenInput) hiddenInput.value = '';
+        document.querySelectorAll('.image-option').forEach(el => el.classList.remove('selected'));
+    }
+    // END NEW IMAGE LIBRARY LOGIC
+
 
     // Initialize dashboard only if not called by script.js already
     if (!window.loadSellerDashboard) {
