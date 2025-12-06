@@ -137,10 +137,20 @@
                             <strong id="checkout-total">₹0</strong>
                         </div>
                         
-                        <div class="alert alert-info">
-                            <i class="fas fa-lock me-2"></i>
-                            Secure payments via Razorpay.
+                        <hr>
+                        
+                        <!-- NEW PAYMENT METHOD SELECTION -->
+                        <div class="mb-3">
+                            <label class="form-label">Select Payment Method</label>
+                            <select class="form-select" id="payment-method-select">
+                                <option value="razorpay">Pay Now (Razorpay - Recommended)</option>
+                                <option value="test_cop">Cash On Pickup (Test/Simulation ONLY)</option>
+                            </select>
+                            <div class="alert alert-info mt-2 p-2 small" id="payment-warning">
+                                <i class="fas fa-lock me-1"></i> Secure payments via Razorpay. Full payment confirms the rental booking.
+                            </div>
                         </div>
+                        <!-- END NEW PAYMENT METHOD SELECTION -->
 
                         <button class="btn btn-primary btn-lg w-100" id="pay-now-btn" onclick="processPayment()">
                             <i class="fas fa-money-check-alt me-2"></i>Pay <span id="pay-button-amount">₹0</span> Now
@@ -253,5 +263,44 @@
     
     <!-- Custom JavaScript -->
     <script src="script.js"></script>
+    
+    <script>
+        // NEW: Event listener to update UI when payment method changes
+        document.addEventListener('DOMContentLoaded', () => {
+            const paymentSelect = document.getElementById('payment-method-select');
+            const payBtn = document.getElementById('pay-now-btn');
+            const paymentWarning = document.getElementById('payment-warning');
+
+            if (paymentSelect) {
+                paymentSelect.addEventListener('change', (event) => {
+                    const method = event.target.value;
+                    if (method === 'test_cop') {
+                        if(payBtn) {
+                            payBtn.innerHTML = '<i class="fas fa-truck-loading me-2"></i> Confirm Rental (No Payment)';
+                            payBtn.classList.remove('btn-primary');
+                            payBtn.classList.add('btn-warning');
+                        }
+                        if(paymentWarning) {
+                            paymentWarning.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i> **TEST MODE:** This option simulates order placement with **No Upfront Payment**. Order status will be **Pending** for seller review.';
+                            paymentWarning.classList.remove('alert-info');
+                            paymentWarning.classList.add('alert-danger');
+                        }
+                    } else { // razorpay
+                        const amount = document.getElementById('pay-button-amount')?.textContent || '₹0';
+                        if(payBtn) {
+                            payBtn.innerHTML = `<i class="fas fa-money-check-alt me-2"></i>Pay ${amount} Now`;
+                            payBtn.classList.remove('btn-warning');
+                            payBtn.classList.add('btn-primary');
+                        }
+                        if(paymentWarning) {
+                            paymentWarning.innerHTML = '<i class="fas fa-lock me-1"></i> Secure payments via Razorpay. Full payment confirms the rental booking.';
+                            paymentWarning.classList.remove('alert-danger');
+                            paymentWarning.classList.add('alert-info');
+                        }
+                    }
+                });
+            }
+        });
+    </script>
 </body>
 </html>
