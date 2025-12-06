@@ -1746,7 +1746,28 @@ function updateNavbarForLoggedInUser(userData) {
          return; 
     }
     
+    // NEW: Customer Notification icon/dropdown container
+    let notificationsHtml = '';
+    if (userData.role === 'customer') {
+        notificationsHtml = `
+            <li class="nav-item dropdown">
+                <a class="nav-link dropdown-toggle" href="#" id="notificationDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-bell"></i>
+                    <span class="badge bg-danger position-absolute top-0 start-100 translate-middle rounded-pill" id="customer-notification-count">0</span>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="notificationDropdown" id="customer-notifications-list">
+                    <li><h6 class="dropdown-header">Alerts & Updates</h6></li>
+                    <li><a class="dropdown-item text-center text-muted" href="#" onclick="showSection('orders')">Loading...</a></li>
+                </ul>
+            </li>
+        `;
+        // Load notifications upon login/navbar update
+        checkCustomerNotifications();
+    }
+
+
     let dropdownHtml = `
+        ${notificationsHtml}
         <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
                 <i class="fas fa-user-circle me-1"></i> ${userData.name || 'User'}
@@ -1771,8 +1792,85 @@ function updateNavbarForLoggedInUser(userData) {
         </li>
     `;
     
-    navbarAuth.innerHTML = dropdownHtml;
+    // We modify the cart li element's content, so we just update navbarAuth with the dropdown
+    navbarAuth.insertAdjacentHTML('afterbegin', dropdownHtml);
 }
+
+// NEW: Check Customer Notifications (Pending orders/status updates)
+async function checkCustomerNotifications() {
+    if (!window.currentUser || window.currentUser.role !== 'customer') return;
+
+    try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
+
+        // Check for orders that are pending (awaiting initial seller action) or active (rented)
+        const ordersSnapshot = await ordersCollectionRef
+            .where('userId', '==', window.currentUser.uid)
+            .where('status', 'in', ['pending', 'active'])
+            .orderBy('createdAt', 'desc')
+            .limit(5)
+            .get();
+
+        const notifications = [];
+        ordersSnapshot.forEach(doc => {
+            const order = doc.data();
+            let message = '';
+            let icon = 'fas fa-info-circle';
+            let badgeClass = 'bg-warning';
+            
+            if (order.status === 'pending') {
+                message = `Order #${doc.id.substring(0, 8)} is pending seller confirmation.`;
+                icon = 'fas fa-clock';
+                badgeClass = 'bg-warning';
+            } else if (order.status === 'active') {
+                message = `Order #${doc.id.substring(0, 8)} confirmed! Ready for pickup.`;
+                icon = 'fas fa-check-circle';
+                badgeClass = 'bg-success';
+            }
+            // Add more status checks here (e.g., cancelled/rejected if action needed)
+            
+            notifications.push({
+                id: doc.id,
+                message,
+                icon,
+                badgeClass,
+                date: order.createdAt
+            });
+        });
+
+        // Update UI
+        const countElement = document.getElementById('customer-notification-count');
+        const listElement = document.getElementById('customer-notifications-list');
+
+        if (countElement) countElement.textContent = notifications.length > 0 ? notifications.length : '';
+        if (listElement) listElement.innerHTML = '<li><h6 class="dropdown-header">Alerts & Updates</h6></li>';
+
+        if (notifications.length === 0) {
+             if (listElement) listElement.innerHTML += '<li><a class="dropdown-item text-center text-muted" href="#">No new alerts.</a></li>';
+        } else {
+            notifications.forEach(notif => {
+                const timeAgo = notif.date ? window.firebaseHelpers.formatTimeAgo(notif.date) : 'N/A';
+                if (listElement) listElement.innerHTML += `
+                    <li>
+                        <a class="dropdown-item d-flex justify-content-between align-items-center" href="orders.html" title="${notif.message}">
+                            <div>
+                                <span class="badge ${notif.badgeClass} me-2"><i class="${notif.icon}"></i></span>
+                                ${notif.message.substring(0, 30)}...
+                            </div>
+                            <small class="text-muted ms-2">${timeAgo}</small>
+                        </a>
+                    </li>
+                `;
+            });
+             if (listElement) listElement.innerHTML += '<li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center" href="orders.html">View All Orders</a></li>';
+        }
+
+    } catch (error) {
+        console.error("Error fetching customer notifications:", error);
+    }
+}
+// END NEW CUSTOMER NOTIFICATIONS
 
 // Update navbar for logged out user
 function updateNavbarForLoggedOutUser() {
@@ -2859,9 +2957,80 @@ function createOrderCard(order) {
     `;
 }
 
-// Function to view order details in a modal (simplified, assumes existing modal structure)
+// Function to view order details in a modal (MODIFIED to actually display details)
 async function viewOrderDetailsModal(orderId) {
-    window.firebaseHelpers.showAlert(`Fetching details for Order #${orderId.substring(0, 8)}... (Feature Coming Soon)`, 'info');
+    try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
+        const doc = await ordersCollectionRef.doc(orderId).get();
+
+        if (doc.exists) {
+            const order = doc.data();
+            const modalElement = document.getElementById('orderDetailsModal');
+            if (!modalElement) {
+                window.firebaseHelpers.showAlert('Error: Order details modal not found in HTML.', 'danger');
+                return;
+            }
+
+            const statusClass = `order-status-${order.status || 'pending'}`;
+            const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
+
+            const detailsHtml = `
+                <h5 class="mb-3">Order # ${orderId.substring(0, 8)} Details</h5>
+                <div class="alert alert-info d-flex justify-content-between">
+                    <div><strong>Status:</strong> <span class="status-badge ${statusClass}">${statusText}</span></div>
+                    <div><strong>Date Placed:</strong> ${window.firebaseHelpers.formatDateTime(order.createdAt)}</div>
+                </div>
+                
+                <h6 class="mt-4 text-primary">Customer & Pickup Information</h6>
+                <table class="table table-sm table-borderless">
+                    <tr><th>Customer Name:</th><td>${order.customerName || 'N/A'}</td></tr>
+                    <tr><th>Phone:</th><td>${order.customerPhone || 'N/A'}</td></tr>
+                    <tr><th>Email:</th><td>${order.customerEmail || 'N/A'}</td></tr>
+                    <tr><th>Pickup Date/Time:</th><td><strong>${order.pickupDate || 'N/A'} at ${order.pickupTime || 'N/A'}</strong></td></tr>
+                    <tr><th>Pincode:</th><td>${order.orderPincode || 'N/A'}</td></tr>
+                    <tr><th>Notes:</th><td>${order.notes || 'None'}</td></tr>
+                </table>
+
+                <h6 class="mt-4 text-success">Equipment Details</h6>
+                <ul class="list-group mb-4">
+                    ${order.items.map(item => `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${item.name}</strong> 
+                                <small class="text-muted d-block">${item.rentalValue} ${item.rentalType} | Seller: ${item.businessName}</small>
+                                <small class="text-muted d-block">Address: ${item.sellerAddress}</small>
+                            </div>
+                            <span class="badge bg-success">${window.firebaseHelpers.formatCurrency(item.price)}</span>
+                        </li>
+                    `).join('')}
+                </ul>
+
+                <h6 class="mt-4 text-warning">Payment Summary</h6>
+                <table class="table table-sm table-borderless">
+                    <tr><th>Total Amount:</th><td><strong>${window.firebaseHelpers.formatCurrency(order.totalAmount)}</strong></td></tr>
+                    <tr><th>Platform Fee:</th><td>${window.firebaseHelpers.formatCurrency(order.platformFee || 0)}</td></tr>
+                    <tr><th>Payment Method:</th><td>${order.paymentMethod || 'N/A'}</td></tr>
+                    <tr><th>Payment Status:</th><td><span class="badge bg-${order.paymentStatus === 'paid' ? 'success' : 'danger'}">${order.paymentStatus || 'N/A'}</span></td></tr>
+                    <tr><th>Transaction ID:</th><td><small>${order.transactionId || 'N/A'}</small></td></tr>
+                </table>
+            `;
+
+            // Update modal body content
+            const modalBody = modalElement.querySelector('.modal-body');
+            if (modalBody) modalBody.innerHTML = detailsHtml;
+
+            // Show the modal
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+
+        } else {
+            window.firebaseHelpers.showAlert('Order details not found.', 'danger');
+        }
+    } catch (error) {
+        console.error('Error viewing order details:', error);
+        window.firebaseHelpers.showAlert('Error loading order details.', 'danger');
+    }
 }
 
 // Function to cancel an order
