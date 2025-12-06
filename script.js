@@ -2378,7 +2378,7 @@ function displayCheckoutSummary(cart) {
     
     // NEW: Collect all rental duration and pickup details for display/form pre-fill
     const totalRentalDetails = [];
-    const pickupDateInput = document.getElementById('rental-dates'); // Renamed to rental-dates in HTML
+    const pickupDateInput = document.getElementById('rental-details'); // Correct ID is rental-details
     const firstItem = cart[0];
 
     // Pre-fill the single "Rental Duration" field with details from the first item
@@ -2433,7 +2433,7 @@ function displayCheckoutSummary(cart) {
     window.razorpayContext = { subtotal, fees, total, orderPincode, ...window.razorpayContext }; 
 }
 
-// Process payment using Razorpay (Simulated Escrow/Route)
+// Process payment using Razorpay (Simulated Escrow/Route) (MODIFIED FOR TEST PAYMENT)
 async function processPayment() {
     const form = document.getElementById('checkout-form');
     if (!form.checkValidity()) {
@@ -2441,6 +2441,8 @@ async function processPayment() {
         window.firebaseHelpers.showAlert('Please fill all required customer details.', 'warning');
         return;
     }
+    
+    const paymentMethod = document.getElementById('payment-method-select').value;
     
     const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
     if (!userPincode) {
@@ -2452,13 +2454,7 @@ async function processPayment() {
     
     const isPickup = true; 
 
-    const keyId = await window.firebaseHelpers.getRazorpayKeyId();
-    if (!keyId) {
-        window.firebaseHelpers.showAlert('Payment gateway key missing. Cannot proceed.', 'danger');
-        return;
-    }
-
-    const { total, orderPickupDate, orderPickupTime } = window.razorpayContext; // NEW: Extract date/time
+    const { total, orderPickupDate, orderPickupTime } = window.razorpayContext; 
     const totalInPaise = Math.round(total * 100);
 
     const customerData = {
@@ -2468,44 +2464,75 @@ async function processPayment() {
         address: 'Self-Pickup Confirmed',
         notes: document.getElementById('additional-notes').value,
         isPickup: isPickup,
-        // NEW: Capture Pickup Date/Time in customer data/notes
+        
         pickupDate: orderPickupDate,
         pickupTime: orderPickupTime,
     };
     
     const orderId = window.firebaseHelpers.generateId(); 
 
-    const options = {
-        key: keyId, 
-        amount: totalInPaise, 
-        currency: "INR",
-        name: "FarmRent",
-        description: "Rental Equipment Booking",
-        handler: async function (response) {
-            await placeOrderInFirestore(orderId, customerData, response.razorpay_payment_id, total);
-            
-        },
-        prefill: {
-            name: customerData.name,
-            email: customerData.email,
-            contact: customerData.phone
-        },
-        theme: {
-            color: "#2B5C2B" 
+    // *** MODIFIED LOGIC START ***
+    if (paymentMethod === 'test_cop') {
+        // Option 1: Cash On Pickup (Test/Simulation ONLY) - Skip payment, place order immediately
+        const payBtn = document.getElementById('pay-now-btn');
+        const originalText = payBtn.innerHTML;
+        payBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Confirming...';
+        payBtn.disabled = true;
+
+        try {
+            // Simulate direct order placement with 'pending' payment status
+            await placeOrderInFirestore(orderId, customerData, 'TEST_COP_TXN', total, 'pending', 'Cash On Pickup (Test)');
+            // The function placeOrderInFirestore will handle success alerts and redirects
+        } catch (error) {
+            console.error('Test Order Placement Failed:', error);
+            window.firebaseHelpers.showAlert('Test order placement failed. See console for details.', 'danger');
+        } finally {
+            payBtn.innerHTML = originalText;
+            payBtn.disabled = false;
         }
-    };
 
-    const rzp = new window.Razorpay(options);
-    rzp.on('payment.failed', function (response) {
-        console.error('Payment Failed:', response.error);
-        window.firebaseHelpers.showAlert('Payment failed: ' + response.error.description, 'danger');
-    });
+    } else { 
+        // Option 2: Razorpay (Real Payment) - Proceed with Razorpay flow
+        const keyId = await window.firebaseHelpers.getRazorpayKeyId();
+        if (!keyId) {
+            window.firebaseHelpers.showAlert('Payment gateway key missing. Cannot proceed.', 'danger');
+            return;
+        }
 
-    rzp.open();
+        const options = {
+            key: keyId, 
+            amount: totalInPaise, 
+            currency: "INR",
+            name: "FarmRent",
+            description: "Rental Equipment Booking",
+            handler: async function (response) {
+                // On successful payment, place order with 'paid' status
+                await placeOrderInFirestore(orderId, customerData, response.razorpay_payment_id, total, 'paid', 'Razorpay');
+                
+            },
+            prefill: {
+                name: customerData.name,
+                email: customerData.email,
+                contact: customerData.phone
+            },
+            theme: {
+                color: "#2B5C2B" 
+            }
+        };
+
+        const rzp = new window.Razorpay(options);
+        rzp.on('payment.failed', function (response) {
+            console.error('Payment Failed:', response.error);
+            window.firebaseHelpers.showAlert('Payment failed: ' + response.error.description, 'danger');
+        });
+
+        rzp.open();
+    }
+    // *** MODIFIED LOGIC END ***
 }
 
-// Final step: Save order to Firestore after (simulated) successful payment (MODIFIED)
-async function placeOrderInFirestore(orderId, customerData, paymentId, totalAmount) {
+// Final step: Save order to Firestore after (simulated) successful payment (MODIFIED to accept payment/status)
+async function placeOrderInFirestore(orderId, customerData, transactionId, totalAmount, paymentStatus, paymentMethod) {
     const cart = await getCartFromFirestore();
     
     if (cart.length === 0) {
@@ -2542,10 +2569,10 @@ async function placeOrderInFirestore(orderId, customerData, paymentId, totalAmou
 
             totalAmount: totalAmount,
             platformFee: window.razorpayContext.fees,
-            status: 'pending', 
-            paymentStatus: 'paid',
-            paymentMethod: 'Razorpay',
-            transactionId: paymentId,
+            status: 'pending', // All orders start as pending for seller review
+            paymentStatus: paymentStatus, // Use dynamic status ('paid' or 'pending')
+            paymentMethod: paymentMethod, // Use dynamic method
+            transactionId: transactionId,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
@@ -2555,8 +2582,13 @@ async function placeOrderInFirestore(orderId, customerData, paymentId, totalAmou
         await ordersCollectionRef.doc(orderId).set(orderData);
         
         await updateCartInFirestore([]); 
+        
+        // Show context-specific alert
+        const successMessage = paymentStatus === 'paid' 
+            ? `Order #${orderId.substring(0, 8)} placed successfully! Payment confirmed. You will be redirected to My Orders.`
+            : `Test Order #${orderId.substring(0, 8)} placed successfully! Payment is **Pending**. You will be redirected to My Orders.`;
 
-        window.firebaseHelpers.showAlert(`Order #${orderId.substring(0, 8)} placed successfully! Payment confirmed.`, 'success');
+        window.firebaseHelpers.showAlert(successMessage, 'success');
         
         setTimeout(() => {
             window.location.href = 'orders.html'; 
