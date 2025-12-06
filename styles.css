@@ -76,7 +76,7 @@ body {
 }
 
 .hero-section {
-    background: linear-gradient(rgba(43, 92, 43, 0.9), rgba(139, 69, 19, 0.8)), url('images/herobg.png');
+    background: linear-gradient(rgba(43, 92, 43, 0.9), rgba(139, 69, 19, 0.8)), url('images/herobg.webp');
     background-size: cover;
     background-position: center;
     color: white;
