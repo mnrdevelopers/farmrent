@@ -10,11 +10,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <!-- Custom CSS -->
     <link rel="stylesheet" href="styles.css">
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-remote-config-compat.js"></script>
     <style>
         .order-card .card-header {
             background-color: var(--farm-green);
@@ -41,6 +36,110 @@
             border-radius: 20px;
             font-size: 0.8rem;
             font-weight: 600;
+        }
+
+        /* --- Dynamic Order Tracker Styles (New) --- */
+        .order-tracker {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            position: relative;
+            margin: 20px 0;
+        }
+
+        .tracker-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            flex: 1;
+            min-width: 0;
+            position: relative;
+            z-index: 10;
+        }
+
+        .step-icon-container {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #e9ecef;
+            color: #6c757d;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            margin-bottom: 5px;
+            transition: all 0.4s ease;
+            box-shadow: 0 0 0 0 rgba(43, 92, 43, 0.4);
+        }
+
+        .step-text {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: #6c757d;
+            transition: color 0.4s;
+        }
+
+        /* Tracker Line */
+        .tracker-line {
+            position: absolute;
+            top: 35px; /* Adjust based on icon container height */
+            left: 0;
+            right: 0;
+            height: 4px;
+            background-color: #e9ecef;
+            z-index: 5;
+            margin: 0 45px; /* Adjust based on icon container width/spacing */
+        }
+        
+        .tracker-progress {
+            height: 100%;
+            width: 0; /* Updated by JS */
+            background-color: var(--farm-green);
+            transition: width 0.6s ease-in-out;
+            border-radius: 2px;
+        }
+
+        /* Active/Completed State */
+        .tracker-step.active .step-icon-container,
+        .tracker-step.completed .step-icon-container {
+            background-color: var(--farm-green);
+            color: white;
+            box-shadow: 0 0 0 6px rgba(43, 92, 43, 0.2);
+            animation: pulse-step 1.5s infinite;
+        }
+        
+        .tracker-step.completed .step-icon-container {
+             background-color: #155724; /* Deeper green for completed */
+             box-shadow: 0 0 0 0 rgba(43, 92, 43, 0.2); /* Remove pulse on completed */
+             animation: none;
+        }
+
+        .tracker-step.active .step-text,
+        .tracker-step.completed .step-text {
+            color: var(--farm-green);
+        }
+        
+        @keyframes pulse-step {
+            0% { box-shadow: 0 0 0 0 rgba(43, 92, 43, 0.2); }
+            70% { box-shadow: 0 0 0 10px rgba(43, 92, 43, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(43, 92, 43, 0); }
+        }
+        
+        /* Responsive adjustments for text */
+        @media (max-width: 576px) {
+            .tracker-step {
+                font-size: 0.65rem;
+            }
+            .step-icon-container {
+                width: 30px;
+                height: 30px;
+                font-size: 1rem;
+            }
+            .tracker-line {
+                top: 29px;
+            }
         }
     </style>
 </head>
@@ -81,7 +180,7 @@
 
     <!-- Order Details Modal (Used by viewOrderDetailsModal) -->
     <div class="modal fade" id="orderDetailsModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title">Order Details</h5>
@@ -89,13 +188,18 @@
                 </div>
                 <div class="modal-body">
                     <!-- Detailed information will go here -->
-                    <div class="text-center py-5">
-                        <div class="spinner-border text-primary"></div>
-                        <p class="mt-3">Loading order details...</p>
+                    <!-- The dynamic tracker HTML will be inserted here by JS -->
+                    <div id="order-tracker-container"></div> 
+                    <div id="order-details-content" class="mt-4">
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary"></div>
+                            <p class="mt-3">Loading order details...</p>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <!-- Dynamic action buttons (e.g., Cancel) added here by JS -->
                 </div>
             </div>
         </div>
