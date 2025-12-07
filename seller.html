@@ -217,6 +217,16 @@
             color: #0C5460;
         }
         
+        .order-status-pickedup {
+             background-color: #A3CCEB; /* Light Blue for Picked Up */
+             color: #0d47a1; 
+        }
+
+        .order-status-returned {
+             background-color: #FFE0B2; /* Light Orange for Returned */
+             color: #E65100;
+        }
+
         .order-status-completed {
             background-color: #D4EDDA;
             color: #155724;
@@ -714,7 +724,9 @@
                             <div class="btn-group" role="group">
                                 <button type="button" class="btn btn-outline-primary active" onclick="filterOrders('all')">All</button>
                                 <button type="button" class="btn btn-outline-primary" onclick="filterOrders('pending')">Pending</button>
-                                <button type="button" class="btn btn-outline-primary" onclick="filterOrders('active')">Active</button>
+                                <button type="button" class="btn btn-outline-primary" onclick="filterOrders('active')">Confirmed (Ready for Pickup)</button>
+                                <button type="button" class="btn btn-outline-primary" onclick="filterOrders('pickedup')">Picked Up</button>
+                                <button type="button" class="btn btn-outline-primary" onclick="filterOrders('returned')">Returned</button>
                                 <button type="button" class="btn btn-outline-primary" onclick="filterOrders('completed')">Completed</button>
                             </div>
                             <div class="d-flex gap-2">
@@ -1372,6 +1384,9 @@
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth-compat.js"></script>
@@ -1877,7 +1892,8 @@ async function populateSellerLocationFields() {
             let totalEarnings = 0;
             relevantOrders.forEach(orderDoc => {
                 const order = orderDoc.data();
-                if ((order.status === 'completed' || order.status === 'active')) {
+                // Include 'completed' and 'returned' earnings
+                if ((order.status === 'completed' || order.status === 'returned')) {
                     // This is still a simplification; totalAmount is gross, but we use it as net here.
                     totalEarnings += order.totalAmount || 0;
                 }
@@ -2245,7 +2261,7 @@ async function populateSellerLocationFields() {
         }
     }
 
-    // Create full order row for orders section
+    // Create full order row for orders section (MODIFIED for new status actions)
     function createFullOrderRow(order) {
         const statusClass = `order-status-${order.status || 'pending'}`;
         const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
@@ -2258,6 +2274,42 @@ async function populateSellerLocationFields() {
         // Use consolidated equipment name if available, otherwise default to first item's name
         const equipmentName = order.equipmentNames.split(',')[0] || order.items[0]?.name || 'Equipment';
 
+        let actionButtons = `
+            <button class="btn btn-sm btn-outline-primary" onclick="viewOrderDetails('${order.id}')">
+                <i class="fas fa-eye"></i>
+            </button>
+        `;
+
+        if (order.status === 'pending') {
+            actionButtons += `
+                <button class="btn btn-sm btn-success ms-1" onclick="updateOrderStatus('${order.id}', 'active')">
+                    <i class="fas fa-check"></i> Approve Pickup
+                </button>
+                <button class="btn btn-sm btn-danger ms-1" onclick="updateOrderStatus('${order.id}', 'cancelled')">
+                    <i class="fas fa-times"></i> Reject
+                </button>
+            `;
+        } else if (order.status === 'active') {
+             actionButtons += `
+                <button class="btn btn-sm btn-info ms-1" onclick="updateOrderStatus('${order.id}', 'pickedup')">
+                    <i class="fas fa-handshake"></i> Customer Picked Up
+                </button>
+            `;
+        } else if (order.status === 'pickedup') {
+             actionButtons += `
+                <button class="btn btn-sm btn-warning ms-1" onclick="updateOrderStatus('${order.id}', 'returned')">
+                    <i class="fas fa-undo-alt"></i> Equipment Returned
+                </button>
+            `;
+        } else if (order.status === 'returned') {
+            actionButtons += `
+                <button class="btn btn-sm btn-primary ms-1" onclick="updateOrderStatus('${order.id}', 'completed')">
+                    <i class="fas fa-flag-checkered"></i> Mark Completed
+                </button>
+            `;
+        }
+        // Note: Completed and Cancelled orders have no further actions.
+
         return `
             <tr>
                 <td>#${order.id.substring(0, 8)}</td>
@@ -2266,24 +2318,7 @@ async function populateSellerLocationFields() {
                 <td>${rentalPeriod}</td>
                 <td>${window.firebaseHelpers.formatCurrency(order.totalAmount || 0)}</td>
                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                <td>
-                    <button class="btn btn-sm btn-outline-primary" onclick="viewOrderDetails('${order.id}')">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    ${order.status === 'pending' ? `
-                        <button class="btn btn-sm btn-success ms-1" onclick="updateOrderStatus('${order.id}', 'active')">
-                            <i class="fas fa-check"></i>
-                        </button>
-                        <button class="btn btn-sm btn-danger ms-1" onclick="updateOrderStatus('${order.id}', 'cancelled')">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    ` : ''}
-                    ${order.status === 'active' ? `
-                        <button class="btn btn-sm btn-primary ms-1" onclick="updateOrderStatus('${order.id}', 'completed')">
-                            <i class="fas fa-flag-checkered"></i>
-                        </button>
-                    ` : ''}
-                </td>
+                <td>${actionButtons}</td>
             </tr>
         `;
     }
@@ -2875,16 +2910,26 @@ async function populateSellerLocationFields() {
         }
     }
 
-    // Update order status
+    // Update order status (MODIFIED to include new statuses)
     async function updateOrderStatus(orderId, newStatus) {
-        // NOTE: Use custom modal instead of built-in confirm
-         const actionText = newStatus === 'active' ? 'Approve Pickup' : newStatus === 'completed' ? 'Mark Completed' : 'Cancel Order';
+        // Map new status to confirmation text
+        const statusMap = {
+            'active': { text: 'Approve Pickup', type: 'success' },
+            'pickedup': { text: 'Mark as Picked Up by Customer', type: 'info' },
+            'returned': { text: 'Mark as Equipment Returned', type: 'warning' },
+            'completed': { text: 'Mark as Completed', type: 'primary' },
+            'cancelled': { text: 'Cancel Order', type: 'danger' }
+        };
+
+        const action = statusMap[newStatus];
+        
+        // Use custom modal instead of built-in confirm
          const modalHtml = `
             <div class="modal fade" id="confirm-status-modal" tabindex="-1">
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
-                        <div class="modal-header bg-${newStatus === 'active' ? 'success' : newStatus === 'completed' ? 'primary' : 'danger'} text-white">
-                            <h5 class="modal-title"><i class="fas fa-check me-2"></i>Confirm Status Change</h5>
+                        <div class="modal-header bg-${action.type} text-white">
+                            <h5 class="modal-title"><i class="fas fa-${newStatus === 'active' ? 'check' : newStatus === 'cancelled' ? 'times' : newStatus === 'pickedup' ? 'handshake' : newStatus === 'returned' ? 'undo-alt' : 'flag-checkered'} me-2"></i>Confirm Status Change</h5>
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
@@ -2892,7 +2937,7 @@ async function populateSellerLocationFields() {
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="button" class="btn btn-${newStatus === 'active' ? 'success' : newStatus === 'completed' ? 'primary' : 'danger'}" id="confirm-status-btn">${actionText}</button>
+                            <button type="button" class="btn btn-${action.type}" id="confirm-status-btn">${action.text}</button>
                         </div>
                     </div>
                 </div>
@@ -2909,12 +2954,23 @@ async function populateSellerLocationFields() {
             try {
                 const orderRef = getPublicCollectionRef('orders').doc(orderId);
                 
-                await orderRef.update({
+                const updatePayload = {
                     status: newStatus,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                };
+
+                // Optionally record specific timestamp for tracking
+                if (newStatus === 'pickedup') {
+                    updatePayload.pickedUpAt = firebase.firestore.FieldValue.serverTimestamp();
+                } else if (newStatus === 'returned') {
+                    updatePayload.returnedAt = firebase.firestore.FieldValue.serverTimestamp();
+                } else if (newStatus === 'completed') {
+                    updatePayload.completedAt = firebase.firestore.FieldValue.serverTimestamp();
+                }
                 
-                window.firebaseHelpers.showAlert(`Order ${newStatus} successfully!`, 'success');
+                await orderRef.update(updatePayload);
+                
+                window.firebaseHelpers.showAlert(`Order status updated to ${newStatus}!`, 'success');
                 loadDashboardData(); // Reload dashboard for badge/stats update
                 loadRecentOrders();
                 loadOrders();
@@ -2954,7 +3010,7 @@ async function populateSellerLocationFields() {
                 const orderDate = order.createdAt ? order.createdAt.toDate() : new Date();
                 const year = orderDate.getFullYear();
                 
-                if (order.sellerIds && order.sellerIds.includes(window.currentUser.uid) && (order.status === 'completed' || order.status === 'active')) {
+                if (order.sellerIds && order.sellerIds.includes(window.currentUser.uid) && (order.status === 'completed' || order.status === 'returned')) {
                      const amount = order.totalAmount || 0; 
                     
                     if (year === currentYear) {
@@ -3072,7 +3128,7 @@ async function populateSellerLocationFields() {
             // Aggregate earnings per equipment
             ordersSnapshot.forEach(orderDoc => {
                 const order = orderDoc.data();
-                 if (order.sellerIds && order.sellerIds.includes(window.currentUser.uid) && (order.status === 'completed' || order.status === 'active')) {
+                 if (order.sellerIds && order.sellerIds.includes(window.currentUser.uid) && (order.status === 'completed' || order.status === 'returned')) {
                     order.items.forEach(item => {
                         // Only count earnings for equipment belonging to this seller
                         if (item.sellerId === window.currentUser.uid && equipmentEarnings[item.id] !== undefined) {
