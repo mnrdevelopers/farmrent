@@ -1346,7 +1346,7 @@ async function rentNowModal() {
     
     // Enforce consistency between user's filter and item's location
     if (userPincode !== itemPincode) {
-        window.firebaseHelpers.showAlert(`The selected equipment is in Pincode ${itemPincode}, but your current location filter is set to ${userPincode}. Please change your filter to match the equipment location.`, 'danger');
+        window.firebaseHelpers.showAlert(`The selected equipment is in Pincode ${itemPincode}, but your current location filter is set to ${userPincode}. Please resolve the location mismatch.`, 'danger');
         
         const warningHtml = `
             <div class="alert alert-danger">
@@ -2894,7 +2894,7 @@ async function loadOrdersPage() {
     }
 }
 
-// Create HTML card for an order (MODIFIED to include Pickup Date/Time)
+// Create HTML card for an order (MODIFIED to include dynamic order tracker and more details)
 function createOrderCard(order) {
     const statusClass = `order-status-${order.status || 'pending'}`;
     const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
@@ -2904,7 +2904,7 @@ function createOrderCard(order) {
     // NEW: Extract pickup details
     const pickupDate = order.pickupDate || 'N/A';
     const pickupTime = order.pickupTime || 'N/A';
-    
+
     return `
         <div class="col-lg-12 mb-4">
             <div class="card order-card shadow-sm">
@@ -2938,26 +2938,107 @@ function createOrderCard(order) {
                         <div class="col-md-6 text-md-end">
                             <strong>Pickup Pincode:</strong> ${order.orderPincode || 'N/A'}
                         </div>
-                        <!-- NEW ROW for Pickup Details -->
+                        <!-- Row for Pickup Details -->
                         <div class="col-12 mt-2">
                             <span class="badge bg-danger text-white"><i class="fas fa-calendar-check me-1"></i> Pickup Date/Time:</span> 
                             <strong>${pickupDate} at ${pickupTime}</strong>
                         </div>
-                        <!-- END NEW ROW -->
+                        <!-- END Row -->
                     </div>
+                    
+                    <!-- NEW: Mini Order Tracker for the list view -->
+                    ${createOrderTrackerHtml(order.status, true)} 
+                    
                 </div>
                 <div class="card-footer text-end">
                     ${order.status === 'pending' ? `
                         <button class="btn btn-sm btn-danger" onclick="cancelOrder('${order.id}')">Cancel Order</button>
                     ` : ''}
-                    <button class="btn btn-sm btn-outline-primary" onclick="viewOrderDetailsModal('${order.id}')">View Details</button>
+                    <button class="btn btn-sm btn-outline-primary" onclick="viewOrderDetailsModal('${order.id}')">View Details & Track</button>
                 </div>
             </div>
         </div>
     `;
 }
 
-// Function to view order details in a modal (MODIFIED to actually display details)
+// NEW FUNCTION: Generate the dynamic order tracker HTML based on status
+function createOrderTrackerHtml(status, isMini = false) {
+    // Define the sequence of steps
+    const steps = [
+        { key: 'pending', text: 'Order Placed', icon: 'fas fa-clipboard-list' },
+        { key: 'active', text: 'Seller Confirmed', icon: 'fas fa-check-circle' },
+        { key: 'pickedup', text: 'Customer Picked Up', icon: 'fas fa-truck-loading' },
+        { key: 'returned', text: 'Equipment Returned', icon: 'fas fa-undo-alt' },
+        { key: 'completed', text: 'Rental Completed', icon: 'fas fa-flag-checkered' }
+    ];
+
+    // Map status to progress (percentage and active index)
+    const statusMap = {
+        'pending': { progress: 0, index: 0, showCancel: true },
+        'active': { progress: 25, index: 1, showCancel: true },
+        'pickedup': { progress: 50, index: 2, showCancel: false },
+        'returned': { progress: 75, index: 3, showCancel: false },
+        'completed': { progress: 100, index: 4, showCancel: false },
+        'cancelled': { progress: 0, index: -1, showCancel: false },
+        'rejected': { progress: 0, index: -1, showCancel: false }
+    };
+
+    const currentStep = statusMap[status] || statusMap['pending'];
+    const isTerminal = status === 'completed' || status === 'cancelled' || status === 'rejected';
+
+    if (isTerminal && status !== 'completed') {
+        const message = status === 'cancelled' 
+            ? 'Order Cancelled' 
+            : 'Order Rejected by Seller';
+            
+        const icon = status === 'cancelled' ? 'fas fa-ban' : 'fas fa-times-circle';
+        
+        return `
+            <div class="alert alert-danger text-center mt-3 mb-0 p-3">
+                <i class="${icon} me-2"></i> <strong>${message}</strong>. 
+                ${status === 'cancelled' ? 'Cancellation requested.' : 'Contact seller for details.'}
+            </div>
+        `;
+    }
+    
+    // Calculate final progress bar width (if not terminal)
+    const progressBarWidth = currentStep.progress; 
+    
+    // Build the tracker HTML
+    const trackerHtml = steps.map((step, index) => {
+        let stepClass = '';
+        if (index < currentStep.index) {
+            stepClass = 'completed';
+        } else if (index === currentStep.index && !isTerminal) {
+            stepClass = 'active';
+        } else if (index === currentStep.index && status === 'completed') {
+             stepClass = 'completed';
+        }
+
+        return `
+            <div class="tracker-step ${stepClass}">
+                <div class="step-icon-container">
+                    <i class="${step.icon}"></i>
+                </div>
+                <div class="step-text">${step.text}</div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="order-tracker ${isMini ? 'p-2 mt-2 mb-0' : 'p-4'}">
+            <div class="tracker-line">
+                <div class="tracker-progress" style="width: ${progressBarWidth}%;"></div>
+            </div>
+            ${trackerHtml}
+        </div>
+    `;
+}
+// Make function globally accessible for easy use in modals/views
+window.createOrderTrackerHtml = createOrderTrackerHtml;
+
+
+// Function to view order details in a modal (MODIFIED to include Tracker)
 async function viewOrderDetailsModal(orderId) {
     try {
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -2978,7 +3059,7 @@ async function viewOrderDetailsModal(orderId) {
             const detailsHtml = `
                 <h5 class="mb-3">Order # ${orderId.substring(0, 8)} Details</h5>
                 <div class="alert alert-info d-flex justify-content-between">
-                    <div><strong>Status:</strong> <span class="status-badge ${statusClass}">${statusText}</span></div>
+                    <div><strong>Current Status:</strong> <span class="status-badge ${statusClass}">${statusText}</span></div>
                     <div><strong>Date Placed:</strong> ${window.firebaseHelpers.formatDateTime(order.createdAt)}</div>
                 </div>
                 
@@ -2988,7 +3069,7 @@ async function viewOrderDetailsModal(orderId) {
                     <tr><th>Phone:</th><td>${order.customerPhone || 'N/A'}</td></tr>
                     <tr><th>Email:</th><td>${order.customerEmail || 'N/A'}</td></tr>
                     <tr><th>Pickup Date/Time:</th><td><strong>${order.pickupDate || 'N/A'} at ${order.pickupTime || 'N/A'}</strong></td></tr>
-                    <tr><th>Pincode:</th><td>${order.orderPincode || 'N/A'}</td></tr>
+                    <tr><th>Pickup Pincode:</th><td>${order.orderPincode || 'N/A'}</td></tr>
                     <tr><th>Notes:</th><td>${order.notes || 'None'}</td></tr>
                 </table>
 
@@ -3016,10 +3097,25 @@ async function viewOrderDetailsModal(orderId) {
                 </table>
             `;
 
-            // Update modal body content
-            const modalBody = modalElement.querySelector('.modal-body');
-            if (modalBody) modalBody.innerHTML = detailsHtml;
+            // Update modal tracker and content area
+            const trackerContainer = document.getElementById('order-tracker-container');
+            if (trackerContainer) {
+                trackerContainer.innerHTML = createOrderTrackerHtml(order.status, false);
+            }
+            
+            const modalBodyContent = document.getElementById('order-details-content');
+            if (modalBodyContent) modalBodyContent.innerHTML = detailsHtml;
 
+            // Update modal footer with dynamic button
+            const modalFooter = modalElement.querySelector('.modal-footer');
+            modalFooter.innerHTML = `<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>`;
+
+            if (order.status === 'pending') {
+                modalFooter.innerHTML += `
+                    <button class="btn btn-danger" onclick="cancelOrder('${order.id}')">Cancel Order</button>
+                `;
+            }
+            
             // Show the modal
             const modal = new bootstrap.Modal(modalElement);
             modal.show();
@@ -3045,7 +3141,7 @@ async function cancelOrder(orderId) {
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
-                        <p>Are you sure you want to cancel this order? Cancellation is subject to seller approval and refund processing.</p>
+                        <p>Are you sure you want to cancel this order? Cancellation is subject to seller approval and refund processing. Only **Pending** orders can be cancelled.</p>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -3066,12 +3162,24 @@ async function cancelOrder(orderId) {
         try {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             const orderRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders').doc(orderId);
+            
+            // Fetch current status to ensure only PENDING orders can be cancelled
+            const orderDoc = await orderRef.get();
+            if (!orderDoc.exists || orderDoc.data().status !== 'pending') {
+                 window.firebaseHelpers.showAlert('Order cannot be cancelled. It is no longer pending.', 'danger');
+                 return;
+            }
 
             await orderRef.update({
                 status: 'cancelled',
                 cancellationRequestedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             window.firebaseHelpers.showAlert('Cancellation requested. Status will be updated shortly.', 'success');
+            
+            // Close the details modal if it's open
+            const detailsModal = bootstrap.Modal.getInstance(document.getElementById('orderDetailsModal'));
+            if (detailsModal) detailsModal.hide();
+            
             loadOrdersPage();
         } catch (error) {
             console.error('Error cancelling order:', error);
