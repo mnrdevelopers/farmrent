@@ -1996,12 +1996,17 @@ async function loadHomepageData() {
     }
 }
 
-// Load categories
+// Load categories (FIXED: To use the dedicated 'categories' public collection)
 async function loadCategories() {
     try {
-        const snapshot = await window.FirebaseDB.collection('categories')
+        // Get reference to the public categories collection
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const categoriesCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId)
+            .collection('public').doc('data').collection('categories');
+            
+        const snapshot = await categoriesCollectionRef
             .where('status', '==', 'active')
-            .orderBy('order', 'asc')
+            // Add a sort order if desired, e.g., .orderBy('order', 'asc')
             .limit(6)
             .get();
         
@@ -2019,6 +2024,9 @@ async function loadCategories() {
             const category = doc.data();
             const col = document.createElement('div');
             col.className = 'col-md-4 col-sm-6 mb-4';
+            // Use doc.data().name for the category filter query param
+            const categoryNameForUrl = category.name.toLowerCase(); 
+            
             col.innerHTML = `
                 <div class="card category-card text-center p-4 h-100">
                     <div class="category-icon">
@@ -2026,7 +2034,7 @@ async function loadCategories() {
                     </div>
                     <h5>${category.name}</h5>
                     <p class="text-muted">${category.description || 'Farming equipment category'}</p>
-                    <a href="browse.html?category=${doc.id}" class="btn btn-outline-primary mt-auto">View Equipment</a>
+                    <a href="browse.html?category=${categoryNameForUrl}" class="btn btn-outline-primary mt-auto">View Equipment</a>
                 </div>
             `;
             container.appendChild(col);
@@ -2034,6 +2042,9 @@ async function loadCategories() {
         
     } catch (error) {
         console.error('Error loading categories:', error);
+        // Fallback or display error message
+        const container = document.getElementById('categories-container');
+        if(container) container.innerHTML = '<div class="col-12 text-center text-danger"><p>Error loading categories. Please check Firestore connection.</p></div>';
     }
 }
 
@@ -2366,9 +2377,13 @@ function initializeEventListeners() {
 // Load categories for the filter dropdown
 async function loadCategoriesForFilter() {
     try {
-        const snapshot = await window.FirebaseDB.collection('categories')
+         // Get reference to the public categories collection
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const categoriesCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId)
+            .collection('public').doc('data').collection('categories');
+            
+        const snapshot = await categoriesCollectionRef
             .where('status', '==', 'active')
-            .orderBy('order', 'asc')
             .get();
 
         const filterSelect = document.getElementById('category-filter');
@@ -2377,8 +2392,10 @@ async function loadCategoriesForFilter() {
             
             snapshot.forEach(doc => {
                 const category = doc.data();
+                // Ensure the value matches the category name being stored in equipment documents (e.g. 'tractor')
+                const categoryValue = category.name.toLowerCase(); 
                 const option = document.createElement('option');
-                option.value = category.name.toLowerCase();
+                option.value = categoryValue;
                 option.textContent = category.name;
                 filterSelect.appendChild(option);
             });
@@ -2400,7 +2417,9 @@ function filterEquipment() {
                               equipment.location.toLowerCase().includes(searchTerm) ||
                               equipment.description.toLowerCase().includes(searchTerm);
         
-        const matchesCategory = categoryFilter === 'all' || equipment.category.toLowerCase() === categoryFilter;
+        // Match against the normalized category name stored in the equipment document
+        const equipmentCategoryName = (equipment.category || '').toLowerCase(); 
+        const matchesCategory = categoryFilter === 'all' || equipmentCategoryName === categoryFilter;
 
         return matchesSearch && matchesCategory;
     });
