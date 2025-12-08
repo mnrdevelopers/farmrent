@@ -35,7 +35,7 @@ try {
             // NEW: Default Post Office API URL
             "post_office_api_url": "https://api.postalpincode.in/pincode/",
             // NEW: Default Fast2SMS API Key (Replace with your Fast2SMS API Key)
-            "fast2sms_api_key": "YOUR_FAST2SMS_API_KEY_HERE" 
+            "fast2sms_api_key": "FhEkRPG1TILnHxa9wpq0mMBSzjJQ54cYVWXfvboZNry3gKsA7lSpXfLt79Y5jkndgvu1wBNT2EbPMVzQ" 
         };
         
         // Fetch and activate the configuration values
