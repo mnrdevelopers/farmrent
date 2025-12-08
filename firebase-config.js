@@ -33,7 +33,8 @@ try {
             "imgbb_api_key": "", 
             "razorpay_key_id": "", 
             "post_office_api_url": "",
-            "fast2sms_api_key": "" 
+            "fast2sms_api_key": "",
+            "geoapify_api_key": "" // NEW: Geoapify API Key
         };
         
         // Fetch and activate the configuration values
@@ -182,6 +183,27 @@ window.firebaseHelpers = {
         } catch (error) {
             console.error("Error retrieving Razorpay Key ID:", error);
             window.firebaseHelpers.showAlert('Failed to retrieve Razorpay Key ID from Remote Config.', 'danger');
+            return ""; 
+        }
+    },
+    
+    /**
+     * NEW: Fetches the Geoapify API Key from Firebase Remote Config.
+     * @returns {Promise<string>} The Geoapify API Key.
+     */
+    getGeoapifyApiKey: async () => {
+        if (!remoteConfig) {
+            console.warn('Remote Config not available for Geoapify key.');
+            return ""; 
+        }
+        try {
+            const apiKey = remoteConfig.getString('geoapify_api_key');
+            if (!apiKey) {
+                 console.warn('Geoapify API key is missing or invalid in Remote Config.');
+            }
+            return apiKey;
+        } catch (error) {
+            console.error("Error retrieving Geoapify API Key:", error);
             return ""; 
         }
     },
