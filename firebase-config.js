@@ -30,12 +30,10 @@ try {
         // Set default values for Remote Config keys
         // IMPORTANT: These keys must be configured in the Firebase Console
         remoteConfig.defaultConfig = {
-            "imgbb_api_key": "", // Placeholder for the ImgBB key
-            "razorpay_key_id": "rzp_test_RYqQhRehAtLv0Z", // Placeholder for Razorpay test key
-            // NEW: Default Post Office API URL
-            "post_office_api_url": "https://api.postalpincode.in/pincode/",
-            // NEW: Default Fast2SMS API Key (Replace with your Fast2SMS API Key)
-            "fast2sms_api_key": "FhEkRPG1TILnHxa9wpq0mMBSzjJQ54cYVWXfvboZNry3gKsA7lSpXfLt79Y5jkndgvu1wBNT2EbPMVzQ" 
+            "imgbb_api_key": "", 
+            "razorpay_key_id": "", 
+            "post_office_api_url": "",
+            "fast2sms_api_key": "" 
         };
         
         // Fetch and activate the configuration values
