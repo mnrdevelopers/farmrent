@@ -1896,6 +1896,7 @@ async function checkCustomerNotifications() {
             
             notifications.push({
                 id: doc.id,
+                type: status === 'pending' ? 'order_request' : 'order_returned',
                 message,
                 icon,
                 badgeClass,
@@ -1996,10 +1997,13 @@ async function loadHomepageData() {
     }
 }
 
-// Load categories
+// Load categories (FIXED: Fetching from dedicated 'categories' collection)
 async function loadCategories() {
     try {
-        const snapshot = await window.FirebaseDB.collection('categories')
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const categoriesCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('categories');
+
+        const snapshot = await categoriesCollectionRef
             .where('status', '==', 'active')
             .orderBy('order', 'asc')
             .limit(6)
@@ -2363,10 +2367,13 @@ function initializeEventListeners() {
     } 
 }
 
-// Load categories for the filter dropdown
+// Load categories for the filter dropdown (FIXED: Fetching from dedicated 'categories' collection)
 async function loadCategoriesForFilter() {
     try {
-        const snapshot = await window.FirebaseDB.collection('categories')
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const categoriesCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('categories');
+
+        const snapshot = await categoriesCollectionRef
             .where('status', '==', 'active')
             .orderBy('order', 'asc')
             .get();
@@ -2378,7 +2385,8 @@ async function loadCategoriesForFilter() {
             snapshot.forEach(doc => {
                 const category = doc.data();
                 const option = document.createElement('option');
-                option.value = category.name.toLowerCase();
+                // Use the category name for filter value and display
+                option.value = category.name.toLowerCase(); 
                 option.textContent = category.name;
                 filterSelect.appendChild(option);
             });
@@ -2400,7 +2408,9 @@ function filterEquipment() {
                               equipment.location.toLowerCase().includes(searchTerm) ||
                               equipment.description.toLowerCase().includes(searchTerm);
         
-        const matchesCategory = categoryFilter === 'all' || equipment.category.toLowerCase() === categoryFilter;
+        // Ensure equipment.category exists before calling toLowerCase
+        const equipmentCategory = equipment.category ? equipment.category.toLowerCase() : '';
+        const matchesCategory = categoryFilter === 'all' || equipmentCategory === categoryFilter;
 
         return matchesSearch && matchesCategory;
     });
