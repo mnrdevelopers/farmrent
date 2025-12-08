@@ -4,7 +4,7 @@ let usersData = [];
 let sellersData = [];
 let equipmentData = [];
 let ordersData = [];
-let categoriesData = []; // Now stores objects with IDs from Firestore
+let categoriesData = [];
 let revenueChart = null;
 let detailedReportChart = null;
 let orderStatusChart = null;
@@ -1372,15 +1372,13 @@ async function calculateReportData(periodDays) {
         });
         
         // Get category data
-        // FIX: Now reading from the persistent 'categories' collection for report charting
-        const categoriesSnapshot = await getPublicCollectionRef('categories').get();
+        const equipmentSnapshot = await window.FirebaseDB.collection('equipment').get();
         const categoryCount = {};
         
-        categoriesSnapshot.forEach(doc => {
-            const category = doc.data();
-            // Use the actual category name
-            if (category.name && category.count > 0) {
-                categoryCount[category.name] = category.count;
+        equipmentSnapshot.forEach(doc => {
+            const equipment = doc.data();
+            if (equipment.category) {
+                categoryCount[equipment.category] = (categoryCount[equipment.category] || 0) + 1;
             }
         });
         
@@ -1625,44 +1623,27 @@ function initializeReportCharts(reportData) {
     });
 }
 
-// Load categories (FIXED: Fetches directly from the 'categories' collection)
+// Load categories
 async function loadCategories() {
     try {
-        // Step 1: Fetch the persistent list of categories
-        const categoriesSnapshot = await getPublicCollectionRef('categories')
-            .orderBy('order', 'asc') // Assuming an 'order' field for display sequencing
-            .get();
-        
-        categoriesData = [];
-        categoriesSnapshot.forEach(doc => {
-            categoriesData.push({ id: doc.id, ...doc.data() });
-        });
-        
-        // Step 2: Dynamically calculate equipment count (This is complex and better done via Cloud Functions/reports, 
-        // but for client-side display, we perform a simplified check by iterating over all equipment).
-        // OPTIMIZATION: Instead of recalculating, rely on the stored 'count' if available, or fetch
-        // all equipment and cross-reference, if the app relies heavily on accurate real-time count.
-        
-        // For simplicity and speed in the admin panel, let's just fetch all equipment category counts once:
         const equipmentSnapshot = await window.FirebaseDB.collection('equipment').get();
-        const equipmentCountMap = {};
+        const categoryMap = {};
+        
         equipmentSnapshot.forEach(doc => {
             const equipment = doc.data();
             if (equipment.category) {
-                // Normalize category name for matching (assuming names are saved consistently)
-                const normalizedCategory = equipment.category.toLowerCase().trim();
-                equipmentCountMap[normalizedCategory] = (equipmentCountMap[normalizedCategory] || 0) + 1;
+                categoryMap[equipment.category] = (categoryMap[equipment.category] || 0) + 1;
             }
         });
         
-        // Step 3: Update local data with the correct count
-        categoriesData = categoriesData.map(category => {
-            const normalizedName = category.name.toLowerCase().trim();
-            // Update the count based on the equipment found
-            category.count = equipmentCountMap[normalizedName] || 0; 
-            return category;
-        });
-
+        categoriesData = Object.entries(categoryMap).map(([name, count]) => ({
+            id: name.toLowerCase().replace(/\s+/g, '-'),
+            name: name.charAt(0).toUpperCase() + name.slice(1),
+            icon: getCategoryIcon(name),
+            count: count,
+            status: 'active'
+        }));
+        
         displayCategories(categoriesData);
         
     } catch (error) {
@@ -1687,7 +1668,7 @@ function getCategoryIcon(categoryName) {
         'default': 'fas fa-tools'
     };
     
-    return icons[categoryName.toLowerCase().replace(/\s+/g, '-')] || icons.default;
+    return icons[categoryName.toLowerCase()] || icons.default;
 }
 
 // Display categories
@@ -1717,7 +1698,7 @@ function createCategoryCard(category) {
         <div class="col-lg-3 col-md-4 col-sm-6 mb-4">
             <div class="category-card">
                 <div class="category-icon">
-                    <i class="${category.icon || getCategoryIcon(category.name)}"></i>
+                    <i class="${category.icon}"></i>
                 </div>
                 <h5>${category.name}</h5>
                 <p class="text-muted">${category.count} equipment items</p>
@@ -1725,7 +1706,7 @@ function createCategoryCard(category) {
                     <button class="btn btn-sm btn-outline-primary" onclick="editCategory('${category.id}')">
                         <i class="fas fa-edit me-1"></i>Edit
                     </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteCategory('${category.id}', '${category.count}')">
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteCategory('${category.id}')">
                         <i class="fas fa-trash me-1"></i>Delete
                     </button>
                 </div>
@@ -1745,49 +1726,11 @@ function searchCategories() {
     displayCategories(filteredCategories);
 }
 
-// Show add category modal (Also used for editing)
-function showAddCategoryModal(isEdit = false, categoryId = null) {
-    resetCategoryForm();
-    const modalTitle = document.getElementById('addCategoryModalLabel');
-    const actionBtn = document.querySelector('#addCategoryModal .modal-footer .btn-primary');
-    
-    if (isEdit && categoryId) {
-        const category = categoriesData.find(c => c.id === categoryId);
-        if (!category) {
-            window.firebaseHelpers.showAlert('Category not found for editing.', 'danger');
-            return;
-        }
-        
-        modalTitle.textContent = `Edit Category: ${category.name}`;
-        document.getElementById('category-id-hidden').value = categoryId;
-        document.getElementById('category-name').value = category.name || '';
-        document.getElementById('category-description').value = category.description || '';
-        document.getElementById('category-icon').value = category.icon || '';
-        document.getElementById('category-status').value = category.status || 'active';
-        document.getElementById('category-order').value = category.order || 0;
-
-        actionBtn.textContent = 'Save Changes';
-        actionBtn.setAttribute('onclick', 'saveCategoryChanges()');
-        
-    } else {
-        modalTitle.textContent = 'Add New Category';
-        actionBtn.textContent = 'Add Category';
-        actionBtn.setAttribute('onclick', 'addNewCategory()');
-    }
-    
+// Show add category modal
+function showAddCategoryModal() {
     const modal = new bootstrap.Modal(document.getElementById('addCategoryModal'));
     modal.show();
 }
-
-// Helper function to reset the category form
-function resetCategoryForm() {
-    document.getElementById('add-category-form')?.reset();
-    document.getElementById('category-id-hidden').value = '';
-    document.getElementById('category-name').disabled = false;
-    // Set a default icon placeholder
-    document.getElementById('category-icon').placeholder = 'fas fa-tools'; 
-}
-window.resetCategoryForm = resetCategoryForm; // Expose globally for modal close
 
 // Add new category
 async function addNewCategory() {
@@ -1795,146 +1738,54 @@ async function addNewCategory() {
     const description = document.getElementById('category-description').value.trim();
     const icon = document.getElementById('category-icon').value.trim();
     const status = document.getElementById('category-status').value;
-    const order = parseInt(document.getElementById('category-order').value) || 0;
     
     if (!name) {
         window.firebaseHelpers.showAlert('Category name is required', 'warning');
         return;
     }
     
-    const categoriesRef = getPublicCollectionRef('categories');
-    
-    // Simple check for duplicate name (client-side only, server-side is safer)
-    if (categoriesData.some(c => c.name.toLowerCase() === name.toLowerCase())) {
-        window.firebaseHelpers.showAlert('Category name already exists.', 'warning');
-        return;
-    }
-
     try {
+        // In a real app, save to Firestore
         const newCategory = {
+            id: name.toLowerCase().replace(/\s+/g, '-'),
             name: name.charAt(0).toUpperCase() + name.slice(1),
-            icon: icon || getCategoryIcon(name),
+            icon: icon || 'fas fa-tools',
             description: description,
             count: 0,
             status: status,
-            order: order,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
         
-        await categoriesRef.add(newCategory);
+        categoriesData.unshift(newCategory);
+        displayCategories(categoriesData);
         
-        window.firebaseHelpers.showAlert('Category added successfully!', 'success');
+        window.firebaseHelpers.showAlert('Category added successfully', 'success');
         
         const modal = bootstrap.Modal.getInstance(document.getElementById('addCategoryModal'));
-        if (modal) modal.hide();
+        modal.hide();
         
-        loadCategories(); // Reload the list
+        document.getElementById('add-category-form').reset();
         
     } catch (error) {
         console.error('Error adding category:', error);
-        window.firebaseHelpers.showAlert('Error adding category. Please try again.', 'danger');
+        window.firebaseHelpers.showAlert('Error adding category', 'danger');
     }
 }
-window.addNewCategory = addNewCategory; // Expose globally
 
-// Edit category (function to open modal with data)
+// Edit category
 function editCategory(categoryId) {
-    showAddCategoryModal(true, categoryId);
+    window.firebaseHelpers.showAlert('Edit feature coming soon!', 'info');
 }
-window.editCategory = editCategory; // Expose globally
-
-// Save changes for editing category
-async function saveCategoryChanges() {
-    const categoryId = document.getElementById('category-id-hidden').value;
-    const name = document.getElementById('category-name').value.trim();
-    const description = document.getElementById('category-description').value.trim();
-    const icon = document.getElementById('category-icon').value.trim();
-    const status = document.getElementById('category-status').value;
-    const order = parseInt(document.getElementById('category-order').value) || 0;
-    
-    if (!name || !categoryId) {
-        window.firebaseHelpers.showAlert('Category ID or name is missing.', 'danger');
-        return;
-    }
-    
-    const categoriesRef = getPublicCollectionRef('categories');
-    
-    try {
-        const updates = {
-            name: name.charAt(0).toUpperCase() + name.slice(1),
-            icon: icon || getCategoryIcon(name),
-            description: description,
-            status: status,
-            order: order,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
-        
-        await categoriesRef.doc(categoryId).update(updates);
-        
-        window.firebaseHelpers.showAlert('Category updated successfully!', 'success');
-        
-        const modal = bootstrap.Modal.getInstance(document.getElementById('addCategoryModal'));
-        if (modal) modal.hide();
-        
-        loadCategories(); // Reload the list
-        
-    } catch (error) {
-        console.error('Error updating category:', error);
-        window.firebaseHelpers.showAlert('Error updating category. Please check console for details.', 'danger');
-    }
-}
-window.saveCategoryChanges = saveCategoryChanges; // Expose globally
 
 // Delete category
-function deleteCategory(categoryId, equipmentCount) {
-    if (parseInt(equipmentCount) > 0) {
-        window.firebaseHelpers.showAlert(`Cannot delete category! ${equipmentCount} equipment items are currently assigned to it. Please reassign items first.`, 'danger');
-        return;
-    }
+function deleteCategory(categoryId) {
+    if (!confirm('Are you sure you want to delete this category?')) return;
     
-    // NOTE: Use custom modal instead of built-in confirm in production
-    const modalHtml = `
-        <div class="modal fade" id="confirm-delete-category-modal" tabindex="-1">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header bg-danger text-white">
-                        <h5 class="modal-title"><i class="fas fa-trash me-2"></i>Confirm Deletion</h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <p>Are you sure you want to permanently delete this category? This action cannot be undone.</p>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-danger" id="confirm-delete-category-btn">Delete Category</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
+    categoriesData = categoriesData.filter(category => category.id !== categoryId);
+    displayCategories(categoriesData);
     
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    const modalElement = document.getElementById('confirm-delete-category-modal');
-    const modalInstance = new bootstrap.Modal(modalElement);
-    modalInstance.show();
-
-    document.getElementById('confirm-delete-category-btn').onclick = async () => {
-        modalInstance.hide();
-        try {
-            const categoriesRef = getPublicCollectionRef('categories');
-            await categoriesRef.doc(categoryId).delete();
-            
-            window.firebaseHelpers.showAlert('Category deleted successfully', 'success');
-            loadCategories(); // Reload list
-        } catch (error) {
-            console.error('Error deleting category:', error);
-            window.firebaseHelpers.showAlert('Error deleting category', 'danger');
-        } finally {
-            modalElement.remove();
-        }
-    };
+    window.firebaseHelpers.showAlert('Category deleted', 'success');
 }
-window.deleteCategory = deleteCategory; // Expose globally
 
 // NEW: Load Notifications Section
 async function loadNotifications() {
