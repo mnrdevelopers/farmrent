@@ -166,7 +166,7 @@ async function getPlatformFeeRate() {
         platformFeeRate = 0.05;
     }
 }
-// --- END NEW FUNCTION ---
+// --- END NEW FUNCTION: Fetch Platform Fee Rate ---
 
 // --- LOCATION LOOKUP FUNCTIONS (Post Office API Integration) ---
 
@@ -1758,6 +1758,11 @@ function updateNavbarForLoggedInUser(userData) {
                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="notificationDropdown" id="customer-notifications-list">
                     <li><h6 class="dropdown-header">Alerts & Updates</h6></li>
                     <li><a class="dropdown-item text-center text-muted" href="#" onclick="showSection('orders')">Loading...</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <!-- NEW: Clear Button added to Customer Notification Dropdown -->
+                    <li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()">
+                        <i class="fas fa-check-double me-1"></i> Clear Alerts
+                    </a></li>
                 </ul>
             </li>
         `;
@@ -1796,6 +1801,37 @@ function updateNavbarForLoggedInUser(userData) {
     navbarAuth.insertAdjacentHTML('afterbegin', dropdownHtml);
 }
 
+// NEW: Function to mark customer notifications as read (simulated/client-side)
+function markCustomerNotificationsAsRead() {
+    if (!window.currentUser) return;
+    
+    const countElement = document.getElementById('customer-notification-count');
+    if (countElement) {
+        countElement.textContent = ''; // Clear the badge
+    }
+    
+    const listElement = document.getElementById('customer-notifications-list');
+    if (listElement) {
+        // Update the list content to show it's cleared/read (optional, for visual feedback)
+        listElement.innerHTML = '<li><h6 class="dropdown-header">Alerts & Updates</h6></li><li><a class="dropdown-item text-center text-muted" href="#">All caught up!</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()"><i class="fas fa-check-double me-1"></i> Clear Alerts</a></li>';
+    }
+    
+    // Store the last time the user cleared notifications in sessionStorage
+    // This prevents the badge from immediately reappearing on page navigation/refresh within the session.
+    sessionStorage.setItem('lastNotificationClearTime', Date.now());
+    
+    // Hide the dropdown menu instance if it exists
+    const dropdownToggle = document.getElementById('notificationDropdown');
+    const dropdown = bootstrap.Dropdown.getInstance(dropdownToggle);
+    if (dropdown) {
+        dropdown.hide();
+    }
+    
+    window.firebaseHelpers.showAlert('Notifications cleared for this session.', 'info');
+}
+window.markCustomerNotificationsAsRead = markCustomerNotificationsAsRead;
+
+
 // NEW: Check Customer Notifications (Pending orders/status updates)
 async function checkCustomerNotifications() {
     if (!window.currentUser || window.currentUser.role !== 'customer') return;
@@ -1814,8 +1850,8 @@ async function checkCustomerNotifications() {
         const notifications = [];
         let unreadCount = 0;
         
-        // NOTE: Since we lack a dedicated customer-side 'read' status in the DB, 
-        // we prioritize showing the last few orders with actionable/new statuses (pending, active)
+        // Retrieve the last clear time from sessionStorage
+        const lastClearTime = parseInt(sessionStorage.getItem('lastNotificationClearTime') || 0);
 
         ordersSnapshot.forEach(doc => {
             const order = doc.data();
@@ -1828,24 +1864,20 @@ async function checkCustomerNotifications() {
                 message = `Order #${doc.id.substring(0, 8)} is pending seller confirmation.`;
                 icon = 'fas fa-clock';
                 badgeClass = 'bg-warning';
-                unreadCount++; // Count pending orders as unread
             } else if (order.status === 'active') {
                 message = `Order #${doc.id.substring(0, 8)} confirmed! Ready for pickup.`;
                 icon = 'fas fa-check-circle';
                 badgeClass = 'bg-success';
-                unreadCount++; // Count newly confirmed orders as unread
             } else if (order.status === 'cancelled') {
                  // Notify if order was cancelled by seller/admin
                 message = `Order #${doc.id.substring(0, 8)} has been cancelled.`;
                 icon = 'fas fa-ban';
                 badgeClass = 'bg-danger';
-                unreadCount++;
             } else if (order.status === 'rejected') {
                  // Notify if order was rejected by seller/admin
                 message = `Order #${doc.id.substring(0, 8)} was rejected by the seller.`;
                 icon = 'fas fa-times-circle';
                 badgeClass = 'bg-danger';
-                unreadCount++;
             } else if (order.status === 'returned') {
                  // Notify if order was returned (final payment/check pending)
                 message = `Order #${doc.id.substring(0, 8)} equipment returned. Final review pending.`;
@@ -1854,6 +1886,12 @@ async function checkCustomerNotifications() {
             } else {
                  // Ignore completed/pickedup/less critical statuses for the quick list
                 return;
+            }
+            
+            // Determine unread status: Any new critical status created *after* the last clear time
+            const orderTimestamp = order.createdAt?.toMillis() || 0;
+            if (orderTimestamp > lastClearTime) {
+                unreadCount++;
             }
             
             notifications.push({
@@ -1893,8 +1931,20 @@ async function checkCustomerNotifications() {
                     </li>
                 `;
             });
-             if (listElement) listElement.innerHTML += '<li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center" href="orders.html">View All Orders</a></li>';
         }
+        
+        // Re-add the divider and Clear Alerts button regardless of notification content
+        if (listElement) {
+             listElement.innerHTML += `
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item text-center" href="orders.html">View All Orders</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()">
+                    <i class="fas fa-check-double me-1"></i> Clear Alerts
+                </a></li>
+            `;
+        }
+
 
     } catch (error) {
         console.error("Error fetching customer notifications:", error);
