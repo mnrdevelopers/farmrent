@@ -277,7 +277,8 @@ async function populateLocationFields(pincodeInputId, villageSelectId, cityInput
 window.populateLocationFields = populateLocationFields;
 
 /**
- * Use Geolocation API to find coordinates and then simulate reverse geocoding to Pincode.
+ * Use Geolocation API to find coordinates and then use Geoapify reverse geocoding to find the Pincode.
+ * Replaces simulated logic.
  */
 async function getCurrentLocationPincode() {
     const statusElement = document.getElementById('location-status');
@@ -293,18 +294,43 @@ async function getCurrentLocationPincode() {
     }
 
     if(statusElement) statusElement.textContent = 'Fetching location...';
-    if(statusElement) statusElement.classList.remove('text-danger', 'text-warning', 'text-success');
-    if(statusElement) statusElement.classList.add('text-info');
+    if(statusElement) statusElement.classList.remove('text-danger', 'text-warning', 'text-success', 'text-info');
+    if(statusElement) statusElement.classList.add('text-muted');
     if(buttonElement) buttonElement.disabled = true;
     if(buttonElement) buttonElement.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Detecting...';
-
-    // Simulated Reverse Geocoding (Returns a common Pincode for India demo)
-    const simulatedReverseGeocode = async (lat, lon) => {
-        // For demonstration, return a common Pincode (e.g., Nizamabad)
-        // In a production environment, this would call a paid geocoding API.
-        console.log(`Simulating reverse geocoding for Lat: ${lat}, Lon: ${lon}`);
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
-        return '503001'; 
+    
+    // Fetch Geoapify API Key from Remote Config
+    const geoapifyKey = await window.firebaseHelpers.getGeoapifyApiKey();
+    if (!geoapifyKey) {
+        if(statusElement) statusElement.textContent = 'Geoapify API Key is missing. Cannot use real geolocation.';
+        if(statusElement) statusElement.classList.remove('text-muted');
+        if(statusElement) statusElement.classList.add('text-danger');
+        if(buttonElement) buttonElement.disabled = false;
+        if(buttonElement) buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
+        return;
+    }
+    
+    // Function to perform Geoapify Reverse Geocoding
+    const reverseGeocode = async (lat, lon) => {
+        const url = `https://api.geoapify.com/v1/geocode/reverse?lat=${lat}&lon=${lon}&apiKey=${geoapifyKey}`;
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                const errorBody = await response.json();
+                console.error('Geoapify Error:', errorBody);
+                return null;
+            }
+            const data = await response.json();
+            
+            // Geoapify results are in features array. We look for 'postcode' in properties.
+            if (data.features && data.features.length > 0 && data.features[0].properties.postcode) {
+                return data.features[0].properties.postcode;
+            }
+            return null;
+        } catch (error) {
+            console.error('Reverse Geocoding Network Error:', error);
+            return null;
+        }
     };
 
 
@@ -312,11 +338,11 @@ async function getCurrentLocationPincode() {
         const { latitude, longitude } = position.coords;
         if(statusElement) statusElement.textContent = `Location found. Determining Pincode...`;
         
-        const pincode = await simulatedReverseGeocode(latitude, longitude);
+        const pincode = await reverseGeocode(latitude, longitude);
 
-        if (pincode) {
+        if (pincode && window.firebaseHelpers.pincodeSystem.validatePincode(pincode)) {
             if(statusElement) statusElement.textContent = `Pincode found: ${pincode}. Applying filter...`;
-            if(statusElement) statusElement.classList.remove('text-info');
+            if(statusElement) statusElement.classList.remove('text-muted');
             if(statusElement) statusElement.classList.add('text-success');
             if(inputElement) inputElement.value = pincode;
             
@@ -330,8 +356,8 @@ async function getCurrentLocationPincode() {
             }, 1000);
 
         } else {
-            if(statusElement) statusElement.textContent = 'Could not determine Pincode. Please enter manually.';
-            if(statusElement) statusElement.classList.remove('text-info');
+            if(statusElement) statusElement.textContent = 'Could not determine a valid Indian Pincode. Please enter manually.';
+            if(statusElement) statusElement.classList.remove('text-muted');
             if(statusElement) statusElement.classList.add('text-warning');
             if(buttonElement) buttonElement.disabled = false;
             if(buttonElement) buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
@@ -347,7 +373,7 @@ async function getCurrentLocationPincode() {
             message = 'The request to get user location timed out.';
         }
         if(statusElement) statusElement.textContent = message;
-        if(statusElement) statusElement.classList.remove('text-info');
+        if(statusElement) statusElement.classList.remove('text-muted');
         if(statusElement) statusElement.classList.add('text-danger');
         if(buttonElement) buttonElement.disabled = false;
         if(buttonElement) buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
@@ -381,7 +407,7 @@ async function checkAndPromptForPincode() {
     }
     
     // If pincode is set, ensure the data reloads with the filter
-    if (finalPincode && (path === 'index.html' || path === '')) {
+    if (finalPincode && (path === 'index.html' || path === '' || path === 'browse.html')) {
         loadFeaturedEquipment(); 
     }
 }
