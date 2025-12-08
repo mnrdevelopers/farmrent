@@ -1409,7 +1409,6 @@ async function loadCartPage() {
         }, 100);
     });
 
-    await updateCartCount();
     await getPlatformFeeRate(); 
     const cart = await getCartFromFirestore(); 
     
@@ -1996,27 +1995,48 @@ async function loadHomepageData() {
     }
 }
 
-// Load categories
+// Load categories (MODIFIED TO FETCH UNIQUE CATEGORIES FROM EQUIPMENT COLLECTION)
 async function loadCategories() {
     try {
-        const snapshot = await window.FirebaseDB.collection('categories')
-            .where('status', '==', 'active')
-            .orderBy('order', 'asc')
-            .limit(6)
+        // 1. Fetch all unique categories from approved equipment
+        const equipmentSnapshot = await window.FirebaseDB.collection('equipment')
+            .where('status', '==', 'approved')
             .get();
+        
+        const categoryMap = {};
+        
+        equipmentSnapshot.forEach(doc => {
+            const equipment = doc.data();
+            if (equipment.category) {
+                const categoryName = equipment.category.charAt(0).toUpperCase() + equipment.category.slice(1);
+                if (!categoryMap[categoryName]) {
+                    categoryMap[categoryName] = {
+                        name: categoryName,
+                        icon: getCategoryIcon(equipment.category),
+                        count: 0
+                    };
+                }
+                categoryMap[categoryName].count++;
+            }
+        });
+        
+        const categories = Object.values(categoryMap);
+        
+        // Sort alphabetically by name
+        categories.sort((a, b) => a.name.localeCompare(b.name));
         
         const container = document.getElementById('categories-container');
         if (!container) return; 
 
         container.innerHTML = '';
         
-        if (snapshot.empty) {
-            container.innerHTML = '<div class="col-12 text-center"><p>No categories found</p></div>';
+        if (categories.length === 0) {
+            container.innerHTML = '<div class="col-12 text-center"><p>No equipment or categories found.</p></div>';
             return;
         }
         
-        snapshot.forEach(doc => {
-            const category = doc.data();
+        // Limit to 6 categories for the homepage display
+        categories.slice(0, 6).forEach(category => {
             const col = document.createElement('div');
             col.className = 'col-md-4 col-sm-6 mb-4';
             col.innerHTML = `
@@ -2025,8 +2045,8 @@ async function loadCategories() {
                         <i class="${category.icon || 'fas fa-question-circle'}"></i>
                     </div>
                     <h5>${category.name}</h5>
-                    <p class="text-muted">${category.description || 'Farming equipment category'}</p>
-                    <a href="browse.html?category=${doc.id}" class="btn btn-outline-primary mt-auto">View Equipment</a>
+                    <p class="text-muted">${category.count} items available</p>
+                    <a href="browse.html?category=${category.name.toLowerCase()}" class="btn btn-outline-primary mt-auto">View Equipment</a>
                 </div>
             `;
             container.appendChild(col);
@@ -2363,23 +2383,35 @@ function initializeEventListeners() {
     } 
 }
 
-// Load categories for the filter dropdown
+// Load categories for the filter dropdown (MODIFIED TO FETCH UNIQUE CATEGORIES FROM EQUIPMENT COLLECTION)
 async function loadCategoriesForFilter() {
     try {
-        const snapshot = await window.FirebaseDB.collection('categories')
-            .where('status', '==', 'active')
-            .orderBy('order', 'asc')
+        // 1. Fetch all unique categories from approved equipment
+        const equipmentSnapshot = await window.FirebaseDB.collection('equipment')
+            .where('status', '==', 'approved')
             .get();
+        
+        const categorySet = new Set();
+        
+        equipmentSnapshot.forEach(doc => {
+            const equipment = doc.data();
+            if (equipment.category) {
+                categorySet.add(equipment.category.toLowerCase());
+            }
+        });
 
         const filterSelect = document.getElementById('category-filter');
         if (filterSelect) {
             filterSelect.innerHTML = '<option value="all">All Categories</option>';
             
-            snapshot.forEach(doc => {
-                const category = doc.data();
+            // Convert Set to Array, sort, and populate dropdown
+            const sortedCategories = Array.from(categorySet).sort();
+            
+            sortedCategories.forEach(category => {
                 const option = document.createElement('option');
-                option.value = category.name.toLowerCase();
-                option.textContent = category.name;
+                option.value = category;
+                // Capitalize first letter for display
+                option.textContent = category.charAt(0).toUpperCase() + category.slice(1); 
                 filterSelect.appendChild(option);
             });
         }
@@ -2387,6 +2419,25 @@ async function loadCategoriesForFilter() {
     } catch (error) {
         console.error('Error loading categories for filter:', error);
     }
+}
+
+// Get category icon based on name (Helper function)
+function getCategoryIcon(categoryName) {
+    const icons = {
+        'tractor': 'fas fa-tractor',
+        'harvester': 'fas fa-dragon',
+        'cultivator': 'fas fa-seedling',
+        'drone': 'fas fa-helicopter',
+        'spray': 'fas fa-spray-can',
+        'crane': 'fas fa-crane',
+        'jcb': 'fas fa-truck-pickup',
+        'grass-cutter': 'fas fa-cut',
+        'trolley': 'fas fa-truck-moving',
+        'water-tanker': 'fas fa-truck-water',
+        'default': 'fas fa-tools'
+    };
+    
+    return icons[categoryName.toLowerCase()] || icons.default;
 }
 
 // Filter and sort equipment based on user input (for browse.html)
