@@ -1804,38 +1804,65 @@ async function checkCustomerNotifications() {
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
 
-        // Check for orders that are pending (awaiting initial seller action) or active (rented)
+        // Fetch all recent orders for the customer
         const ordersSnapshot = await ordersCollectionRef
             .where('userId', '==', window.currentUser.uid)
-            .where('status', 'in', ['pending', 'active'])
             .orderBy('createdAt', 'desc')
-            .limit(5)
+            .limit(10) // Limit to 10 most recent orders
             .get();
 
         const notifications = [];
+        let unreadCount = 0;
+        
+        // NOTE: Since we lack a dedicated customer-side 'read' status in the DB, 
+        // we prioritize showing the last few orders with actionable/new statuses (pending, active)
+
         ordersSnapshot.forEach(doc => {
             const order = doc.data();
             let message = '';
             let icon = 'fas fa-info-circle';
             let badgeClass = 'bg-warning';
             
+            // Critical statuses for notification
             if (order.status === 'pending') {
                 message = `Order #${doc.id.substring(0, 8)} is pending seller confirmation.`;
                 icon = 'fas fa-clock';
                 badgeClass = 'bg-warning';
+                unreadCount++; // Count pending orders as unread
             } else if (order.status === 'active') {
                 message = `Order #${doc.id.substring(0, 8)} confirmed! Ready for pickup.`;
                 icon = 'fas fa-check-circle';
                 badgeClass = 'bg-success';
+                unreadCount++; // Count newly confirmed orders as unread
+            } else if (order.status === 'cancelled') {
+                 // Notify if order was cancelled by seller/admin
+                message = `Order #${doc.id.substring(0, 8)} has been cancelled.`;
+                icon = 'fas fa-ban';
+                badgeClass = 'bg-danger';
+                unreadCount++;
+            } else if (order.status === 'rejected') {
+                 // Notify if order was rejected by seller/admin
+                message = `Order #${doc.id.substring(0, 8)} was rejected by the seller.`;
+                icon = 'fas fa-times-circle';
+                badgeClass = 'bg-danger';
+                unreadCount++;
+            } else if (order.status === 'returned') {
+                 // Notify if order was returned (final payment/check pending)
+                message = `Order #${doc.id.substring(0, 8)} equipment returned. Final review pending.`;
+                icon = 'fas fa-undo-alt';
+                badgeClass = 'bg-info';
+            } else {
+                 // Ignore completed/pickedup/less critical statuses for the quick list
+                return;
             }
-            // Add more status checks here (e.g., cancelled/rejected if action needed)
             
             notifications.push({
                 id: doc.id,
                 message,
                 icon,
                 badgeClass,
-                date: order.createdAt
+                date: order.createdAt,
+                status: order.status
             });
         });
 
@@ -1843,13 +1870,16 @@ async function checkCustomerNotifications() {
         const countElement = document.getElementById('customer-notification-count');
         const listElement = document.getElementById('customer-notifications-list');
 
-        if (countElement) countElement.textContent = notifications.length > 0 ? notifications.length : '';
+        // Only display the *last 5 most critical* notifications in the dropdown
+        const criticalNotifications = notifications.slice(0, 5); 
+
+        if (countElement) countElement.textContent = unreadCount > 0 ? unreadCount : '';
         if (listElement) listElement.innerHTML = '<li><h6 class="dropdown-header">Alerts & Updates</h6></li>';
 
-        if (notifications.length === 0) {
+        if (criticalNotifications.length === 0) {
              if (listElement) listElement.innerHTML += '<li><a class="dropdown-item text-center text-muted" href="#">No new alerts.</a></li>';
         } else {
-            notifications.forEach(notif => {
+            criticalNotifications.forEach(notif => {
                 const timeAgo = notif.date ? window.firebaseHelpers.formatTimeAgo(notif.date) : 'N/A';
                 if (listElement) listElement.innerHTML += `
                     <li>
@@ -2659,7 +2689,7 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, total
             pickupTime: customerData.pickupTime,
 
             equipmentNames: itemNames,
-            sellerIds: sellerIds,
+            sellerIds: sellerIds.split(',').map(id => id.trim()).filter(id => id), // Ensure this is an array of seller IDs
             sellerBusinessNames: businessNames,
             orderPincode: orderPincode, 
 
@@ -3043,16 +3073,27 @@ async function viewOrderDetailsModal(orderId) {
     try {
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
-        const doc = await ordersCollectionRef.doc(orderId).get();
-
-        if (doc.exists) {
-            const order = doc.data();
-            const modalElement = document.getElementById('orderDetailsModal');
-            if (!modalElement) {
-                window.firebaseHelpers.showAlert('Error: Order details modal not found in HTML.', 'danger');
+        
+        // Use an onSnapshot listener for real-time updates while the modal is open
+        const modalElement = document.getElementById('orderDetailsModal');
+        // Ensure modal instance is fetched/created before the listener
+        const modalInstance = new bootstrap.Modal(modalElement);
+        
+        // Show modal immediately with loading content
+        modalInstance.show();
+        
+        const unsubscribe = ordersCollectionRef.doc(orderId).onSnapshot(docSnapshot => {
+            if (!docSnapshot.exists) {
+                // If order is deleted, close modal
+                modalInstance.hide();
+                window.firebaseHelpers.showAlert('Order not found or deleted.', 'danger');
+                unsubscribe();
+                loadOrdersPage();
                 return;
             }
 
+            const order = docSnapshot.data();
+            
             const statusClass = `order-status-${order.status || 'pending'}`;
             const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
 
@@ -3110,19 +3151,32 @@ async function viewOrderDetailsModal(orderId) {
             const modalFooter = modalElement.querySelector('.modal-footer');
             modalFooter.innerHTML = `<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>`;
 
+            // Only allow cancellation if order is pending
             if (order.status === 'pending') {
                 modalFooter.innerHTML += `
                     <button class="btn btn-danger" onclick="cancelOrder('${order.id}')">Cancel Order</button>
                 `;
             }
             
-            // Show the modal
-            const modal = new bootstrap.Modal(modalElement);
-            modal.show();
+            // Ensure the main orders page list also reloads if status has changed
+            loadOrdersPage();
+            // Also update the customer navbar count
+            checkCustomerNotifications();
 
-        } else {
-            window.firebaseHelpers.showAlert('Order details not found.', 'danger');
-        }
+
+        }, error => {
+            console.error("Error listening to order document:", error);
+            modalInstance.hide();
+            window.firebaseHelpers.showAlert('Error listening for order updates.', 'danger');
+        });
+        
+        // Stop listening when the modal is closed
+        modalElement.addEventListener('hidden.bs.modal', function onModalHidden() {
+            unsubscribe();
+            modalElement.removeEventListener('hidden.bs.modal', onModalHidden);
+        });
+
+
     } catch (error) {
         console.error('Error viewing order details:', error);
         window.firebaseHelpers.showAlert('Error loading order details.', 'danger');
@@ -3199,7 +3253,6 @@ async function updateCartCount() {
         cartCountElement.textContent = cart.length;
     }
 }
-
 // Load Razorpay SDK dynamically if not already present
 if (typeof Razorpay === 'undefined') {
     const script = document.createElement('script');
