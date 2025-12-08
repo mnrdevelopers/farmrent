@@ -6,9 +6,19 @@ let earningsChart = null;
 let detailedEarningsChart = null;
 let sellerNotifications = []; 
 
-// NEW: Collection to store seller's alerts (e.g., read/dismissal status for new orders)
-const SELLER_ALERTS_COLLECTION = 'seller_alerts';
-let dismissedAlerts = new Set(); // Stores IDs of alerts dismissed/read by the seller
+// NEW: List of available placeholder images (paths relative to index.html)
+const libraryImages = [
+    'images/Farm_Tractor_45HP.png',
+    'images/Combine_Harvester.png',
+    'images/Farm_Cultivator.png',
+    'images/Agricultural_Drone.png',
+    'images/Power_Spray_Machine.png',
+    'images/Water_Tanker_5000L.png',
+    'images/TRACTOR.png'
+    
+];
+let currentImageTab = 'upload'; // Tracks the active tab: 'upload' or 'library'
+
 
 // Helper to get the Firestore document reference for public orders
 function getPublicCollectionRef(collectionName) {
@@ -16,58 +26,6 @@ function getPublicCollectionRef(collectionName) {
     return window.FirebaseDB.collection('artifacts').doc(appId)
         .collection('public').doc('data').collection(collectionName);
 }
-
-// Helper to get the Firestore document reference for private seller alerts
-function getSellerAlertsRef() {
-    if (!window.currentUser || !window.FirebaseDB) return null;
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-    
-    // Path: /artifacts/{appId}/users/{userId}/seller_alerts/dismissed
-    return window.FirebaseDB.collection('artifacts').doc(appId)
-        .collection('users').doc(window.currentUser.uid).collection(SELLER_ALERTS_COLLECTION).doc('dismissed');
-}
-
-// Helper to load dismissed alerts status upon dashboard load
-async function loadDismissedAlerts() {
-    const docRef = getSellerAlertsRef();
-    if (!docRef) return;
-    
-    try {
-        const doc = await docRef.get();
-        if (doc.exists && doc.data().alerts) {
-            // Convert array of IDs to a Set for fast lookup
-            dismissedAlerts = new Set(doc.data().alerts); 
-        }
-    } catch (error) {
-        console.error("Error loading dismissed alerts:", error);
-    }
-}
-
-// Helper to save a dismissed alert status
-async function markAlertAsRead(orderId) {
-    // FIX: Ensure it is checking the current orderId, and not just the value of the hidden input
-    if (!orderId || dismissedAlerts.has(orderId)) return;
-
-    dismissedAlerts.add(orderId);
-    const docRef = getSellerAlertsRef();
-    if (!docRef) return;
-
-    try {
-        // Save the updated Set of IDs back to Firestore
-        await docRef.set({
-            alerts: Array.from(dismissedAlerts),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-        
-        // Re-run the dashboard data loading to update the count instantly
-        loadDashboardData(); 
-
-    } catch (error) {
-        console.error("Error marking alert as read:", error);
-        window.firebaseHelpers.showAlert('Error dismissing alert. Please refresh.', 'danger');
-    }
-}
-window.markOrderAlertAsRead = markAlertAsRead; // Make globally accessible for the modal button
 
 // Export the loadSellerDashboard function globally so script.js can call it
 window.loadSellerDashboard = async () => {
@@ -110,10 +68,6 @@ window.loadSellerDashboard = async () => {
     
     // Update UI with seller data
     updateSellerInfo();
-    
-    // NEW: Load dismissed alerts status
-    await loadDismissedAlerts();
-    
     loadDashboardData();
     loadProfileData(); // This loads the data into the profile section form
     
@@ -122,10 +76,6 @@ window.loadSellerDashboard = async () => {
     
     // Ensure dashboard is shown by default
     showSection('dashboard');
-    
-    // NEW: Check for immediate new order popup (MUST RUN AFTER loadDismissedAlerts and loadDashboardData)
-    // We run it here because loadDashboardData ensures sellerNotifications is populated
-    checkNewOrderPopup(); 
 
     // NEW: Load library images once
     loadLibraryImages();
@@ -313,31 +263,6 @@ async function loadDashboardData() {
     }
 }
 
-// NEW: Check for new pending orders and show a pop-up if found
-async function checkNewOrderPopup() {
-    const pendingOrders = sellerNotifications.filter(n => 
-        n.type === 'order_request' && !dismissedAlerts.has(n.relatedId)
-    );
-    
-    if (pendingOrders.length > 0) {
-        const modalElement = document.getElementById('newOrderNotificationModal');
-        if (!modalElement) return;
-
-        const countDisplay = document.getElementById('new-order-count-display');
-        if(countDisplay) countDisplay.textContent = pendingOrders.length;
-
-        const orderIdDisplay = document.getElementById('new-order-id-display');
-        if(orderIdDisplay) orderIdDisplay.textContent = `#${pendingOrders[0].relatedId.substring(0, 8)}${pendingOrders.length > 1 ? ' + others' : ''}`;
-        
-        const newOrderIdInput = document.getElementById('new-order-id');
-        if(newOrderIdInput) newOrderIdInput.value = pendingOrders[0].relatedId;
-        
-        const modal = new bootstrap.Modal(modalElement);
-        modal.show();
-    }
-}
-
-
 // NEW: Calculate Seller Notifications (Pending orders and new reviews)
 async function calculateSellerNotifications() {
     if (!window.currentUser) return { unreadCount: 0, recentNotifications: [] };
@@ -345,7 +270,7 @@ async function calculateSellerNotifications() {
     let notifications = [];
 
     try {
-        // 1. Pending Orders that are NOT already dismissed/read
+        // 1. Pending Orders
         const ordersSnapshot = await getPublicCollectionRef('orders')
             // FIX: Filter by the seller's ID being in the sellerIds array
             .where('sellerIds', 'array-contains', window.currentUser.uid)
@@ -355,7 +280,6 @@ async function calculateSellerNotifications() {
 
         ordersSnapshot.forEach(doc => {
             const order = doc.data();
-            const orderId = doc.id;
             const status = order.status;
             const itemNames = order.equipmentNames.split(',').slice(0, 2).join(', ');
             
@@ -365,18 +289,15 @@ async function calculateSellerNotifications() {
             } else if (status === 'returned') {
                  message = `Equipment Returned: ${itemNames}`;
             }
-            
-            // Only consider it a new/unread notification if it hasn't been dismissed AND it's an actionable state
-            const isNewAlert = !dismissedAlerts.has(orderId);
 
             notifications.push({
-                id: orderId,
+                id: doc.id,
                 type: status === 'pending' ? 'order_request' : 'order_returned',
                 message: message,
-                relatedId: orderId,
+                relatedId: doc.id,
                 date: order.createdAt,
-                read: !isNewAlert, // Read status depends on dismissal set
-                action: () => viewOrderDetails(orderId) // Action directs to order details modal
+                read: false, 
+                action: () => showSection('orders')
             });
         });
 
@@ -406,13 +327,7 @@ async function calculateSellerNotifications() {
         notifications.sort((a, b) => (b.date?.toDate() || 0) - (a.date?.toDate() || 0));
         
         sellerNotifications = notifications; // Store globally
-        
-        // Count unread notifications (i.e., new pending orders + all reviews)
-        // For simplicity, pending orders are unread only if not dismissed. Reviews are always unread until a review system is implemented.
-        const unreadOrderAlerts = notifications.filter(n => n.type.startsWith('order_') && !n.read).length;
-        const unreadReviewAlerts = notifications.filter(n => n.type === 'new_review').length;
-        
-        const unreadCount = unreadOrderAlerts + unreadReviewAlerts;
+        const unreadCount = notifications.length; // All are unread by default (pending action)
         
         return {
             unreadCount,
@@ -443,9 +358,9 @@ function displayTopNotifications(notifications) {
     recentAlerts.forEach(notification => {
         const timeAgo = notification.date ? window.firebaseHelpers.formatTimeAgo(notification.date) : 'N/A';
         let icon = 'fas fa-info-circle';
-        if (notification.type === 'order_request') icon = 'fas fa-clipboard-list text-warning';
-        if (notification.type === 'order_returned') icon = 'fas fa-undo-alt text-primary';
-        if (notification.type === 'new_review') icon = 'fas fa-star text-success';
+        if (notification.type === 'order_request') icon = 'fas fa-clipboard-list';
+        if (notification.type === 'order_returned') icon = 'fas fa-undo-alt';
+        if (notification.type === 'new_review') icon = 'fas fa-star';
         
         list.innerHTML += `
             <li>
@@ -468,16 +383,6 @@ function displayTopNotifications(notifications) {
 function handleNotificationClick(notificationId) {
     const notification = sellerNotifications.find(n => n.id === notificationId);
     if (notification && notification.action) {
-        // Mark as read/dismissed if it's an actionable order/review
-        if (notification.type === 'order_request') {
-             markAlertAsRead(notification.relatedId);
-             // Instead of a full redirect, show the order details modal immediately
-             viewOrderDetails(notification.relatedId);
-        } else if (notification.type === 'order_returned') {
-             viewOrderDetails(notification.relatedId);
-        }
-        
-        // Always execute the original action (e.g., changing section)
         notification.action();
     }
 }
@@ -1475,10 +1380,6 @@ async function viewOrderDetails(orderId) {
                             <tr><th>Status:</th><td><span class="status-badge order-status-${order.status}">${order.status}</span></td></tr>
                             <tr><th>Created:</th><td>${createdAt}</td></tr>
                             <tr><th>Total Amount:</th><td>${window.firebaseHelpers.formatCurrency(order.totalAmount || 0)}</td></tr>
-                            <!-- NEW: Display Pickup Details -->
-                            <tr><th>Pickup Date:</th><td>${order.pickupDate || 'N/A'}</td></tr>
-                            <tr><th>Pickup Time:</th><td>${order.pickupTime || 'N/A'}</td></tr>
-                            <!-- END NEW -->
                         </table>
                     </div>
                     <div class="col-md-6">
@@ -1503,7 +1404,7 @@ async function viewOrderDetails(orderId) {
                     <div class="col-md-6">
                         <h5>Payment Information</h5>
                         <table class="table table-sm">
-                            <tr><th>Payment Status:</th><td><span class="badge bg-${order.paymentStatus === 'paid' ? 'success' : 'danger'}">${order.paymentStatus || 'pending'}</span></td></tr>
+                            <tr><th>Payment Status:</th><td>${order.paymentStatus || 'pending'}</td></tr>
                             <tr><th>Payment Method:</th><td>${order.paymentMethod || 'Razorpay'}</td></tr>
                             <tr><th>Transaction ID:</th><td>${order.transactionId || 'N/A'}</td></tr>
                         </table>
@@ -1516,48 +1417,11 @@ async function viewOrderDetails(orderId) {
                         <p>${order.notes}</p>
                     </div>
                 ` : ''}
-                
-                <!-- NEW: Action buttons at the bottom of the details view for quick status change -->
-                <div class="mt-4 pt-3 border-top d-flex gap-2 justify-content-end">
-                    ${order.status === 'pending' ? `
-                        <button class="btn btn-sm btn-success" onclick="updateOrderStatus('${order.id}', 'active')">
-                            <i class="fas fa-check me-1"></i> Approve Pickup
-                        </button>
-                        <button class="btn btn-sm btn-danger" onclick="updateOrderStatus('${order.id}', 'cancelled')">
-                            <i class="fas fa-times me-1"></i> Reject
-                        </button>
-                    ` : order.status === 'active' ? `
-                        <button class="btn btn-sm btn-info" onclick="updateOrderStatus('${order.id}', 'pickedup')">
-                            <i class="fas fa-handshake me-1"></i> Customer Picked Up
-                        </button>
-                    ` : order.status === 'pickedup' ? `
-                        <button class="btn btn-sm btn-warning" onclick="updateOrderStatus('${order.id}', 'returned')">
-                            <i class="fas fa-undo-alt me-1"></i> Equipment Returned
-                        </button>
-                    ` : order.status === 'returned' ? `
-                        <button class="btn btn-sm btn-primary" onclick="updateOrderStatus('${order.id}', 'completed')">
-                            <i class="fas fa-flag-checkered me-1"></i> Mark Completed
-                        </button>
-                    ` : ''}
-                </div>
             `;
             
             document.getElementById('order-modal-body').innerHTML = modalBody;
-            
-            // Add handler to automatically refresh the modal body when status changes
-            // Find the active modal instance and update the buttons in real-time
-            const modalElement = document.getElementById('orderModal');
-            if (modalElement) {
-                const modalInstance = bootstrap.Modal.getInstance(modalElement);
-                if (modalInstance) {
-                    // Force the modal to show again (it won't flicker if already open)
-                    modalInstance.show();
-                } else {
-                    // Create and show modal if not present
-                    const newModal = new bootstrap.Modal(modalElement);
-                    newModal.show();
-                }
-            }
+            const modal = new bootstrap.Modal(document.getElementById('orderModal'));
+            modal.show();
         }
     } catch (error) {
         console.error('Error viewing order:', error);
@@ -1626,11 +1490,6 @@ async function updateOrderStatus(orderId, newStatus) {
             await orderRef.update(updatePayload);
             
             window.firebaseHelpers.showAlert(`Order status updated to ${newStatus}!`, 'success');
-            
-            // FIX/ENHANCEMENT: After updating status, reload the order details modal to show new status/buttons
-            // This relies on viewOrderDetails refreshing the modal content immediately
-            viewOrderDetails(orderId); 
-            
             loadDashboardData(); // Reload dashboard for badge/stats update
             loadRecentOrders();
             loadOrders();
@@ -1861,30 +1720,24 @@ async function loadNotifications() {
         let typeIcon = 'fas fa-info-circle';
         let badgeColor = 'bg-info';
         let actionText = 'View Details';
-        let isOrder = false;
 
         if (notification.type === 'order_request') {
             typeIcon = 'fas fa-clipboard-list';
             badgeColor = 'bg-warning';
             actionText = 'Review Request';
-            isOrder = true;
         } else if (notification.type === 'order_returned') {
             typeIcon = 'fas fa-undo-alt';
             badgeColor = 'bg-primary';
             actionText = 'Mark Completed';
-            isOrder = true;
         } else if (notification.type === 'new_review') {
             typeIcon = 'fas fa-star';
             badgeColor = 'bg-success';
             actionText = 'View Review';
         }
-        
-        // If it's an order request AND it's not read, it gets the unread style
-        const unreadClass = (isOrder && !notification.read) ? 'notification-unread' : '';
 
         listContainer.innerHTML += `
-            <div class="list-group-item notification-item ${unreadClass} d-flex justify-content-between align-items-center p-3 mb-2 rounded shadow-sm"
-                 onclick="handleNotificationClick('${notification.id}')">
+            <div class="list-group-item notification-item notification-unread d-flex justify-content-between align-items-center p-3 mb-2 rounded shadow-sm"
+                 onclick="handleNotificationAction('${notification.relatedId}', '${notification.type}')">
                 <div class="d-flex align-items-center">
                     <i class="${typeIcon} fa-2x me-3" style="color: var(--sun-yellow);"></i>
                     <div>
@@ -1908,15 +1761,9 @@ async function loadNotifications() {
 // NEW: Handle action button click in Notifications section
 function handleNotificationAction(relatedId, type) {
     if (type === 'order_request' || type === 'order_returned') {
-        // Mark as read/dismissed
-        if (type === 'order_request') {
-            markAlertAsRead(relatedId);
-        }
-        
-        // Show the order details modal
+        // Find the specific order to determine next action (viewing details is enough)
         viewOrderDetails(relatedId);
-        showSection('orders'); // Still navigates to the order section in the background
-        
+        showSection('orders');
     } else if (type === 'new_review') {
         showSection('reviews');
     } else {
