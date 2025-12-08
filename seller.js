@@ -1624,6 +1624,14 @@ async function viewOrderDetails(orderId) {
 
 // Update order status 
 async function updateOrderStatus(orderId, newStatus) {
+    // --- FIX: Check for invalid orderId at the start ---
+    if (!orderId) {
+        console.error('Critical Error: orderId is undefined in updateOrderStatus.');
+        window.firebaseHelpers.showAlert('Critical Error: Cannot update order status. Order ID is missing.', 'danger');
+        return;
+    }
+    // --- END FIX ---
+
     // Map new status to confirmation text
     const statusMap = {
         'active': { text: 'Approve Pickup', type: 'success' },
@@ -1722,7 +1730,12 @@ async function updateOrderStatus(orderId, newStatus) {
             
         } catch (error) {
             console.error('Error updating order:', error);
-            window.firebaseHelpers.showAlert('Error updating order status', 'danger');
+            // Log the detailed error message for better debugging
+            if (error.message.includes('No document to update')) {
+                 window.firebaseHelpers.showAlert('Error updating order status: Document not found. Please check order existence.', 'danger');
+            } else {
+                 window.firebaseHelpers.showAlert('Error updating order status', 'danger');
+            }
         } finally {
             modalElement.remove();
         }
