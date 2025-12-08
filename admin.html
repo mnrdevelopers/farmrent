@@ -616,7 +616,7 @@
                 <div class="col-12">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <button class="btn btn-primary" onclick="showAddCategoryModal()">
+                            <button class="btn btn-primary" onclick="showAddCategoryModal(false)">
                                 <i class="fas fa-plus me-2"></i>Add Category
                             </button>
                         </div>
@@ -799,7 +799,7 @@
         </div>
     </div>
 
-    <!-- Add Category Modal (FIXED: Used for both Add and Edit) -->
+    <!-- Add/Edit Category Modal -->
     <div class="modal fade" id="addCategoryModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -823,18 +823,25 @@
                             <input type="text" class="form-control" id="category-icon" placeholder="fas fa-tractor">
                             <small class="text-muted">e.g., fas fa-tractor. Use FontAwesome 6 classes.</small>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Status</label>
-                            <select class="form-select" id="category-status">
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                            </select>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Status</label>
+                                <select class="form-select" id="category-status">
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Display Order</label>
+                                <input type="number" class="form-control" id="category-order" value="0">
+                                <small class="text-muted">Lower number displays first.</small>
+                            </div>
                         </div>
                     </form>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="resetCategoryForm()">Cancel</button>
-                    <!-- Button action handled by JS: addNewCategory() or saveCategoryChanges() -->
+                    <!-- Button action will be dynamically set by JS to addNewCategory() or saveCategoryChanges() -->
                     <button type="button" class="btn btn-primary" onclick="addNewCategory()">Add Category</button>
                 </div>
             </div>
