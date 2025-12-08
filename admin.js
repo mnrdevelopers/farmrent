@@ -1688,7 +1688,7 @@ function getCategoryIcon(categoryName) {
         'jcb': 'fas fa-truck-pickup',
         'grass-cutter': 'fas fa-cut',
         'trolley': 'fas fa-truck-moving',
-        'water-tanker': 'fa-truck-loading',
+        'water-tanker': 'fas fa-truck',
         'default': 'fas fa-tools'
     };
     
