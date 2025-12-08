@@ -33,7 +33,9 @@ try {
             "imgbb_api_key": "", // Placeholder for the ImgBB key
             "razorpay_key_id": "rzp_test_RYqQhRehAtLv0Z", // Placeholder for Razorpay test key
             // NEW: Default Post Office API URL
-            "post_office_api_url": "https://api.postalpincode.in/pincode/" 
+            "post_office_api_url": "https://api.postalpincode.in/pincode/",
+            // NEW: Default Fast2SMS API Key (Replace with your Fast2SMS API Key)
+            "fast2sms_api_key": "YOUR_FAST2SMS_API_KEY_HERE" 
         };
         
         // Fetch and activate the configuration values
@@ -198,6 +200,85 @@ window.firebaseHelpers = {
         } catch (error) {
             console.error("Error retrieving Post Office API URL:", error);
             return "https://api.postalpincode.in/pincode/";
+        }
+    },
+
+    /**
+     * NEW: Fetches the Fast2SMS API Key from Firebase Remote Config.
+     * @returns {Promise<string>} The Fast2SMS API Key.
+     */
+    getFast2SmsApiKey: async () => {
+        if (!remoteConfig) {
+            console.warn('Remote Config not available for Fast2SMS key.');
+            return ""; 
+        }
+        try {
+            const apiKey = remoteConfig.getString('fast2sms_api_key');
+            if (!apiKey || apiKey === "YOUR_FAST2SMS_API_KEY_HERE") {
+                 console.warn('Fast2SMS API key is missing or using placeholder in Remote Config.');
+            }
+            return apiKey;
+        } catch (error) {
+            console.error("Error retrieving Fast2SMS API Key:", error);
+            return ""; 
+        }
+    },
+    
+    /**
+     * NEW: Sends an SMS alert using the Fast2SMS API.
+     * NOTE: This is client-side, purely for demonstration. In production, this should be done via a secure server/cloud function.
+     * @param {string} mobileNumber - The 10-digit mobile number to send the SMS to.
+     * @param {string} message - The message content.
+     * @returns {Promise<void>}
+     */
+    sendSmsAlert: async (mobileNumber, message) => {
+        const apiKey = await window.firebaseHelpers.getFast2SmsApiKey();
+        
+        if (!apiKey || apiKey === "YOUR_FAST2SMS_API_KEY_HERE") {
+            console.warn('SMS Alert Skipped: Fast2SMS API Key is missing or invalid in Remote Config.');
+            window.firebaseHelpers.showAlert('SMS Alert Skipped: Missing API Key.', 'warning');
+            return;
+        }
+        
+        if (!mobileNumber || mobileNumber.length !== 10) {
+            console.error('SMS Alert Failed: Invalid mobile number.', mobileNumber);
+            return;
+        }
+
+        // NOTE: The 'route' parameter below assumes the use of a standard transactional route, 
+        // but this may need adjustment based on the specific Fast2SMS account and template approval.
+        const url = 'https://www.fast2sms.com/dev/bulkV2';
+        
+        const params = new URLSearchParams({
+            // NOTE: Fast2SMS API requires numbers to be in a comma-separated string format
+            'variables_values': encodeURIComponent(message), 
+            'route': 'otp', // Using OTP route as a common transactional fallback
+            'sender_id': 'FSTSMS', // Replace with your approved Sender ID
+            'language': 'english',
+            'numbers': mobileNumber,
+        });
+
+        try {
+            // Using POST with URLSearchParams in the body often works better for some API setups
+            // However, Fast2SMS sometimes prefers GET or specific JSON body structures.
+            // Using a simple GET structure for demonstration:
+            const finalUrl = `${url}?authorization=${apiKey}&message=${encodeURIComponent(message)}&route=q&numbers=${mobileNumber}`;
+            
+            const response = await fetch(finalUrl, { method: 'GET' });
+
+            const result = await response.json();
+
+            if (result.return === true || result.success === true) {
+                console.log('SMS Alert Sent Successfully:', result);
+                window.firebaseHelpers.showAlert(`SMS sent to ${mobileNumber} for notification.`, 'success');
+            } else {
+                console.error('SMS Alert Failed from Fast2SMS:', result);
+                window.firebaseHelpers.showAlert('SMS Alert Failed. Check console for Fast2SMS error.', 'danger');
+            }
+            
+        } catch (error) {
+            console.error('SMS Alert Network Error:', error);
+            window.firebaseHelpers.showAlert('SMS Alert Network Error.', 'danger');
         }
     },
 
