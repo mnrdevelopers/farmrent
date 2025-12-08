@@ -1684,6 +1684,34 @@ async function updateOrderStatus(orderId, newStatus) {
             
             window.firebaseHelpers.showAlert(`Order status updated to ${newStatus}!`, 'success');
             
+            // NEW: SMS Alert Logic
+            const orderDoc = await orderRef.get();
+            const order = orderDoc.data();
+            
+            if (order && order.customerPhone) {
+                let smsMessage = '';
+                const orderShortId = `#${orderId.substring(0, 8)}`;
+                const equipNames = order.equipmentNames.split(',')[0];
+
+                if (newStatus === 'active') {
+                    smsMessage = `FarmRent: Order ${orderShortId} for ${equipNames} has been confirmed & is ready for pickup on ${order.pickupDate} at ${order.pickupTime}. Thank you!`;
+                } else if (newStatus === 'pickedup') {
+                    smsMessage = `FarmRent: Order ${orderShortId} status changed to Picked Up. Enjoy your rental! Contact seller ${order.sellerBusinessNames} for any issues.`;
+                } else if (newStatus === 'returned') {
+                    smsMessage = `FarmRent: Equipment for Order ${orderShortId} has been returned. Final check and transaction completion pending.`;
+                } else if (newStatus === 'completed') {
+                    smsMessage = `FarmRent: Order ${orderShortId} completed successfully! Thank you for renting with us.`;
+                }
+                
+                // Only send alert for relevant status changes
+                if (smsMessage) {
+                    // Call the helper function from firebase-config.js
+                    await window.firebaseHelpers.sendSmsAlert(order.customerPhone, smsMessage);
+                }
+            }
+            // END NEW: SMS Alert Logic
+
+            
             // FIX/ENHANCEMENT: After updating status, reload the order details modal to show new status/buttons
             // This relies on viewOrderDetails refreshing the modal content immediately
             viewOrderDetails(orderId); 
@@ -1847,7 +1875,8 @@ async function loadTopEquipment() {
                 order.items.forEach(item => {
                     // Only count earnings for equipment belonging to this seller
                     if (item.sellerId === window.currentUser.uid && equipmentEarnings[item.id] !== undefined) {
-                        equipmentEarnings[item.id] += item.price || 0; // Item price is the amount paid for that item rental
+                        item.price = item.price || 0; // Ensure item.price exists
+                        equipmentEarnings[item.id] += item.price; // Item price is the amount paid for that item rental
                     }
                 });
             }
