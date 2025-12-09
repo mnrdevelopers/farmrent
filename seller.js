@@ -1,3 +1,5 @@
+// seller.js - Corrected Version
+
 // Global variables used by seller.js
 let sellerData = null; 
 let equipmentData = [];
@@ -19,10 +21,8 @@ const libraryImages = [
     'images/Power_Spray_Machine.png',
     'images/Water_Tanker_5000L.png',
     'images/TRACTOR.png'
-    
 ];
 let currentImageTab = 'upload'; // Tracks the active tab: 'upload' or 'library'
-
 
 // Helper to get the Firestore document reference for public orders
 function getPublicCollectionRef(collectionName) {
@@ -215,8 +215,6 @@ function updateSellerInfo() {
     }
 }
 
-// Pincode location lookup function for seller profile (Duplicate removed, relies on window.populateLocationFields from script.js)
-
 // Show section function
 function showSection(sectionId) {
     // Hide all sections
@@ -350,7 +348,6 @@ async function checkNewOrderPopup() {
         modal.show();
     }
 }
-
 
 // NEW: Calculate Seller Notifications (Pending orders and new reviews)
 async function calculateSellerNotifications() {
@@ -538,8 +535,7 @@ async function markAllOrderAlertsAsRead() {
 }
 window.markAllOrderAlertsAsRead = markAllOrderAlertsAsRead;
 
-
-// Calculate seller statistics
+// Calculate seller statistics (UPDATED to fetch sellerRating specifically)
 async function calculateSellerStats() {
     if (!window.currentUser) return {
         totalEarnings: 0,
@@ -559,8 +555,7 @@ async function calculateSellerStats() {
         // Get seller's orders
         const ordersCollectionRef = getPublicCollectionRef('orders');
 
-        const ordersSnapshot = await ordersCollectionRef
-            .get(); 
+        const ordersSnapshot = await ordersCollectionRef.get(); 
         
         const relevantOrders = ordersSnapshot.docs.filter(doc => {
              const order = doc.data();
@@ -581,7 +576,7 @@ async function calculateSellerStats() {
             }
         });
         
-        // Get average rating from reviews
+        // Get average rating from reviews - SPECIFICALLY SELLER RATING
         const reviewsSnapshot = await window.FirebaseDB.collection('reviews')
             .where('sellerId', '==', window.currentUser.uid)
             .get();
@@ -591,11 +586,13 @@ async function calculateSellerStats() {
         
         reviewsSnapshot.forEach(doc => {
             const review = doc.data();
-            totalRating += review.rating || 0;
+            // Use specific sellerRating if available, otherwise fallback to general rating
+            const ratingValue = review.sellerRating || review.rating || 0;
+            totalRating += ratingValue;
             ratingCount++;
         });
         
-        const rating = ratingCount > 0 ? totalRating / ratingCount : 4.0;
+        const rating = ratingCount > 0 ? totalRating / ratingCount : 0.0; // Default to 0 if no reviews
         
         return {
             totalEarnings,
@@ -610,7 +607,7 @@ async function calculateSellerStats() {
             totalEarnings: 0,
             totalOrders: 0,
             totalEquipment: 0,
-            rating: 4.0
+            rating: 0.0
         };
     }
 }
@@ -1340,7 +1337,6 @@ async function editEquipment(equipmentId) {
         const editEquipmentPincodeEl = document.getElementById('edit-equipment-pincode');
         if (editEquipmentPincodeEl) editEquipmentPincodeEl.value = sellerData.pincode || '';
 
-
         // Clear existing specs and populate
         const specsContainer = document.getElementById('edit-specs-container');
         if(specsContainer) specsContainer.innerHTML = '';
@@ -1427,7 +1423,6 @@ document.getElementById('edit-equipment-form')?.addEventListener('submit', async
              return;
         }
 
-
         // Gather specifications
         const specs = {};
         const specRows = document.querySelectorAll('#edit-specs-container .row');
@@ -1460,7 +1455,6 @@ document.getElementById('edit-equipment-form')?.addEventListener('submit', async
         }
     }
 });
-
 
 // Delete equipment
 async function deleteEquipment(equipmentId) {
@@ -1755,8 +1749,7 @@ async function loadEarningsData() {
         const ordersCollectionRef = getPublicCollectionRef('orders');
         
         // Get all relevant orders
-        const ordersSnapshot = await ordersCollectionRef
-            .get(); 
+        const ordersSnapshot = await ordersCollectionRef.get(); 
         
         let thisMonthEarnings = 0;
         let lastMonthEarnings = 0;
@@ -1878,8 +1871,7 @@ async function loadTopEquipment() {
         // Fetch all relevant orders
         const ordersCollectionRef = getPublicCollectionRef('orders');
         
-        const ordersSnapshot = await ordersCollectionRef
-            .get();
+        const ordersSnapshot = await ordersCollectionRef.get();
 
         // Aggregate earnings per equipment
         ordersSnapshot.forEach(orderDoc => {
@@ -2034,7 +2026,7 @@ function sendMessage() {
     }
 }
 
-// Load reviews
+// Load reviews (UPDATED to display detailed ratings)
 async function loadReviews() {
     if (!window.currentUser) return;
     
@@ -2064,12 +2056,26 @@ async function loadReviews() {
         
         reviewsSnapshot.forEach(doc => {
             const review = doc.data();
-            totalRating += review.rating || 0;
+            // Calculate avg for the specific review card summary
+            const displayRating = review.sellerRating || review.rating || 0;
+            totalRating += displayRating;
             ratingCount++;
             
-            const stars = '★'.repeat(review.rating) + '☆'.repeat(5 - review.rating);
+            const stars = '★'.repeat(Math.round(displayRating)) + '☆'.repeat(5 - Math.round(displayRating));
             const date = window.firebaseHelpers.formatDate(review.createdAt);
             
+            // Create breakdown HTML if specific ratings exist
+            let breakdownHtml = '';
+            if (review.equipmentRating) {
+                breakdownHtml = `
+                    <div class="small text-muted mt-1">
+                        <span class="me-2"><i class="fas fa-tractor"></i> Equip: ${review.equipmentRating}/5</span>
+                        <span class="me-2"><i class="fas fa-store"></i> Seller: ${review.sellerRating}/5</span>
+                        <span><i class="fas fa-hand-holding-heart"></i> Exp: ${review.experienceRating}/5</span>
+                    </div>
+                `;
+            }
+
             reviewsList.innerHTML += `
                 <div class="border-bottom pb-3 mb-3">
                     <div class="d-flex justify-content-between align-items-start mb-2">
@@ -2079,19 +2085,18 @@ async function loadReviews() {
                         </div>
                         <small class="text-muted">${date}</small>
                     </div>
-                    <p class="mb-2">${review.comment || 'No comment'}</p>
-                    <small class="text-muted">For: ${review.equipmentName || 'Equipment'}</small>
+                    ${breakdownHtml}
+                    <p class="mb-2 mt-2 fst-italic">"${review.comment || 'No comment'}"</p>
+                    <small class="text-muted">Order ID: #${(review.orderId || '').substring(0,8)}</small>
                 </div>
             `;
         });
         
-        // Update average rating
         const averageRating = ratingCount > 0 ? totalRating / ratingCount : 0;
         
         const averageRatingEl = document.getElementById('average-rating');
         if (averageRatingEl) averageRatingEl.textContent = averageRating.toFixed(1);
         
-        // Update star icons based on average rating
         const starContainer = document.querySelector('#reviews-section .table-container .mb-2');
         if (starContainer) {
             const fullStars = Math.round(averageRating);
@@ -2511,7 +2516,6 @@ function resetImageSelection() {
     document.querySelectorAll('.image-option').forEach(el => el.classList.remove('selected'));
 }
 // END NEW IMAGE LIBRARY LOGIC
-
 
 // Initialize dashboard only if not called by script.js already
 if (!window.loadSellerDashboard) {
