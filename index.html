@@ -27,10 +27,19 @@
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
+                       <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
                         <a class="nav-link active" href="index.html">Home</a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="categoriesDropdown" role="button" data-bs-toggle="dropdown">
+                            Categories
+                        </a>
+                        <ul class="dropdown-menu" id="navbar-categories-menu">
+                            <!-- Categories will be loaded dynamically -->
+                            <li><div class="text-center py-2"><div class="spinner-border spinner-border-sm text-primary"></div> Loading categories...</div></li>
+                        </ul>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="browse.html">Browse Equipment</a>
@@ -43,13 +52,13 @@
                     </li>
                 </ul>
                 <ul class="navbar-nav align-items-center" id="navbar-auth-container">
-                    <!-- NEW: Pincode Display in Navbar -->
+                    <!-- Pincode Display in Navbar -->
                     <li class="nav-item d-none d-lg-block">
                         <span class="nav-link pincode-indicator" id="navbar-pincode-display" onclick="showPincodeModal()" style="cursor: pointer;">
                             <i class="fas fa-map-marker-alt me-1"></i> <strong id="current-pincode-value-nav">All Locations</strong>
                         </span>
                     </li>
-                    <!-- END NEW -->
+                    <!-- END Pincode Display -->
                     <li class="nav-item">
                         <a class="nav-link" href="cart.html">
                             <i class="fas fa-shopping-cart"></i> Cart
@@ -57,7 +66,7 @@
                         </a>
                     </li>
                     <ul class="navbar-nav" id="navbar-auth">
-                    <!-- Auth links loaded by script.js -->
+                        <!-- Auth links loaded by script.js -->
                     </ul>
                 </ul>
             </div>
@@ -92,16 +101,6 @@
                              class="simple-3d-tractor-image">
                     </div>
                 </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Categories Section -->
-    <section class="py-5 bg-clean">
-        <div class="container">
-            <h2 class="section-title">Farming Equipment Categories</h2>
-            <div class="row" id="categories-container">
-                <!-- Categories will be loaded dynamically -->
             </div>
         </div>
     </section>
