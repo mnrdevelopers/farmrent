@@ -13,6 +13,8 @@ let lastClearTime = 0; // Global variable to store the last notification clear t
 // Chat system variables
 let activeChatId = null;
 let chatUnsubscribe = null;
+let typingTimeout = null;
+
 
 // --- NEW HELPER: Get Notification Status Ref ---
 function getCustomerNotificationRef(userId) {
@@ -162,9 +164,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     initializeEventListeners();
     await getPlatformFeeRate(); 
     
-    // NEW: Initialize Chat Widget on all pages (except seller specific ones handled by seller.js)
+  // NEW: Initialize Chat Widget on all pages (except seller specific ones handled by seller.js)
+    // Update this section to use the new renderChatWidget function:
     if (path !== 'seller.html' && path !== 'seller-pending.html' && path !== 'admin.html') {
-        renderChatWidget();
+        // Wait a bit for auth to fully initialize
+        setTimeout(() => {
+            if (document.getElementById('chat-widget-container')) {
+                renderChatWidget();
+            }
+        }, 1000);
     }
 });
 
@@ -3705,7 +3713,7 @@ function getStarRatingHtml(rating) {
 
 // --- CUSTOMER CHAT SYSTEM ---
 
-// 1. Render Chat Widget HTML
+// 1. Render Chat Widget HTML (Updated Layout)
 function renderChatWidget() {
     const container = document.getElementById('chat-widget-container');
     if (!container) return;
@@ -3716,18 +3724,37 @@ function renderChatWidget() {
         </div>
         <div class="chat-window hidden" id="customer-chat-window">
             <div class="chat-header">
-                <h6 id="chat-header-title">My Chats</h6>
+                <div class="chat-header-info">
+                    <h6 class="chat-header-title" id="chat-header-title">My Chats</h6>
+                    <div id="chat-header-status" class="chat-header-status" style="display:none;">
+                        <span class="status-dot"></span> <span id="status-text">Offline</span>
+                    </div>
+                </div>
                 <button class="btn btn-sm btn-link text-white p-0" onclick="toggleChatWindow()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
+            
             <div class="chat-body" id="chat-body">
-                <!-- Chat list or messages -->
                 <div class="text-center text-muted mt-5">
                     <p>Login to view your chats</p>
                 </div>
             </div>
+
+            <!-- Quick Replies Container -->
+            <div id="quick-replies-container" class="quick-replies" style="display:none;">
+                <span class="reply-chip" onclick="sendQuickReply('Is this available?')">Is this available?</span>
+                <span class="reply-chip" onclick="sendQuickReply('What is the final price?')">Price?</span>
+                <span class="reply-chip" onclick="sendQuickReply('Can I inspect it?')">Inspection?</span>
+                <span class="reply-chip" onclick="sendQuickReply('Please call me.')">Call me</span>
+            </div>
+
             <div class="chat-footer hidden" id="chat-input-container">
+                <!-- Typing Indicator -->
+                <div id="customer-typing-indicator" class="typing-indicator" style="display:none; background:transparent; box-shadow:none; padding:0 0 5px 10px;">
+                    <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>
+                </div>
+                
                 <div class="input-group">
                     <input type="text" class="form-control" id="chat-message-input" placeholder="Type a message...">
                     <button class="btn btn-primary" onclick="sendChatMessage()">
@@ -3738,7 +3765,6 @@ function renderChatWidget() {
         </div>
     `;
     
-    // Check auth status to load chats if already logged in
     if (window.currentUser) {
         loadUserConversations();
     }
@@ -3759,28 +3785,31 @@ function toggleChatWindow() {
 async function loadUserConversations() {
     const body = document.getElementById('chat-body');
     const inputContainer = document.getElementById('chat-input-container');
+    const quickReplies = document.getElementById('quick-replies-container');
     const title = document.getElementById('chat-header-title');
+    const statusDiv = document.getElementById('chat-header-status');
     
     if (!body) return;
     
-    // Reset view to list
     activeChatId = null;
     if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
     
     inputContainer.classList.add('hidden');
+    if (quickReplies) quickReplies.style.display = 'none';
+    if (statusDiv) statusDiv.style.display = 'none';
     title.textContent = 'My Chats';
     
     if (!window.currentUser) {
-        body.innerHTML = '<div class="text-center text-muted mt-5"><p>Please login to chat with sellers.</p></div>';
+        body.innerHTML = '<div class="text-center text-muted mt-5"><p>Please login to chat.</p></div>';
         return;
     }
 
     body.innerHTML = '<div class="text-center mt-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
 
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const conversationsRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations');
+    
     try {
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const conversationsRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations');
-        
         const snapshot = await conversationsRef
             .where('customerId', '==', window.currentUser.uid)
             .orderBy('updatedAt', 'desc')
@@ -3789,7 +3818,7 @@ async function loadUserConversations() {
         body.innerHTML = '';
 
         if (snapshot.empty) {
-            body.innerHTML = '<div class="text-center text-muted mt-5"><p>No active chats found.<br>Go to <strong>My Orders</strong> to start a chat.</p></div>';
+            body.innerHTML = '<div class="text-center text-muted mt-5"><p>No active chats.<br>Go to Orders to start one.</p></div>';
             return;
         }
 
@@ -3798,30 +3827,140 @@ async function loadUserConversations() {
             const time = chat.updatedAt ? window.firebaseHelpers.formatTimeAgo(chat.updatedAt) : '';
             const unread = chat.unreadCountCustomer > 0 ? `<span class="badge bg-danger rounded-pill">${chat.unreadCountCustomer}</span>` : '';
             
+            // Professional List Item
             body.innerHTML += `
-                <div class="chat-list-item p-2 rounded" onclick="loadChatMessages('${doc.id}', '${chat.sellerBusinessName}')">
-                    <div class="d-flex justify-content-between">
-                        <strong>${chat.sellerBusinessName}</strong>
-                        <small class="text-muted">${time}</small>
+                <div class="p-3 border-bottom bg-white hover-bg-light cursor-pointer" onclick="loadChatMessages('${doc.id}', '${chat.sellerBusinessName}', '${chat.sellerId}')" style="cursor:pointer;">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <strong class="text-dark">${chat.sellerBusinessName}</strong>
+                        <span class="small text-muted">${time}</span>
                     </div>
                     <div class="d-flex justify-content-between align-items-center">
-                        <small class="text-muted text-truncate" style="max-width: 200px;">
-                            ${chat.lastMessage || 'Start chatting...'}
-                        </small>
+                        <small class="text-muted text-truncate" style="max-width: 200px;">${chat.lastMessage || 'Click to chat'}</small>
                         ${unread}
                     </div>
-                    <small class="text-muted" style="font-size: 0.7rem;">Order #${chat.orderId.substring(0,8)}</small>
                 </div>
             `;
         });
-
     } catch (error) {
         console.error("Error loading chats:", error);
         body.innerHTML = '<div class="text-center text-danger mt-3">Error loading chats.</div>';
     }
 }
 
-// 4. Open Chat for a specific Order (Called from Orders Page)
+// 4. Load Messages for a Chat ID (Updated with status indicators)
+async function loadChatMessages(chatId, titleName, sellerId) {
+    activeChatId = chatId;
+    
+    const body = document.getElementById('chat-body');
+    const inputContainer = document.getElementById('chat-input-container');
+    const quickReplies = document.getElementById('quick-replies-container');
+    const title = document.getElementById('chat-header-title');
+    const statusDiv = document.getElementById('chat-header-status');
+    const statusText = document.getElementById('status-text');
+    const statusDot = statusDiv.querySelector('.status-dot');
+
+    // Setup Header
+    title.innerHTML = `<button class="btn btn-sm text-white p-0 me-2" onclick="loadUserConversations()"><i class="fas fa-arrow-left"></i></button> ${titleName}`;
+    inputContainer.classList.remove('hidden');
+    if (quickReplies) quickReplies.style.display = 'flex';
+    if (statusDiv) statusDiv.style.display = 'flex';
+    
+    body.innerHTML = '<div class="text-center mt-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+
+    // 1. Fetch Seller Status (Online/Offline)
+    if (sellerId) {
+        window.FirebaseDB.collection('users').doc(sellerId).onSnapshot(doc => {
+            const seller = doc.data();
+            const isOnline = seller && seller.isOnline;
+            if (statusText) statusText.textContent = isOnline ? 'Online' : 'Offline';
+            if (statusDot) statusDot.className = `status-dot ${isOnline ? 'online' : 'offline'}`;
+            
+            // Show Custom Status Message if Offline
+            const customMsgId = 'custom-status-msg';
+            const existingMsg = document.getElementById(customMsgId);
+            
+            if (!isOnline && !existingMsg && body) {
+                const msg = document.createElement('div');
+                msg.id = customMsgId;
+                msg.className = 'system-message';
+                msg.textContent = `Seller is currently offline. You can leave a message.`;
+                body.appendChild(msg);
+            } else if (isOnline && existingMsg) {
+                existingMsg.remove();
+            }
+        });
+    }
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const chatDocRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations').doc(chatId);
+    const messagesRef = chatDocRef.collection('messages');
+
+    if (chatUnsubscribe) chatUnsubscribe();
+
+    chatUnsubscribe = messagesRef.orderBy('timestamp', 'asc').onSnapshot(snapshot => {
+        if (!body) return;
+        
+        body.innerHTML = '';
+        
+        // Welcome Message if empty
+        if (snapshot.empty) {
+            body.innerHTML = `
+                <div class="system-message mt-4">
+                    Welcome to FarmRent Chat!<br>How can we help you today?
+                </div>
+            `;
+        } else {
+            snapshot.forEach(doc => {
+                const msg = doc.data();
+                const isMe = msg.senderId === window.currentUser.uid;
+                const date = msg.timestamp ? msg.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+                
+                body.innerHTML += `
+                    <div style="display: flex; justify-content: ${isMe ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
+                        <div class="message-bubble ${isMe ? 'message-sent' : 'message-received'}">
+                            ${msg.text}
+                            <span class="message-time">${date}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            body.scrollTop = body.scrollHeight;
+        }
+        
+        // Mark read
+        chatDocRef.update({ unreadCountCustomer: 0 });
+    });
+
+    // Listen for Typing
+    chatDocRef.onSnapshot(doc => {
+        const data = doc.data();
+        const indicator = document.getElementById('customer-typing-indicator');
+        if (data && data.typing && data.typing.seller && indicator) {
+            indicator.style.display = 'flex';
+            if (body) body.scrollTop = body.scrollHeight;
+        } else if (indicator) {
+            indicator.style.display = 'none';
+        }
+    });
+
+    // Handle Typing Input
+    const input = document.getElementById('chat-message-input');
+    if (input) {
+        input.oninput = () => {
+            chatDocRef.set({ typing: { customer: true } }, { merge: true });
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => {
+                chatDocRef.set({ typing: { customer: false } }, { merge: true });
+            }, 2000);
+        };
+        
+        input.onkeypress = (e) => { 
+            if (e.key === 'Enter') sendChatMessage(); 
+        };
+    }
+}
+
+// 5. Open Chat for a specific Order (Called from Orders Page - Updated)
 async function openOrderChat(orderId, sellerId, businessName) {
     if (!window.currentUser) {
         window.firebaseHelpers.showAlert('Please login to chat.', 'warning');
@@ -3853,72 +3992,37 @@ async function openOrderChat(orderId, sellerId, businessName) {
         });
     }
 
-    loadChatMessages(chatId, businessName);
+    loadChatMessages(chatId, businessName, sellerId);
 }
 // Make globally available
 window.openOrderChat = openOrderChat;
 
-// 5. Load Messages for a Chat ID
-function loadChatMessages(chatId, titleName) {
-    activeChatId = chatId;
-    
-    const body = document.getElementById('chat-body');
-    const inputContainer = document.getElementById('chat-input-container');
-    const title = document.getElementById('chat-header-title');
-    const backBtn = '<button class="btn btn-sm btn-link text-white p-0 me-2" onclick="loadUserConversations()"><i class="fas fa-arrow-left"></i></button>';
-    
-    title.innerHTML = `${backBtn} ${titleName}`;
-    inputContainer.classList.remove('hidden');
-    body.innerHTML = '<div class="text-center mt-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
-
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-    const messagesRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data')
-        .collection('conversations').doc(chatId).collection('messages');
-
-    // Real-time listener
-    if (chatUnsubscribe) chatUnsubscribe();
-    
-    chatUnsubscribe = messagesRef.orderBy('timestamp', 'asc').onSnapshot(snapshot => {
-        body.innerHTML = '';
-        
-        if (snapshot.empty) {
-            body.innerHTML = '<div class="text-center text-muted mt-5"><small>Say hello! Start the conversation.</small></div>';
-        } else {
-            snapshot.forEach(doc => {
-                const msg = doc.data();
-                const isMe = msg.senderId === window.currentUser.uid;
-                const date = msg.timestamp ? msg.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '...';
-                
-                body.innerHTML += `
-                    <div class="message-bubble ${isMe ? 'message-sent' : 'message-received'}">
-                        ${msg.text}
-                        <span class="message-time">${date}</span>
-                    </div>
-                `;
-            });
-            // Scroll to bottom
-            body.scrollTop = body.scrollHeight;
-        }
-        
-        // Reset unread count for customer when viewing
-        window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data')
-            .collection('conversations').doc(chatId).update({ unreadCountCustomer: 0 });
-            
-    });
+// 6. Send Quick Reply
+function sendQuickReply(text) {
+    const input = document.getElementById('chat-message-input');
+    if (input) {
+        input.value = text;
+        sendChatMessage();
+    }
 }
 
-// 6. Send Message
+// 7. Send Message (Updated)
 async function sendChatMessage() {
     const input = document.getElementById('chat-message-input');
+    if (!input) return;
+    
     const text = input.value.trim();
     if (!text || !activeChatId || !window.currentUser) return;
     
-    input.value = ''; // Clear input immediately
+    input.value = '';
     
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     const chatRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations').doc(activeChatId);
     
     try {
+        clearTimeout(typingTimeout);
+        await chatRef.set({ typing: { customer: false } }, { merge: true });
+
         await chatRef.collection('messages').add({
             senderId: window.currentUser.uid,
             text: text,
@@ -3928,14 +4032,19 @@ async function sendChatMessage() {
         await chatRef.update({
             lastMessage: text,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            // Increment unread count for seller using atomic increment
-            unreadCountSeller: firebase.firestore.FieldValue.increment(1) 
+            unreadCountSeller: firebase.firestore.FieldValue.increment(1)
         });
-        
     } catch (error) {
         console.error("Error sending message:", error);
     }
 }
+
+// Make chat functions globally available
+window.toggleChatWindow = toggleChatWindow;
+window.sendQuickReply = sendQuickReply;
+window.sendChatMessage = sendChatMessage;
+window.loadUserConversations = loadUserConversations;
+window.loadChatMessages = loadChatMessages;
 
 // Add enter key listener for chat input
 document.addEventListener('keypress', function (e) {
