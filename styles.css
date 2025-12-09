@@ -8,17 +8,15 @@
 
 /* Ensure HTML and Body allow scrolling */
 html, body {
-    height: 100%; /* Changed from min-height if present */
+    height: 100%;
     min-height: 100vh;
-    overflow-x: hidden; /* Prevent horizontal scrollbars */
+    overflow-x: hidden;
 }
 
 body {
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     color: #333;
     background-color: var(--clean-white);
-    /* Remove any fixed heights or hidden overflow declarations that might cause sticking */
-    /* overflow-y: auto; or overflow-y: scroll; should be the default, but we ensure no 'hidden' is applied globally */
 }
 
 .navbar {
@@ -149,11 +147,12 @@ body {
     margin-top: 50px;
 }
 
-.whatsapp-btn {
+/* --- CHAT WIDGET STYLES (NEW) --- */
+.chat-btn-floating {
     position: fixed;
     bottom: 20px;
     right: 20px;
-    background-color: #25D366;
+    background-color: var(--farm-green);
     color: white;
     width: 60px;
     height: 60px;
@@ -162,15 +161,111 @@ body {
     align-items: center;
     justify-content: center;
     font-size: 24px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-    z-index: 1000;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    z-index: 1050;
     transition: transform 0.3s;
+    cursor: pointer;
+    border: 2px solid white;
 }
 
-.whatsapp-btn:hover {
+.chat-btn-floating:hover {
     transform: scale(1.1);
-    color: white;
+    color: var(--sun-yellow);
 }
+
+.chat-window {
+    position: fixed;
+    bottom: 90px;
+    right: 20px;
+    width: 350px;
+    height: 500px;
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 5px 25px rgba(0,0,0,0.2);
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    border: 1px solid #ddd;
+}
+
+.chat-window.hidden {
+    display: none;
+}
+
+.chat-header {
+    background-color: var(--farm-green);
+    color: white;
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.chat-header h6 {
+    margin: 0;
+    font-weight: 600;
+}
+
+.chat-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px;
+    background-color: #f8f9fa;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.chat-footer {
+    padding: 10px;
+    border-top: 1px solid #eee;
+    background: white;
+}
+
+.message-bubble {
+    max-width: 80%;
+    padding: 10px 15px;
+    border-radius: 15px;
+    font-size: 0.9rem;
+    position: relative;
+    word-wrap: break-word;
+}
+
+.message-sent {
+    background-color: var(--farm-green);
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 2px;
+}
+
+.message-received {
+    background-color: #e9ecef;
+    color: #333;
+    align-self: flex-start;
+    border-bottom-left-radius: 2px;
+}
+
+.message-time {
+    font-size: 0.7rem;
+    opacity: 0.7;
+    margin-top: 4px;
+    display: block;
+    text-align: right;
+}
+
+.chat-list-item {
+    cursor: pointer;
+    transition: background-color 0.2s;
+    border-bottom: 1px solid #eee;
+}
+
+.chat-list-item:hover {
+    background-color: #f1f1f1;
+}
+
+/* --- END CHAT WIDGET STYLES --- */
 
 .section-title {
     color: var(--farm-green);
@@ -472,7 +567,6 @@ html, body {
     padding: 2px 6px;
 }
 
-/* Make dropdown work on hover for desktop */
 @media (min-width: 992px) {
     .navbar-nav .dropdown:hover .dropdown-menu {
         display: block;
