@@ -97,46 +97,32 @@ function initializeChatListeners() {
         scrollToBottom();
 
         try {
-            // 3. Get API Key
-            const apiKey = await window.firebaseHelpers.getOpenaiApiKey();
+            // 3. Call Gemini API
+            const apiKey = ""; // Environment provided key
             
-            if (!apiKey) {
-                removeMessage(loadingId);
-                addMessage("I'm currently undergoing maintenance (API Key missing). Please try again later or contact support.", 'bot');
-                return;
-            }
-
-            // 4. Call OpenAI API
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    model: "gpt-3.5-turbo", // or gpt-4 if available/preferred
-                    messages: [
-                        { role: "system", content: SYSTEM_PROMPT },
-                        // In a real app, you might want to send recent history here
-                        { role: "user", content: message }
-                    ],
-                    max_tokens: 150
+                    contents: [{ parts: [{ text: message }] }],
+                    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] }
                 })
             });
 
             const data = await response.json();
             
-            // 5. Remove Loading & Show Response
+            // 4. Remove Loading & Show Response
             removeMessage(loadingId);
             
-            if (data.error) {
-                console.error("OpenAI Error:", data.error);
-                addMessage("Sorry, I encountered an error. Please try again.", 'bot');
-            } else if (data.choices && data.choices.length > 0) {
-                const botReply = data.choices[0].message.content;
+            const botReply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            if (botReply) {
                 addMessage(botReply, 'bot');
             } else {
-                addMessage("I didn't understand that. Could you rephrase?", 'bot');
+                console.error("Gemini API Error:", data);
+                addMessage("I'm sorry, I couldn't process that request right now.", 'bot');
             }
 
         } catch (error) {
