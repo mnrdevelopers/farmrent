@@ -1772,9 +1772,10 @@ function updateNavbarForLoggedInUser(userData) {
     }
     
     // NEW: Cart Icon (Always visible if logged in, part of the mobile/desktop auth cluster)
+    // ADDED: me-2 class for spacing, text-white for contrast
     let cartHtml = `
-        <li class="nav-item">
-            <a class="nav-link position-relative" href="cart.html" title="View Cart">
+        <li class="nav-item me-2"> 
+            <a class="nav-link position-relative text-white" href="cart.html" title="View Cart">
                 <i class="fas fa-shopping-cart fa-lg"></i>
                 <span class="badge bg-danger position-absolute top-0 start-100 translate-middle rounded-pill" id="cart-count">0</span>
             </a>
@@ -1784,9 +1785,10 @@ function updateNavbarForLoggedInUser(userData) {
     // NEW: Customer Notification icon/dropdown container
     let notificationsHtml = '';
     if (userData.role === 'customer') {
+        // ADDED: me-2 class for spacing, text-white for contrast
         notificationsHtml = `
-            <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle position-relative" href="#" id="notificationDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Notifications">
+            <li class="nav-item dropdown me-2">
+                <a class="nav-link dropdown-toggle position-relative text-white" href="#" id="notificationDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Notifications">
                     <i class="fas fa-bell fa-lg"></i>
                     <span class="badge bg-danger position-absolute top-0 start-100 translate-middle rounded-pill" id="customer-notification-count">0</span>
                 </a>
@@ -1809,7 +1811,7 @@ function updateNavbarForLoggedInUser(userData) {
     let dropdownHtml = `
         ${notificationsHtml}
         <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" title="Profile">
+            <a class="nav-link dropdown-toggle text-white" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" title="Profile">
                 <i class="fas fa-user-circle me-1 fa-lg"></i> <span class="d-none d-md-inline">${userData.name || 'User'}</span>
             </a>
             <ul class="dropdown-menu dropdown-menu-end">
@@ -1999,9 +2001,10 @@ function updateNavbarForLoggedOutUser() {
     }
     
     // NEW: Cart Icon (Always visible for logged out user too)
+    // ADDED: me-2 class for spacing, text-white for contrast
     let cartHtml = `
-        <li class="nav-item">
-            <a class="nav-link position-relative" href="cart.html" title="View Cart">
+        <li class="nav-item me-2">
+            <a class="nav-link position-relative text-white" href="cart.html" title="View Cart">
                 <i class="fas fa-shopping-cart fa-lg"></i>
                 <span class="badge bg-danger position-absolute top-0 start-100 translate-middle rounded-pill" id="cart-count">0</span>
             </a>
@@ -2009,9 +2012,10 @@ function updateNavbarForLoggedOutUser() {
     `;
 
     // Dropdown for Sign Up/Login
+    // ADDED: text-white for contrast
     let authHtml = `
         <li class="nav-item dropdown" id="role-dropdown">
-            <a class="nav-link dropdown-toggle" href="#" id="roleDropdown" role="button" data-bs-toggle="dropdown" title="Sign Up/Login">
+            <a class="nav-link dropdown-toggle text-white" href="#" id="roleDropdown" role="button" data-bs-toggle="dropdown" title="Sign Up/Login">
                 <i class="fas fa-sign-in-alt me-1 fa-lg"></i> <span class="d-none d-md-inline">Login</span>
             </a>
             <ul class="dropdown-menu dropdown-menu-end">
