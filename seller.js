@@ -137,10 +137,6 @@ window.loadSellerDashboard = async () => {
     // Ensure dashboard is shown by default
     showSection('dashboard');
     
-    // NEW: Check for immediate new order popup (MUST RUN AFTER loadDismissedAlerts and loadDashboardData)
-    // We run it here because loadDashboardData ensures sellerNotifications is populated
-    checkNewOrderPopup(); 
-
     // NEW: Load library images once
     loadLibraryImages();
 }
@@ -322,30 +318,6 @@ async function loadDashboardData() {
     } catch (error) {
         console.error('Error loading dashboard data:', error);
         window.firebaseHelpers.showAlert('Error loading dashboard data', 'danger');
-    }
-}
-
-// NEW: Check for new pending orders and show a pop-up if found
-async function checkNewOrderPopup() {
-    const pendingOrders = sellerNotifications.filter(n => 
-        n.type === 'order_request' && !dismissedAlerts.has(n.relatedId)
-    );
-    
-    if (pendingOrders.length > 0) {
-        const modalElement = document.getElementById('newOrderNotificationModal');
-        if (!modalElement) return;
-
-        const countDisplay = document.getElementById('new-order-count-display');
-        if(countDisplay) countDisplay.textContent = pendingOrders.length;
-
-        const orderIdDisplay = document.getElementById('new-order-id-display');
-        if(orderIdDisplay) orderIdDisplay.textContent = `#${pendingOrders[0].relatedId.substring(0, 8)}${pendingOrders.length > 1 ? ' + others' : ''}`;
-        
-        const newOrderIdInput = document.getElementById('new-order-id');
-        if(newOrderIdInput) newOrderIdInput.value = pendingOrders[0].relatedId;
-        
-        const modal = new bootstrap.Modal(modalElement);
-        modal.show();
     }
 }
 
@@ -696,8 +668,11 @@ function createOrderRow(order) {
                     <i class="fas fa-eye"></i>
                 </button>
                 ${order.status === 'pending' ? `
-                    <button class="btn btn-sm btn-success ms-1" onclick="updateOrderStatus('${order.id}', 'active')">
+                    <button class="btn btn-sm btn-success ms-1" title="Approve" onclick="updateOrderStatus('${order.id}', 'active')">
                         <i class="fas fa-check"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger ms-1" title="Reject" onclick="updateOrderStatus('${order.id}', 'cancelled')">
+                        <i class="fas fa-times"></i>
                     </button>
                 ` : ''}
             </td>
@@ -2153,12 +2128,6 @@ async function loadProfileData() {
     const profileStateEl = document.getElementById('profile-state');
     if (profileStateEl) profileStateEl.value = sellerData.state || '';
     
-    // Update profile picture if exists
-    const profilePictureEl = document.getElementById('profile-picture');
-    if (profilePictureEl && sellerData.profilePicture) {
-        profilePictureEl.src = sellerData.profilePicture;
-    }
-    
     // Update join date
     const joinDateEl = document.getElementById('join-date');
     if (joinDateEl && sellerData.createdAt) {
@@ -2372,52 +2341,6 @@ document.getElementById('image-upload')?.addEventListener('change', function(e) 
     if (this.files.length > 0 && librarySelection) {
         librarySelection.value = '';
         document.querySelectorAll('.image-option').forEach(el => el.classList.remove('selected'));
-    }
-});
-
-// Handle profile picture upload
-document.getElementById('profile-picture-upload')?.addEventListener('change', async function(e) {
-    if (this.files[0]) {
-        if (!window.currentUser) {
-             window.firebaseHelpers.showAlert('Please log in again to upload a profile picture.', 'danger');
-             return;
-        }
-        
-        try {
-            const file = this.files[0];
-            
-            // Show loading placeholder
-            const profilePic = document.getElementById('profile-picture');
-            if (profilePic) profilePic.src = 'https://via.placeholder.com/100?text=Uploading...';
-            
-            // Use the new ImgBB helper
-            const downloadURL = await window.firebaseHelpers.uploadFile(
-                `profile_pictures/${window.currentUser.uid}`, 
-                file
-            );
-            
-            // Update profile picture in Firestore
-            await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update({
-                profilePicture: downloadURL,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            
-            // Update local data and UI
-            sellerData.profilePicture = downloadURL;
-            if (profilePic) profilePic.src = downloadURL;
-            
-            window.firebaseHelpers.showAlert('Profile picture updated successfully', 'success');
-            
-        } catch (error) {
-            console.error('Error uploading profile picture:', error);
-            window.firebaseHelpers.showAlert('Error uploading profile picture. ' + error.message, 'danger');
-            
-            // Restore original picture or default placeholder on failure
-            const currentSellerData = await window.FirebaseDB.collection('users').doc(window.currentUser.uid).get();
-            const restoredSrc = currentSellerData.data()?.profilePicture || 'https://via.placeholder.com/100';
-            const profilePic = document.getElementById('profile-picture');
-            if (profilePic) profilePic.src = restoredSrc;
-        }
     }
 });
 
