@@ -4,8 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Loading Equipment Details...</title>
+    <!-- Chat CSS -->
+    <link rel="stylesheet" href="chat.css">
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-remote-config-compat.js"></script>
 </head>
 <body>
+    <script src="firebase-config.js"></script>
+    <!-- Chat Assistant Logic -->
+    <script src="chat-assistant.js"></script>
+    
     <script>
         // Extract the item ID from the URL query parameters
         const urlParams = new URLSearchParams(window.location.search);
