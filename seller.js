@@ -9,7 +9,7 @@ let sellerNotifications = [];
 // Chat Globals
 let sellerActiveChatId = null;
 let sellerChatUnsubscribe = null;
-let typingTimeout = null;
+let sellertypingTimeout = null;
 
 
 // Seller Alerts
