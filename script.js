@@ -15,6 +15,8 @@ let activeChatId = null;
 let chatUnsubscribe = null;
 let typingTimeout = null;
 
+// NEW: Seller Status Tracker
+let sellerOnlineStatus = true; // Default to true, updated by listener in loadChatMessages
 
 // --- NEW HELPER: Get Notification Status Ref ---
 function getCustomerNotificationRef(userId) {
@@ -447,7 +449,7 @@ async function getCurrentLocationPincode() {
  * Checks for existing pincode and prompts user if not found (on homepage only).
  */
 async function checkAndPromptForPincode() {
-    // This relies on initializeAuthInternal having been awaited before this call in DOMContentLoaded
+    // This relies on initializeAuth() having been awaited before this call in DOMContentLoaded
     const finalPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
     window.customerPincode = finalPincode;
     
@@ -2344,7 +2346,7 @@ function loadHowItWorks() {
     if (processSteps.length >= 3) {
         const thirdStepIcon = processSteps[2].querySelector('.step-icon');
         if (thirdStepIcon) {
-            thirdStepIcon.style.background = 'linear-gradient(135deg, #1e4a1e, var(--farm-green))';
+            thirdStepIcon.style.background = 'linear-gradient(135deg, #1e4a1e, var(--farm-green));';
         }
     }
 }
@@ -3671,7 +3673,7 @@ async function submitReview() {
         
         // Close modal
         const modal = bootstrap.Modal.getInstance(document.getElementById('reviewModal'));
-        modal.hide();
+        if (modal) modal.hide();
         
         // Reload orders to update button state
         loadOrdersPage();
@@ -3727,10 +3729,10 @@ function renderChatWidget() {
                 <div class="chat-header-info">
                     <h6 class="chat-header-title" id="chat-header-title">My Chats</h6>
                     <div id="chat-header-status" class="chat-header-status" style="display:none;">
-                        <span class="status-dot"></span> <span id="status-text">Offline</span>
+                        <span class="status-dot" id="chat-status-dot"></span> <span id="status-text">Offline</span>
                     </div>
                 </div>
-                <button class="btn btn-sm btn-link text-white p-0" onclick="toggleChatWindow()">
+                <button class="btn btn-sm text-white p-0" onclick="toggleChatWindow()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -3847,6 +3849,52 @@ async function loadUserConversations() {
     }
 }
 
+// Helper to render message with status icon
+function renderChatMessage(msg, isMe) {
+    const date = msg.timestamp ? msg.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+    
+    let statusIconHtml = '';
+    if (isMe) {
+        let iconClass = '';
+        let iconColor = 'status-sent';
+        let iconMarkup = '<i class="fas fa-check"></i>'; // Single tick default
+
+        switch (msg.status) {
+            case '3': // Read (Blue Double Tick)
+                iconMarkup = '<i class="fas fa-check-double"></i>';
+                iconColor = 'status-read'; 
+                break;
+            case '2': // Delivered (Grey Double Tick)
+                iconMarkup = '<i class="fas fa-check-double"></i>';
+                iconColor = 'status-delivered';
+                break;
+            case '1': // Sent (Grey Single Tick)
+            default:
+                iconMarkup = '<i class="fas fa-check"></i>';
+                iconColor = 'status-sent';
+                break;
+        }
+        
+        statusIconHtml = `
+            <span class="message-status-icon ${iconColor}">
+                ${iconMarkup}
+            </span>
+        `;
+    }
+
+    return `
+        <div style="display: flex; justify-content: ${isMe ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
+            <div class="message-bubble ${isMe ? 'message-sent' : 'message-received'}">
+                ${msg.text}
+                <span class="message-time">
+                    ${date}
+                    ${statusIconHtml}
+                </span>
+            </div>
+        </div>
+    `;
+}
+
 // 4. Load Messages for a Chat ID (Updated with status indicators)
 async function loadChatMessages(chatId, titleName, sellerId) {
     activeChatId = chatId;
@@ -3857,7 +3905,7 @@ async function loadChatMessages(chatId, titleName, sellerId) {
     const title = document.getElementById('chat-header-title');
     const statusDiv = document.getElementById('chat-header-status');
     const statusText = document.getElementById('status-text');
-    const statusDot = statusDiv.querySelector('.status-dot');
+    const statusDot = document.getElementById('chat-status-dot');
 
     // Setup Header
     title.innerHTML = `<button class="btn btn-sm text-white p-0 me-2" onclick="loadUserConversations()"><i class="fas fa-arrow-left"></i></button> ${titleName}`;
@@ -3872,20 +3920,27 @@ async function loadChatMessages(chatId, titleName, sellerId) {
         window.FirebaseDB.collection('users').doc(sellerId).onSnapshot(doc => {
             const seller = doc.data();
             const isOnline = seller && seller.isOnline;
+            window.sellerOnlineStatus = isOnline; // Update global status
+            
             if (statusText) statusText.textContent = isOnline ? 'Online' : 'Offline';
             if (statusDot) statusDot.className = `status-dot ${isOnline ? 'online' : 'offline'}`;
             
             // Show Custom Status Message if Offline
             const customMsgId = 'custom-status-msg';
-            const existingMsg = document.getElementById(customMsgId);
+            let existingMsg = document.getElementById(customMsgId);
             
-            if (!isOnline && !existingMsg && body) {
-                const msg = document.createElement('div');
-                msg.id = customMsgId;
-                msg.className = 'system-message';
-                msg.textContent = `Seller is currently offline. You can leave a message.`;
-                body.appendChild(msg);
+            if (!isOnline) {
+                // If offline and message not present, add it
+                if (!existingMsg) {
+                    existingMsg = document.createElement('div');
+                    existingMsg.id = customMsgId;
+                    existingMsg.className = 'system-message';
+                    existingMsg.textContent = `Seller is currently offline. You can leave a message.`;
+                    body.appendChild(existingMsg);
+                    body.scrollTop = body.scrollHeight;
+                }
             } else if (isOnline && existingMsg) {
+                // If online and message is present, remove it
                 existingMsg.remove();
             }
         });
@@ -3913,21 +3968,13 @@ async function loadChatMessages(chatId, titleName, sellerId) {
             snapshot.forEach(doc => {
                 const msg = doc.data();
                 const isMe = msg.senderId === window.currentUser.uid;
-                const date = msg.timestamp ? msg.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
                 
-                body.innerHTML += `
-                    <div style="display: flex; justify-content: ${isMe ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
-                        <div class="message-bubble ${isMe ? 'message-sent' : 'message-received'}">
-                            ${msg.text}
-                            <span class="message-time">${date}</span>
-                        </div>
-                    </div>
-                `;
+                body.innerHTML += renderChatMessage(msg, isMe);
             });
             body.scrollTop = body.scrollHeight;
         }
         
-        // Mark read
+        // Mark read: Customer reads all *seller's* messages by loading the chat
         chatDocRef.update({ unreadCountCustomer: 0 });
     });
 
@@ -4006,7 +4053,7 @@ function sendQuickReply(text) {
     }
 }
 
-// 7. Send Message (Updated)
+// 7. Send Message (Updated with message status)
 async function sendChatMessage() {
     const input = document.getElementById('chat-message-input');
     if (!input) return;
@@ -4023,10 +4070,17 @@ async function sendChatMessage() {
         clearTimeout(typingTimeout);
         await chatRef.set({ typing: { customer: false } }, { merge: true });
 
-        await chatRef.collection('messages').add({
+        // Step 1: Add message with status '1' (Sent)
+        const newMessageRef = await chatRef.collection('messages').add({
             senderId: window.currentUser.uid,
             text: text,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            status: '1', // 1: Sent (Single Tick)
+        });
+
+        // Step 2: Update message status to '2' (Delivered) after successful write
+        await newMessageRef.update({
+            status: '2', // 2: Delivered (Double Grey Tick)
         });
         
         await chatRef.update({
@@ -4034,6 +4088,7 @@ async function sendChatMessage() {
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             unreadCountSeller: firebase.firestore.FieldValue.increment(1)
         });
+        
     } catch (error) {
         console.error("Error sending message:", error);
     }
@@ -4063,6 +4118,7 @@ async function updateCartCount() {
         cartCountElement.textContent = cart.length;
     }
 }
+
 // Load Razorpay SDK dynamically if not already present
 if (typeof Razorpay === 'undefined') {
     const script = document.createElement('script');
