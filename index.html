@@ -3,63 +3,279 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FarmRent - Farmer Equipment Rental</title>
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <!-- Custom CSS -->
+    <title>FarmRent - Rent Farming Equipment Online</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Load Bootstrap 5 for modals and responsive components -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Load three.js for 3D simulation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Custom Styles -->
     <link rel="stylesheet" href="styles.css">
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-firestore-compat.js"></script>
-    <!-- ADDED: Firebase Remote Config SDK for fetching ImgBB key -->
-    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-remote-config-compat.js"></script>
-    <!-- REMOVED: <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-storage-compat.js"></script> -->
+    <style>
+        /* Custom Variables */
+        :root {
+            --farm-green: #4CAF50;
+            --farm-dark-green: #2B5C2B;
+        }
+
+        /* General styles */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f8f8;
+        }
+
+        .navbar {
+            background-color: var(--farm-dark-green);
+        }
+
+        .hero-section {
+            background: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('images/herobg.webp') center center no-repeat;
+            background-size: cover;
+            color: white;
+            padding: 100px 0;
+            min-height: 50vh;
+            display: flex;
+            align-items: center;
+        }
+
+        .hero-title {
+            font-size: 3rem;
+            font-weight: 700;
+        }
+
+        .category-card {
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            background-color: white;
+            padding-top: 40px;
+            padding-bottom: 40px;
+        }
+
+        .category-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .category-icon {
+            font-size: 3rem;
+            color: var(--farm-green);
+            margin-bottom: 1rem;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--farm-dark-green);
+        }
+
+        .stat-label {
+            font-size: 1rem;
+            color: #666;
+            text-transform: uppercase;
+        }
+        
+        .process-step {
+            text-align: center;
+            padding: 20px;
+            border-radius: 10px;
+            position: relative;
+        }
+        
+        .process-step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            top: 40px;
+            right: -25%; /* Halfway point between columns in desktop */
+            width: 50%;
+            height: 2px;
+            background-color: #ddd;
+            z-index: 0;
+        }
+        
+        @media (max-width: 767px) {
+            .process-step:not(:last-child)::after {
+                content: none;
+            }
+        }
+
+        .step-icon {
+            font-size: 2rem;
+            width: 80px;
+            height: 80px;
+            line-height: 80px;
+            border-radius: 50%;
+            background-color: var(--farm-green);
+            color: white;
+            margin: 0 auto 15px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .testimonial-card {
+            background-color: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+        }
+
+        .testimonial-text {
+            font-style: italic;
+            color: #555;
+            margin-bottom: 15px;
+        }
+
+        .client-info {
+            display: flex;
+            align-items: center;
+        }
+
+        .client-avatar {
+            width: 50px;
+            height: 50px;
+            line-height: 50px;
+            border-radius: 50%;
+            background-color: var(--farm-dark-green);
+            color: white;
+            text-align: center;
+            font-weight: bold;
+            margin-right: 15px;
+        }
+
+        .equipment-card {
+            border-radius: 12px;
+            overflow: hidden;
+            transition: box-shadow 0.3s;
+        }
+
+        .equipment-card:hover {
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+        }
+
+        .category-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: var(--farm-dark-green);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        
+        .price-tag {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #d9534f;
+        }
+
+        .sale-badge {
+            background-color: #f0ad4e;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        
+        /* 3D Showcase Specific Styles */
+        #tractor-3d-showcase {
+            width: 100%;
+            height: 500px;
+            background: linear-gradient(to top, #c7d8c7, #e0eee0); /* Light green field/sky background */
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Responsive adjustments for 3D showcase */
+        @media (max-width: 767px) {
+             #tractor-3d-showcase {
+                height: 350px;
+            }
+        }
+    </style>
 </head>
 <body>
-    <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+
+    <!-- Pincode Modal -->
+    <div class="modal fade" id="pincodeModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" data-i18n="Set Your Location">Set Your Location</h5>
+                    <button type="button" class="btn-close btn-close-white" onclick="skipPincode()"></button>
+                </div>
+                <form id="pincode-form">
+                    <div class="modal-body">
+                        <p data-i18n="Enter your 6-digit Pincode to view equipment available in your area.">Enter your 6-digit Pincode to view equipment available in your area.</p>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" id="pincode-input" pattern="\d{6}" maxlength="6" required placeholder="Pincode (e.g., 500001)" data-i18n-placeholder="Pincode (e.g., 500001)">
+                            <button class="btn btn-outline-secondary" type="button" id="location-access-btn" onclick="getCurrentLocationPincode()" data-i18n="Use Current Location">
+                                <i class="fas fa-location-arrow me-2"></i> Use Current Location
+                            </button>
+                        </div>
+                        <small id="location-status" class="text-muted"></small>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="skipPincode()" data-i18n="Skip for now">Skip for now</button>
+                        <button type="submit" class="btn btn-primary" data-i18n="Apply Filter">Apply Filter</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark shadow-md sticky-top">
         <div class="container">
-            <a class="navbar-brand" href="index.html">
-                <i class="fas fa-tractor me-2"></i>FarmRent
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <a class="navbar-brand font-bold text-xl" href="index.html" data-i18n="FarmRent">FarmRent</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="index.html">Home</a>
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item" id="nav-home">
+                        <a class="nav-link active" href="index.html" data-i18n="Home">Home</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="browse.html">Browse Equipment</a>
+                    <li class="nav-item" id="nav-browse">
+                        <a class="nav-link" href="browse.html" data-i18n="Browse Equipment">Browse Equipment</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="about.html">About Us</a>
+                    <li class="nav-item" id="nav-about">
+                        <a class="nav-link" href="about.html" data-i18n="About Us">About Us</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="contact.html">Contact</a>
+                    <li class="nav-item" id="nav-contact">
+                        <a class="nav-link" href="contact.html" data-i18n="Contact">Contact</a>
                     </li>
                 </ul>
-                <ul class="navbar-nav align-items-center" id="navbar-auth-container">
-                    <!-- NEW: Pincode Display in Navbar -->
-                    <li class="nav-item d-none d-lg-block">
-                        <span class="nav-link pincode-indicator" id="navbar-pincode-display" onclick="showPincodeModal()" style="cursor: pointer;">
-                            <i class="fas fa-map-marker-alt me-1"></i> <strong id="current-pincode-value-nav">All Locations</strong>
-                        </span>
-                    </li>
-                    <!-- END NEW -->
+                <ul class="navbar-nav" id="navbar-auth">
+                    <!-- Dynamic auth status and language toggle inserted by script.js -->
+                </ul>
+                <ul class="navbar-nav">
                     <li class="nav-item">
-                        <a class="nav-link" href="cart.html">
-                            <i class="fas fa-shopping-cart"></i> Cart
-                            <span class="badge bg-warning text-dark" id="cart-count">0</span>
+                        <a class="nav-link text-white" href="cart.html">
+                            <i class="fas fa-shopping-cart"></i>
+                            <span class="badge bg-danger rounded-pill" id="cart-count">0</span>
                         </a>
                     </li>
-                    <ul class="navbar-nav" id="navbar-auth">
-                    <!-- Auth links loaded by script.js -->
-                    </ul>
+                    <li class="nav-item">
+                        <span class="nav-link text-white">
+                             <i class="fas fa-map-marker-alt"></i> Pincode: <strong id="current-pincode-value-nav">All Locations</strong>
+                        </span>
+                    </li>
                 </ul>
             </div>
         </div>
@@ -68,296 +284,343 @@
     <!-- Hero Section -->
     <section class="hero-section">
         <div class="container">
-            <div class="row align-items-center">
-                <div class="col-lg-6">
-                    <h1 class="display-4 fw-bold mb-4">Modern Farming Made Easy</h1>
-                    <p class="lead mb-4">India's leading farming equipment rental service. Get modern tools for your farm with easy self-pickup options.</p>
+            <div class="row">
+                <div class="col-md-7">
+                    <h1 class="hero-title" data-i18n="Rent Farming Equipment. Grow Prosperity.">Rent Farming Equipment. Grow Prosperity.</h1>
+                    <p class="lead mt-3" data-i18n="Find the perfect tractor, harvester, or implement near you.">Find the perfect tractor, harvester, or implement near you.</p>
                     
-                    <!-- UPDATED: Pincode display in the hero section -->
-                    <div id="homepage-pincode-display" class="mb-4">
-                        <p class="text-white mb-1"><i class="fas fa-map-marker-alt me-1 text-warning"></i> Showing equipment available for: <strong id="current-pincode-value">All Locations</strong></p>
-                        <button class="btn btn-sm btn-outline-light" onclick="showPincodeModal()">Change Location Filter</button>
-                    </div>
-                    <!-- END UPDATED -->
-
-                    <div class="d-flex flex-wrap gap-3">
-                        <a href="browse.html" class="btn btn-warning btn-lg">Browse Equipment</a>
-                        <a href="#how-it-works" class="btn btn-outline-light btn-lg">How It Works</a>
-                    </div>
-                </div>
-                <div class="col-lg-6 text-center">
-                    <div class="seasonal-offer">
-                        <h4><i class="fas fa-seedling me-2"></i>Monsoon Special</h4>
-                        <p class="mb-0">Get 20% off on tractor and cultivator rentals this season!</p>
+                    <div id="homepage-pincode-display" class="mt-4 bg-white p-3 rounded shadow-lg text-dark">
+                        <p class="mb-2">
+                            <i class="fas fa-map-marker-alt text-primary me-2"></i> 
+                            <span data-i18n="Viewing Listings for">Viewing Listings for:</span> <strong>All Locations</strong>
+                        </p>
+                        <button class="btn btn-sm btn-outline-primary" onclick="showPincodeModal()" data-i18n="Set Location Filter">Set Location Filter</button>
+                        <a href="browse.html" class="btn btn-sm btn-success ms-2" data-i18n="Start Browsing">Start Browsing</a>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Categories Section -->
-    <section class="py-5 bg-clean">
+    <!-- 3D Tractor Showcase Section (Replaces Monsoon Offer) -->
+    <section class="py-12 bg-white">
         <div class="container">
-            <h2 class="section-title">Farming Equipment Categories</h2>
+            <h2 class="text-3xl font-bold text-center mb-8" data-i18n="3D Equipment Showcase">3D Equipment Showcase</h2>
+            <p class="text-center text-muted mb-6" data-i18n="Explore a stylized 3D model of a modern farm tractor below.">Explore a stylized 3D model of a modern farm tractor below.</p>
+            
+            <div id="tractor-3d-showcase">
+                <!-- three.js canvas will be injected here -->
+            </div>
+            
+            <!-- Instructions -->
+            <div class="text-center mt-4 text-sm text-muted" data-i18n="Click and drag to rotate the model.">
+                Click and drag to rotate the model.
+            </div>
+        </div>
+    </section>
+    
+    <!-- JavaScript for 3D Tractor Animation -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('tractor-3d-showcase');
+            if (!container || typeof THREE === 'undefined') {
+                console.warn("3D container or THREE.js not found. Skipping 3D render.");
+                return;
+            }
+
+            let scene, camera, renderer;
+            let tractorGroup;
+            let mouseX = 0, mouseY = 0;
+            let targetRotationX = 0, targetRotationY = 0;
+            const rotationSpeed = 0.02;
+
+            function init3D() {
+                // Scene setup
+                scene = new THREE.Scene();
+                // Add ambient light to simulate natural, soft lighting
+                const ambientLight = new THREE.AmbientLight(0xcccccc, 0.4);
+                scene.add(ambientLight);
+
+                // Add directional light for shadows and definition
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(10, 10, 10).normalize();
+                scene.add(directionalLight);
+
+                // Camera setup
+                const aspectRatio = container.clientWidth / container.clientHeight;
+                camera = new THREE.PerspectiveCamera(50, aspectRatio, 0.1, 1000);
+                camera.position.set(0, 3, 10);
+                
+                // Renderer setup
+                renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                renderer.setSize(container.clientWidth, container.clientHeight);
+                renderer.setPixelRatio(window.devicePixelRatio);
+                container.appendChild(renderer.domElement);
+
+                // Create the Tractor Model (Stylized representation)
+                tractorGroup = new THREE.Group();
+                scene.add(tractorGroup);
+
+                // 1. Main Chassis (Farm Green)
+                const chassisGeometry = new THREE.BoxGeometry(4, 1.5, 2);
+                const chassisMaterial = new THREE.MeshPhongMaterial({ color: 0x4CAF50 });
+                const chassis = new THREE.Mesh(chassisGeometry, chassisMaterial);
+                chassis.position.set(0, 1.5, 0);
+                tractorGroup.add(chassis);
+
+                // 2. Cabin (Yellow/Black)
+                const cabinGeometry = new THREE.BoxGeometry(1.5, 2, 1.8);
+                const cabinMaterial = new THREE.MeshPhongMaterial({ color: 0xffa500 });
+                const cabin = new THREE.Mesh(cabinGeometry, cabinMaterial);
+                cabin.position.set(1.25, 3.5, 0);
+                tractorGroup.add(cabin);
+
+                // 3. Engine Hood (Red Accent)
+                const hoodGeometry = new THREE.BoxGeometry(1.5, 1, 1.5);
+                const hoodMaterial = new THREE.MeshPhongMaterial({ color: 0xd9534f });
+                const hood = new THREE.Mesh(hoodGeometry, hoodMaterial);
+                hood.position.set(-2, 1.75, 0);
+                tractorGroup.add(hood);
+
+                // 4. Wheels (Black/Grey)
+                const wheelMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+                const rearWheelGeometry = new THREE.CylinderGeometry(1.5, 1.5, 0.5, 12);
+                const frontWheelGeometry = new THREE.CylinderGeometry(0.7, 0.7, 0.4, 12);
+
+                const createWheel = (geometry, x, y, z) => {
+                    const wheel = new THREE.Mesh(geometry, wheelMaterial);
+                    wheel.position.set(x, y, z);
+                    wheel.rotation.z = Math.PI / 2; // Rotate wheel to face forward
+                    tractorGroup.add(wheel);
+                };
+
+                // Rear Wheels
+                createWheel(rearWheelGeometry, 1.5, 1.5, 1.25);
+                createWheel(rearWheelGeometry, 1.5, 1.5, -1.25);
+
+                // Front Wheels
+                createWheel(frontWheelGeometry, -2.5, 1, 1.1);
+                createWheel(frontWheelGeometry, -2.5, 1, -1.1);
+
+                // Add a simple ground plane (optional, but helps context)
+                const planeGeometry = new THREE.PlaneGeometry(30, 30);
+                const planeMaterial = new THREE.MeshPhongMaterial({ color: 0x8aa86c, side: THREE.DoubleSide });
+                const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+                plane.rotation.x = -Math.PI / 2; // Rotate to lie flat
+                plane.position.y = 0;
+                scene.add(plane);
+                
+                // Set initial rotation for a better view
+                tractorGroup.rotation.y = Math.PI * 0.2;
+                tractorGroup.rotation.x = Math.PI * 0.05;
+
+
+                // Event Listeners for Interaction
+                let isDragging = false;
+                let previousMousePosition = { x: 0, y: 0 };
+                
+                container.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    previousMousePosition = { x: e.clientX, y: e.clientY };
+                });
+
+                container.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+                    
+                    const deltaX = e.clientX - previousMousePosition.x;
+                    const deltaY = e.clientY - previousMousePosition.y;
+
+                    // Update target rotations based on mouse movement (scaling down for sensitivity)
+                    targetRotationY += deltaX * 0.005;
+                    targetRotationX += deltaY * 0.005;
+                    
+                    // Limit vertical rotation to prevent flipping
+                    targetRotationX = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, targetRotationX));
+
+                    previousMousePosition = { x: e.clientX, y: e.clientY };
+                });
+                
+                container.addEventListener('mouseup', () => {
+                    isDragging = false;
+                });
+                
+                // Handle touch events for mobile
+                container.addEventListener('touchstart', (e) => {
+                    if (e.touches.length === 1) {
+                        e.preventDefault(); // Prevent scrolling
+                        isDragging = true;
+                        previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                    }
+                }, { passive: false });
+
+                container.addEventListener('touchmove', (e) => {
+                    if (!isDragging || e.touches.length !== 1) return;
+                    e.preventDefault(); 
+
+                    const touch = e.touches[0];
+                    const deltaX = touch.clientX - previousMousePosition.x;
+                    const deltaY = touch.clientY - previousMousePosition.y;
+
+                    targetRotationY += deltaX * 0.005;
+                    targetRotationX += deltaY * 0.005;
+
+                    targetRotationX = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, targetRotationX));
+
+                    previousMousePosition = { x: touch.clientX, y: touch.clientY };
+                }, { passive: false });
+
+                container.addEventListener('touchend', () => {
+                    isDragging = false;
+                });
+
+
+                window.addEventListener('resize', onWindowResize, false);
+            }
+
+            function onWindowResize() {
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+                
+                camera.aspect = width / height;
+                camera.updateProjectionMatrix();
+                renderer.setSize(width, height);
+            }
+
+            function animate() {
+                requestAnimationFrame(animate);
+
+                // Apply rotation interpolation for smooth movement
+                tractorGroup.rotation.y += (targetRotationY - tractorGroup.rotation.y) * 0.1;
+                tractorGroup.rotation.x += (targetRotationX - tractorGroup.rotation.x) * 0.1;
+
+                // Continuous, subtle self-rotation if not dragging
+                if (!isDragging) {
+                    targetRotationY += 0.001; 
+                }
+
+                renderer.render(scene, camera);
+            }
+
+            // Start the initialization and animation loop
+            try {
+                init3D();
+                animate();
+            } catch (e) {
+                console.error("Failed to initialize 3D scene:", e);
+                container.innerHTML = '<div class="text-center p-5 text-danger"><i class="fas fa-exclamation-triangle me-2"></i> 3D rendering failed on this device/browser.</div>';
+            }
+        });
+    </script>
+
+    <!-- Section 1: Categories -->
+    <section class="py-12">
+        <div class="container">
+            <h2 class="text-3xl font-bold text-center mb-10" data-i18n="Top Equipment Categories">Top Equipment Categories</h2>
             <div class="row" id="categories-container">
-                <!-- Categories will be loaded dynamically -->
+                <!-- Categories loaded by script.js -->
             </div>
         </div>
     </section>
 
-    <!-- Featured Equipment -->
-    <section class="py-5">
+    <!-- Section 2: How It Works -->
+    <section class="py-12 bg-light-green">
         <div class="container">
-            <h2 class="section-title">Popular Farming Equipment</h2>
+            <h2 class="text-3xl font-bold text-center mb-10" data-i18n="How FarmRent Works">How FarmRent Works</h2>
+            <div class="row position-relative" id="how-it-works-container">
+                <!-- Steps loaded by script.js -->
+            </div>
+        </div>
+    </section>
+    
+    <!-- Section 4: Featured Equipment -->
+    <section class="py-12">
+        <div class="container">
+            <h2 class="text-3xl font-bold text-center mb-10" data-i18n="Featured Rental Equipment">Featured Rental Equipment</h2>
             <div class="row" id="featured-equipment">
-                <!-- Equipment cards will be populated by JavaScript -->
+                <!-- Equipment cards loaded by script.js -->
             </div>
-            <div class="text-center mt-4">
-                <a href="browse.html" class="btn btn-primary btn-lg">View All Equipment</a>
-            </div>
-        </div>
-    </section>
-
-    <!-- Stats Section -->
-    <section class="stats-section">
-        <div class="container">
-            <div class="row text-center" id="stats-container">
-                <!-- Stats will be loaded dynamically -->
+            <div class="text-center mt-8">
+                <a href="browse.html" class="btn btn-lg btn-success" data-i18n="View All Equipment">View All Equipment</a>
             </div>
         </div>
     </section>
 
-    <!-- How It Works -->
-    <section class="py-5 bg-clean" id="how-it-works">
+    <!-- Section 5: Stats -->
+    <section class="py-12 bg-gray-100">
         <div class="container">
-            <h2 class="section-title text-center">How It Works (Self-Pickup)</h2>
-            <div class="row" id="how-it-works-container">
-                <!-- Process steps will be loaded dynamically by script.js's loadHowItWorks() function -->
+            <h2 class="text-3xl font-bold text-center mb-8" data-i18n="Our Impact and Reach">Our Impact and Reach</h2>
+            <div class="row" id="stats-container">
+                <!-- Stats loaded by script.js -->
             </div>
         </div>
     </section>
-
-    <!-- Testimonials -->
-    <section class="py-5">
+    
+    <!-- Section 6: Testimonials -->
+    <section class="py-12">
         <div class="container">
-            <h2 class="section-title text-center">What Farmers Say</h2>
+            <h2 class="text-3xl font-bold text-center mb-10" data-i18n="What Farmers Say">What Farmers Say</h2>
             <div class="row" id="testimonials-container">
-                <!-- Testimonials will be loaded dynamically -->
-            </div>
-        </div>
-    </section>
-
-    <!-- Newsletter -->
-    <section class="newsletter-section">
-        <div class="container text-center">
-            <h2 class="section-title center text-sun">Stay Updated</h2>
-            <p class="lead mb-4">Subscribe to get updates on new equipment, seasonal offers, and farming tips.</p>
-            <div class="newsletter-form">
-                <div class="input-group input-group-lg">
-                    <input type="email" class="form-control" placeholder="Your email address" id="newsletter-email">
-                    <button class="btn btn-warning" type="button" onclick="subscribeNewsletter()">Subscribe</button>
-                </div>
-                <small class="mt-2 d-block">We respect your privacy. Unsubscribe at any time.</small>
+                <!-- Testimonials loaded by script.js -->
             </div>
         </div>
     </section>
 
     <!-- Footer -->
-    <footer class="footer">
+    <footer class="bg-dark text-white pt-5 pb-4">
         <div class="container">
             <div class="row">
-                <div class="col-lg-4 mb-4">
-                    <h5><i class="fas fa-tractor me-2 text-sun"></i>FarmRent</h5>
-                    <p>India's trusted farming equipment rental service. Modern equipment for modern farmers.</p>
-                    <div class="mt-3">
-                        <a href="#" class="text-decoration-none me-3 text-sun"><i class="fab fa-facebook-f"></i></a>
-                        <a href="#" class="text-decoration-none me-3 text-sun"><i class="fab fa-twitter"></i></a>
-                        <a href="#" class="text-decoration-none me-3 text-sun"><i class="fab fa-instagram"></i></a>
-                        <a href="#" class="text-decoration-none me-3 text-sun"><i class="fab fa-youtube"></i></a>
+                <!-- Column 1: Company Info -->
+                <div class="col-md-4 mb-4">
+                    <h5 class="font-bold mb-3" data-i18n="FarmRent">FarmRent</h5>
+                    <p data-i18n="The leading platform for renting agricultural machinery, connecting owners and farmers easily.">The leading platform for renting agricultural machinery, connecting owners and farmers easily.</p>
+                    <p><i class="fas fa-map-marker-alt me-2"></i> Hyderabad, India</p>
+                    <p><i class="fas fa-envelope me-2"></i> support@farmrent.in</p>
+                </div>
+
+                <!-- Column 2: Quick Links -->
+                <div class="col-md-2 mb-4">
+                    <h6 class="font-bold mb-3" data-i18n="Quick Links">Quick Links</h6>
+                    <ul class="list-unstyled">
+                        <li><a href="about.html" class="text-decoration-none text-light" data-i18n="About Us">About Us</a></li>
+                        <li><a href="contact.html" class="text-decoration-none text-light" data-i18n="Contact">Contact</a></li>
+                        <li><a href="browse.html" class="text-decoration-none text-light" data-i18n="Browse">Browse</a></li>
+                        <li><a href="#" class="text-decoration-none text-light" data-i18n="FAQ">FAQ</a></li>
+                    </ul>
+                </div>
+
+                <!-- Column 3: Popular Equipment -->
+                <div class="col-md-3 mb-4">
+                    <h6 class="font-bold mb-3" data-i18n="Popular Equipment">Popular Equipment</h6>
+                    <ul class="list-unstyled" id="popular-equipment-footer">
+                        <!-- Popular equipment loaded by script.js -->
+                    </ul>
+                </div>
+
+                <!-- Column 4: Newsletter -->
+                <div class="col-md-3 mb-4">
+                    <h6 class="font-bold mb-3" data-i18n="Subscribe to Newsletter">Subscribe to Newsletter</h6>
+                    <p class="small" data-i18n="Get the latest offers and updates delivered to your inbox.">Get the latest offers and updates delivered to your inbox.</p>
+                    <div class="input-group">
+                        <input type="email" class="form-control" id="newsletter-email" placeholder="Your Email" data-i18n-placeholder="Your Email">
+                        <button class="btn btn-success" type="button" onclick="subscribeNewsletter()" data-i18n="Subscribe">Subscribe</button>
                     </div>
                 </div>
-                <div class="col-lg-2 col-md-6 mb-4">
-                    <h5>Quick Links</h5>
-                    <ul class="list-unstyled">
-                        <li><a href="index.html" class="text-decoration-none text-light">Home</a></li>
-                        <li><a href="browse.html" class="text-decoration-none text-light">Browse Equipment</a></li>
-                        <li><a href="about.html" class="text-decoration-none text-light">About Us</a></li>
-                        <li><a href="contact.html" class="text-decoration-none text-light">Contact</a></li>
-                    </ul>
-                </div>
-                <div class="col-lg-3 col-md-6 mb-4">
-                    <h5>Contact Info</h5>
-                    <ul class="list-unstyled">
-                        <li><i class="fas fa-map-marker-alt me-2 text-sun"></i> Nizamabad, Telangana, India</li>
-                        <li><i class="fas fa-phone me-2 text-sun"></i> +91 98765 43210</li>
-                        <li><i class="fas fa-envelope me-2 text-sun"></i> info@farmrent.com</li>
-                        <li><i class="fas fa-clock me-2 text-sun"></i> Mon-Sun: 6:00 AM - 9:00 PM</li>
-                    </ul>
-                </div>
-                <div class="col-lg-3 mb-4">
-                    <h5>Popular Equipment</h5>
-                    <ul class="list-unstyled" id="popular-equipment-footer">
-                        <!-- Will be populated dynamically -->
-                    </ul>
-                </div>
             </div>
-            <hr class="bg-sun">
-            <div class="row">
-                <div class="col-md-6">
-                    <p>&copy; 2025 FarmRent. All rights reserved.</p>
+            <div class="row mt-4 border-top border-secondary pt-3">
+                <div class="col-md-6 text-center text-md-start">
+                    <p class="small mb-0">&copy; 2024 FarmRent. All rights reserved.</p>
                 </div>
-                <div class="col-md-6 text-md-end">
-                    <a href="#" class="text-decoration-none me-3 text-light">Terms of Service</a>
-                    <a href="#" class="text-decoration-none text-light">Privacy Policy</a>
+                <div class="col-md-6 text-center text-md-end">
+                    <a href="#" class="text-white me-3"><i class="fab fa-facebook-f"></i></a>
+                    <a href="#" class="text-white me-3"><i class="fab fa-twitter"></i></a>
+                    <a href="#" class="text-white me-3"><i class="fab fa-instagram"></i></a>
                 </div>
             </div>
         </div>
     </footer>
-
-    <!-- WhatsApp Button -->
-    <a href="https://wa.me/917416006394?text=Hi%2C%20I'm%20interested%20in%20renting%20farming%20equipment" class="whatsapp-btn" target="_blank">
-        <i class="fab fa-whatsapp"></i>
-    </a>
-
-    <!-- Pincode Prompt Modal (NEW) -->
-    <div class="modal fade pincode-modal" id="pincodeModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title">
-                        <i class="fas fa-map-marker-alt me-2"></i>
-                        Choose Your Location
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <form id="pincode-form">
-                    <div class="modal-body">
-                        <div class="mb-4">
-                            <p class="mb-2">Enter your pincode to see equipment available in your area</p>
-                            
-                            <!-- Current Location Button -->
-                            <div class="d-grid mb-3">
-                                <button type="button" class="btn btn-outline-primary" id="location-access-btn" 
-                                        onclick="getCurrentLocationPincode()">
-                                    <i class="fas fa-location-arrow me-2"></i>
-                                    Use Current Location
-                                </button>
-                                <small class="text-muted mt-1 text-center" id="location-status"></small>
-                            </div>
-                            
-                            <!-- Divider -->
-                            <div class="divider text-center mb-3">
-                                <span class="text-muted small">OR ENTER PINCODE</span>
-                            </div>
-                            
-                            <!-- Pincode Input -->
-                            <div class="input-group input-group-lg">
-                                <input type="text" 
-                                        class="form-control" 
-                                        id="pincode-input"
-                                        placeholder="Enter 6-digit pincode"
-                                        maxlength="6"
-                                        pattern="[0-9]{6}"
-                                        inputmode="numeric">
-                                <button class="btn btn-primary" type="submit">
-                                    <i class="fas fa-check"></i>
-                                </button>
-                            </div>
-                            
-                            <!-- Pincode Help -->
-                            <div class="mt-2">
-                                <small class="text-muted">
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    We'll show equipment from sellers in your area
-                                </small>
-                            </div>
-                        </div>
-                        
-                        <!-- Popular Cities (Optional) -->
-                        <div id="popular-cities">
-                            <h6 class="text-muted mb-2">Popular Locations (Demo):</h6>
-                            <div class="d-flex flex-wrap gap-2">
-                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="savePincode('500001')">
-                                    Hyderabad
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="savePincode('110001')">
-                                    Delhi
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="savePincode('400001')">
-                                    Mumbai
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="savePincode('600001')">
-                                    Chennai
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-secondary" onclick="skipPincode()">
-                            Skip for now
-                        </button>
-                        <button type="submit" class="btn btn-primary">
-                            Apply Location
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-    <!-- END Pincode Prompt Modal -->
-
-    <!-- Equipment Details Modal (needed for script.js) -->
-    <div class="modal fade" id="equipmentDetailsModal" tabindex="-1">
-        <div class="modal-dialog modal-xl modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="equipmentModalTitle">Equipment Details</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div id="modal-content-area">
-                        <!-- Content loaded dynamically by JS -->
-                    </div>
-                </div>
-                <div class="modal-footer d-block">
-                    <div class="row g-2 align-items-center">
-                        <div class="col-md-4">
-                            <label for="rental-duration-type" class="form-label mb-0 small">Rental Duration</label>
-                            <select class="form-select" id="rental-duration-type">
-                                <option value="acre">By Acre</option>
-                                <option value="hour">By Hour</option>
-                            </select>
-                        </div>
-                         <div class="col-md-4">
-                            <label for="rental-duration-value" class="form-label mb-0 small">Number of Acres/Hours</label>
-                            <input type="number" class="form-control" id="rental-duration-value" value="1" min="1">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label mb-0 small">Total Price</label>
-                            <div class="h5 mb-0 text-success" id="modal-total-price">₹0</div>
-                        </div>
-                    </div>
-                    
-                    <div class="d-flex gap-2 mt-3">
-                        <button type="button" class="btn btn-outline-primary flex-fill" id="add-to-cart-btn" onclick="addToCartModal()">
-                            <i class="fas fa-shopping-cart me-2"></i>Add to Cart
-                        </button>
-                        <button type="button" class="btn btn-warning flex-fill" id="rent-now-btn" onclick="rentNowModal()">
-                            <i class="fas fa-calendar-check me-2"></i>Rent Now
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- Firebase Configuration -->
-    <script src="firebase-config.js"></script>
-    
-    <!-- Custom JavaScript -->
-    <script src="script.js"></script>
+    <!-- Load custom Firebase and App script -->
+    <script type="module" src="firebase-config.js"></script>
+    <script type="module" src="script.js"></script>
 </body>
 </html>
