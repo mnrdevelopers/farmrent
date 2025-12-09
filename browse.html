@@ -25,20 +25,9 @@
             <a class="navbar-brand" href="index.html">
                 <i class="fas fa-tractor me-2"></i>FarmRent
             </a>
-            
-            <!-- NEW: Toggler and Icons Container -->
-            <div class="d-flex align-items-center order-lg-3 gap-2">
-                <!-- Auth and Icons links loaded by script.js and always visible (Mobile and Desktop) -->
-                <ul class="navbar-nav flex-row align-items-center" id="navbar-auth">
-                <!-- Icons/Auth links loaded by script.js -->
-                </ul>
-                
-                <!-- Hamburger Menu -->
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-            </div>
-            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
@@ -53,6 +42,24 @@
                     <li class="nav-item">
                         <a class="nav-link" href="contact.html">Contact</a>
                     </li>
+                </ul>
+                <ul class="navbar-nav align-items-center">
+                    <!-- NEW: Pincode Display in Navbar -->
+                    <li class="nav-item d-none d-lg-block">
+                        <span class="nav-link pincode-indicator" id="navbar-pincode-display" onclick="showPincodeModal()" style="cursor: pointer;">
+                            <i class="fas fa-map-marker-alt me-1"></i> <strong id="current-pincode-value-nav">All Locations</strong>
+                        </span>
+                    </li>
+                    <!-- END NEW -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="cart.html">
+                            <i class="fas fa-shopping-cart"></i> Cart
+                            <span class="badge bg-warning text-dark" id="cart-count">0</span>
+                        </a>
+                    </li>
+                    <ul class="navbar-nav" id="navbar-auth">
+                    <!-- Auth links loaded by script.js -->
+                    </ul>
                 </ul>
             </div>
         </div>
@@ -266,7 +273,7 @@
                             
                             <!-- Divider -->
                             <div class="divider text-center mb-3">
-                                <span>OR ENTER PINCODE</span>
+                                <span class="text-muted small">OR ENTER PINCODE</span>
                             </div>
                             
                             <!-- Pincode Input -->
