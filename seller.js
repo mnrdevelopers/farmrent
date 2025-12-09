@@ -8,6 +8,10 @@ let earningsChart = null;
 let detailedEarningsChart = null;
 let sellerNotifications = []; 
 
+// NEW: Chat Globals
+let sellerActiveChatId = null;
+let sellerChatUnsubscribe = null;
+
 // NEW: Collection to store seller's alerts (e.g., read/dismissal status for new orders)
 const SELLER_ALERTS_COLLECTION = 'seller_alerts';
 let dismissedAlerts = new Set(); // Stores IDs of alerts dismissed/read by the seller
@@ -260,6 +264,7 @@ function showSection(sectionId) {
             break;
         case 'notifications': // NEW: Load notifications
             loadNotifications();
+            loadSellerConversations(); // NEW: Load chats
             break;
         case 'reviews':
             loadReviews();
@@ -1919,57 +1924,197 @@ async function loadNotifications() {
                 <p class="text-muted">You have no pending rental requests or new reviews.</p>
             </div>
         `;
-        return;
-    }
-
-    notifications.forEach(notification => {
-        const timeAgo = notification.date ? window.firebaseHelpers.formatTimeAgo(notification.date) : 'N/A';
-        let typeIcon = 'fas fa-info-circle';
-        let badgeColor = 'bg-info';
-        let actionText = 'View Details';
-        let isOrder = false;
-
-        if (notification.type === 'order_request') {
-            typeIcon = 'fas fa-clipboard-list';
-            badgeColor = 'bg-warning';
-            actionText = 'Review Request';
-            isOrder = true;
-        } else if (notification.type === 'order_returned') {
-            typeIcon = 'fas fa-undo-alt';
-            badgeColor = 'bg-primary';
-            actionText = 'Mark Completed';
-            isOrder = true;
-        } else if (notification.type === 'new_review') {
-            typeIcon = 'fas fa-star';
-            badgeColor = 'bg-success';
-            actionText = 'View Review';
-        }
-        
-        // If it's an order request AND it's not read, it gets the unread style
-        const unreadClass = (isOrder && !notification.read) ? 'notification-unread' : '';
-
-        listContainer.innerHTML += `
-            <div class="list-group-item notification-item ${unreadClass} d-flex justify-content-between align-items-center p-3 mb-2 rounded shadow-sm"
-                 onclick="handleNotificationClick('${notification.id}')">
-                <div class="d-flex align-items-center">
-                    <i class="${typeIcon} fa-2x me-3" style="color: var(--sun-yellow);"></i>
+    } else {
+        notifications.forEach(notification => {
+            const timeAgo = notification.date ? window.firebaseHelpers.formatTimeAgo(notification.date) : 'N/A';
+            let typeIcon = 'fas fa-info-circle';
+            let badgeColor = 'bg-info';
+            let actionText = 'View Details';
+            let isOrder = false;
+    
+            if (notification.type === 'order_request') {
+                typeIcon = 'fas fa-clipboard-list';
+                badgeColor = 'bg-warning';
+                actionText = 'Review Request';
+                isOrder = true;
+            } else if (notification.type === 'order_returned') {
+                typeIcon = 'fas fa-undo-alt';
+                badgeColor = 'bg-primary';
+                actionText = 'Mark Completed';
+                isOrder = true;
+            } else if (notification.type === 'new_review') {
+                typeIcon = 'fas fa-star';
+                badgeColor = 'bg-success';
+                actionText = 'View Review';
+            }
+            
+            // If it's an order request AND it's not read, it gets the unread style
+            const unreadClass = (isOrder && !notification.read) ? 'notification-unread' : '';
+    
+            listContainer.innerHTML += `
+                <div class="list-group-item notification-item ${unreadClass} d-flex justify-content-between align-items-center p-3 mb-2 rounded shadow-sm"
+                     onclick="handleNotificationClick('${notification.id}')">
+                    <div class="d-flex align-items-center">
+                        <i class="${typeIcon} fa-2x me-3" style="color: var(--sun-yellow);"></i>
+                        <div>
+                            <h6 class="mb-1">${notification.message}</h6>
+                            <small class="text-muted">
+                                <span class="badge ${badgeColor}">${notification.type.replace('_', ' ')}</span>
+                                <span class="ms-2">Received: ${timeAgo}</span>
+                            </small>
+                        </div>
+                    </div>
                     <div>
-                        <h6 class="mb-1">${notification.message}</h6>
-                        <small class="text-muted">
-                            <span class="badge ${badgeColor}">${notification.type.replace('_', ' ')}</span>
-                            <span class="ms-2">Received: ${timeAgo}</span>
-                        </small>
+                        <button class="btn btn-sm btn-outline-primary">
+                            ${actionText} <i class="fas fa-arrow-right ms-1"></i>
+                        </button>
                     </div>
                 </div>
-                <div>
-                    <button class="btn btn-sm btn-outline-primary">
-                        ${actionText} <i class="fas fa-arrow-right ms-1"></i>
-                    </button>
-                </div>
-            </div>
-        `;
+            `;
+        });
+    }
+}
+
+// --- NEW: SELLER CHAT LOGIC ---
+
+// 1. Load Seller Conversations (List View)
+async function loadSellerConversations() {
+    const chatListContainer = document.getElementById('active-chats-list');
+    if (!chatListContainer) return;
+    
+    chatListContainer.innerHTML = '<div class="text-muted small">Loading...</div>';
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const conversationsRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations');
+    
+    // Listen for chats involving this seller
+    conversationsRef
+        .where('sellerId', '==', window.currentUser.uid)
+        .orderBy('updatedAt', 'desc')
+        .limit(10)
+        .onSnapshot(snapshot => {
+            chatListContainer.innerHTML = '';
+            
+            if (snapshot.empty) {
+                chatListContainer.innerHTML = '<div class="text-muted small p-2">No active conversations.</div>';
+                return;
+            }
+
+            snapshot.forEach(doc => {
+                const chat = doc.data();
+                const isActive = doc.id === sellerActiveChatId ? 'border-primary bg-light' : '';
+                const unread = chat.unreadCountSeller > 0 ? `<span class="badge bg-danger rounded-pill ms-1">${chat.unreadCountSeller}</span>` : '';
+                
+                // Chat Head UI
+                chatListContainer.innerHTML += `
+                    <div class="card p-2 shadow-sm border ${isActive}" style="min-width: 150px; cursor: pointer;" 
+                         onclick="loadSellerChatMessages('${doc.id}', '${chat.customerName}')">
+                        <div class="d-flex justify-content-between">
+                            <strong>${chat.customerName}</strong>
+                            ${unread}
+                        </div>
+                        <small class="text-muted text-truncate" style="max-width: 130px;">${chat.lastMessage || '...'}</small>
+                        <small class="text-muted" style="font-size: 0.65rem;">Order #${chat.orderId.substring(0,6)}</small>
+                    </div>
+                `;
+            });
+        }, error => {
+            console.error("Error loading seller chats:", error);
+            chatListContainer.innerHTML = '<div class="text-danger small">Error loading chats.</div>';
+        });
+}
+
+// 2. Load Messages for Selected Chat
+function loadSellerChatMessages(chatId, customerName) {
+    sellerActiveChatId = chatId;
+    
+    const messagesContainer = document.getElementById('chat-messages');
+    const input = document.getElementById('message-input');
+    const sendBtn = document.getElementById('send-btn');
+    
+    input.disabled = false;
+    sendBtn.disabled = false;
+    
+    messagesContainer.innerHTML = `<div class="text-center py-5 text-muted"><p>Loading chat with ${customerName}...</p></div>`;
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const messagesRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data')
+        .collection('conversations').doc(chatId).collection('messages');
+
+    if (sellerChatUnsubscribe) sellerChatUnsubscribe();
+
+    sellerChatUnsubscribe = messagesRef.orderBy('timestamp', 'asc').onSnapshot(snapshot => {
+        messagesContainer.innerHTML = '';
+        
+        if (snapshot.empty) {
+            messagesContainer.innerHTML = '<div class="text-center text-muted mt-5"><p>No messages yet.</p></div>';
+        } else {
+            snapshot.forEach(doc => {
+                const msg = doc.data();
+                const isMe = msg.senderId === window.currentUser.uid;
+                const date = msg.timestamp ? msg.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '...';
+                
+                messagesContainer.innerHTML += `
+                    <div style="display: flex; justify-content: ${isMe ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
+                        <div style="
+                            max-width: 70%;
+                            padding: 8px 12px;
+                            border-radius: 15px;
+                            background-color: ${isMe ? '#2B5C2B' : '#e9ecef'};
+                            color: ${isMe ? 'white' : '#333'};
+                            font-size: 0.9rem;
+                        ">
+                            ${msg.text}
+                            <span style="display: block; font-size: 0.65rem; text-align: right; opacity: 0.7;">${date}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        // Reset unread count for seller
+        window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data')
+            .collection('conversations').doc(chatId).update({ unreadCountSeller: 0 });
+            
+        // Refresh list to remove unread badge visually (if handled by snapshot listener above, it's automatic)
     });
 }
+
+// 3. Send Message (Seller Side)
+async function sendMessage() {
+    const input = document.getElementById('message-input');
+    const text = input.value.trim();
+    if (!text || !sellerActiveChatId || !window.currentUser) return;
+    
+    input.value = ''; 
+    
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const chatRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations').doc(sellerActiveChatId);
+    
+    try {
+        await chatRef.collection('messages').add({
+            senderId: window.currentUser.uid,
+            text: text,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        await chatRef.update({
+            lastMessage: text,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            unreadCountCustomer: firebase.firestore.FieldValue.increment(1)
+        });
+        
+    } catch (error) {
+        console.error("Error sending message:", error);
+    }
+}
+// Enter key logic for seller chat
+document.getElementById('message-input')?.addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') sendMessage();
+});
+
+// --- END SELLER CHAT LOGIC ---
 
 // NEW: Handle action button click in Notifications section
 function handleNotificationAction(relatedId, type) {
@@ -1987,17 +2132,6 @@ function handleNotificationAction(relatedId, type) {
         showSection('reviews');
     } else {
         window.firebaseHelpers.showAlert('Unknown alert type.', 'warning');
-    }
-}
-
-// Send message (Placeholder function remains)
-function sendMessage() {
-    const input = document.getElementById('message-input');
-    const message = input.value.trim();
-    
-    if (message) {
-         window.firebaseHelpers.showAlert('Message sent (simulated). Chat feature is not fully implemented.', 'info');
-         if (input) input.value = '';
     }
 }
 
