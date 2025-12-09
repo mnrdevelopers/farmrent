@@ -9,7 +9,6 @@ let sellerNotifications = [];
 // Chat Globals
 let sellerActiveChatId = null;
 let sellerChatUnsubscribe = null;
-let typingTimeout = null;
 
 // Seller Alerts
 const SELLER_ALERTS_COLLECTION = 'seller_alerts';
