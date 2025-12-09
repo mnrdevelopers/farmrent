@@ -2101,6 +2101,78 @@ async function loadHomepageData() {
     }
 }
 
+// Load categories for navbar dropdown
+async function loadNavbarCategories() {
+    try {
+        // 1. Fetch all unique categories from approved equipment
+        const equipmentSnapshot = await window.FirebaseDB.collection('equipment')
+            .where('status', '==', 'approved')
+            .get();
+        
+        const categoryMap = {};
+        
+        equipmentSnapshot.forEach(doc => {
+            const equipment = doc.data();
+            if (equipment.category) {
+                const categoryName = equipment.category.charAt(0).toUpperCase() + equipment.category.slice(1);
+                if (!categoryMap[categoryName]) {
+                    categoryMap[categoryName] = {
+                        name: categoryName,
+                        icon: getCategoryIcon(equipment.category),
+                        count: 0
+                    };
+                }
+                categoryMap[categoryName].count++;
+            }
+        });
+        
+        const categories = Object.values(categoryMap);
+        
+        // Sort alphabetically by name
+        categories.sort((a, b) => a.name.localeCompare(b.name));
+        
+        const navbarMenu = document.getElementById('navbar-categories-menu');
+        if (!navbarMenu) return; 
+
+        navbarMenu.innerHTML = '';
+        
+        if (categories.length === 0) {
+            navbarMenu.innerHTML = '<li><a class="dropdown-item disabled">No categories found</a></li>';
+            return;
+        }
+        
+        // Limit to 8 categories for navbar dropdown
+        categories.slice(0, 8).forEach(category => {
+            const listItem = document.createElement('li');
+            listItem.innerHTML = `
+                <a class="dropdown-item d-flex align-items-center" href="browse.html?category=${category.name.toLowerCase()}">
+                    <i class="${category.icon || 'fas fa-tools'} me-2"></i>
+                    ${category.name}
+                    <span class="badge bg-primary ms-auto">${category.count}</span>
+                </a>
+            `;
+            navbarMenu.appendChild(listItem);
+        });
+        
+        // Add "View All" link at the bottom
+        const viewAllItem = document.createElement('li');
+        viewAllItem.innerHTML = `
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item text-center text-primary" href="browse.html">
+                <i class="fas fa-eye me-2"></i>View All Categories
+            </a></li>
+        `;
+        navbarMenu.appendChild(viewAllItem);
+        
+    } catch (error) {
+        console.error('Error loading navbar categories:', error);
+        const navbarMenu = document.getElementById('navbar-categories-menu');
+        if (navbarMenu) {
+            navbarMenu.innerHTML = '<li><a class="dropdown-item disabled text-danger">Error loading categories</a></li>';
+        }
+    }
+}
+
 // Load categories (MODIFIED TO FETCH UNIQUE CATEGORIES FROM EQUIPMENT COLLECTION)
 async function loadCategories() {
     try {
@@ -2428,6 +2500,9 @@ function validateEmail(email) {
 
 // Initialize event listeners
 function initializeEventListeners() {
+    // Load navbar categories on all pages
+    loadNavbarCategories();
+    
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', function (e) {
             const href = this.getAttribute('href');
