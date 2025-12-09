@@ -1,4 +1,5 @@
-// chat-assistant.js
+import { app } from './firebase-config.js';
+import { getRemoteConfig, fetchAndActivate, getValue } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-remote-config.js";
 
 document.addEventListener('DOMContentLoaded', () => {
     injectChatWidget();
@@ -78,8 +79,8 @@ function initializeChatListeners() {
         }
     };
 
-    toggleBtn.addEventListener('click', toggleChat);
-    closeBtn.addEventListener('click', toggleChat);
+    if (toggleBtn) toggleBtn.addEventListener('click', toggleChat);
+    if (closeBtn) closeBtn.addEventListener('click', toggleChat);
 
     // Send Message Logic
     const handleSend = async () => {
@@ -97,38 +98,53 @@ function initializeChatListeners() {
         scrollToBottom();
 
         try {
-            // 3. Call Gemini API
-            const apiKey = ""; // Environment provided key
-            
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+            // 3. Fetch API Key from Remote Config
+            const apiKey = await getDeepSeekApiKey();
+
+            if (!apiKey) {
+                throw new Error("API Key not found in Remote Config");
+            }
+
+            // 4. Call DeepSeek API
+            const response = await fetch('https://api.deepseek.com/chat/completions', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
                 },
                 body: JSON.stringify({
-                    contents: [{ parts: [{ text: message }] }],
-                    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] }
+                    model: "deepseek-chat",
+                    messages: [
+                        { role: "system", content: SYSTEM_PROMPT },
+                        { role: "user", content: message }
+                    ],
+                    stream: false
                 })
             });
 
             const data = await response.json();
             
-            // 4. Remove Loading & Show Response
+            // 5. Remove Loading & Show Response
             removeMessage(loadingId);
             
-            const botReply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            // DeepSeek OpenAI-compatible response structure
+            const botReply = data.choices?.[0]?.message?.content;
 
             if (botReply) {
                 addMessage(botReply, 'bot');
             } else {
-                console.error("Gemini API Error:", data);
-                addMessage("I'm sorry, I couldn't process that request right now.", 'bot');
+                console.error("DeepSeek API Error:", data);
+                if (data.error && (data.error.code === 'invalid_api_key' || data.error.type === 'authentication_error')) {
+                    addMessage("Error: Authentication failed. Please contact support.", 'bot');
+                } else {
+                    addMessage("I'm sorry, I couldn't process that request right now.", 'bot');
+                }
             }
 
         } catch (error) {
             console.error("Chat Error:", error);
             removeMessage(loadingId);
-            addMessage("Network error. Please check your connection.", 'bot');
+            addMessage("Network error or configuration issue. Please check your connection.", 'bot');
         } finally {
             input.disabled = false;
             sendBtn.disabled = false;
@@ -137,14 +153,38 @@ function initializeChatListeners() {
         }
     };
 
-    sendBtn.addEventListener('click', handleSend);
-    input.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleSend();
-    });
+    if (sendBtn) sendBtn.addEventListener('click', handleSend);
+    if (input) {
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleSend();
+        });
+    }
+}
+
+// Helper to fetch key from Remote Config
+async function getDeepSeekApiKey() {
+    try {
+        const remoteConfig = getRemoteConfig(app);
+        
+        // Set fetch interval to low for development (allows instant updates)
+        // Change to higher value (e.g., 3600000) in production
+        remoteConfig.settings.minimumFetchIntervalMillis = 0; 
+
+        await fetchAndActivate(remoteConfig);
+        
+        // "deepseek_api_key" must match the parameter name in Firebase Console
+        const val = getValue(remoteConfig, "deepseek_api_key");
+        return val.asString();
+    } catch (error) {
+        console.error("Error fetching remote config:", error);
+        return null;
+    }
 }
 
 function addMessage(text, type) {
     const messagesContainer = document.getElementById('chat-messages');
+    if (!messagesContainer) return;
+
     const msgDiv = document.createElement('div');
     msgDiv.className = `chat-message ${type}`;
     
@@ -159,6 +199,8 @@ function addMessage(text, type) {
 
 function addTypingIndicator() {
     const messagesContainer = document.getElementById('chat-messages');
+    if (!messagesContainer) return null;
+
     const id = 'typing-' + Date.now();
     const div = document.createElement('div');
     div.id = id;
@@ -173,11 +215,14 @@ function addTypingIndicator() {
 }
 
 function removeMessage(id) {
+    if (!id) return;
     const el = document.getElementById(id);
     if (el) el.remove();
 }
 
 function scrollToBottom() {
     const messagesContainer = document.getElementById('chat-messages');
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    if (messagesContainer) {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
 }
