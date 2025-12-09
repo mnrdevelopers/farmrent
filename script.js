@@ -3130,16 +3130,31 @@ async function loadOrdersPage() {
     }
 }
 
-// Create HTML card for an order (MODIFIED to include dynamic order tracker and more details)
+// Create HTML card for an order (MODIFIED to include Review Button)
 function createOrderCard(order) {
     const statusClass = `order-status-${order.status || 'pending'}`;
     const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
     const date = window.firebaseHelpers.formatDate(order.createdAt);
     const deliveryType = '<span class="badge bg-warning text-dark me-2"><i class="fas fa-hand-paper me-1"></i>Self-Pickup</span>';
     
-    // NEW: Extract pickup details
     const pickupDate = order.pickupDate || 'N/A';
     const pickupTime = order.pickupTime || 'N/A';
+
+    // Logic for Review Button
+    let reviewButton = '';
+    if (order.status === 'completed' && !order.isReviewed) {
+        reviewButton = `
+            <button class="btn btn-sm btn-warning ms-2" onclick="openReviewModal('${order.id}', '${order.sellerIds || ''}')">
+                <i class="fas fa-star me-1"></i> Rate & Review
+            </button>
+        `;
+    } else if (order.isReviewed) {
+        reviewButton = `
+            <button class="btn btn-sm btn-outline-success ms-2" disabled>
+                <i class="fas fa-check-circle me-1"></i> Reviewed
+            </button>
+        `;
+    }
 
     return `
         <div class="col-lg-12 mb-4">
@@ -3174,15 +3189,12 @@ function createOrderCard(order) {
                         <div class="col-md-6 text-md-end">
                             <strong>Pickup Pincode:</strong> ${order.orderPincode || 'N/A'}
                         </div>
-                        <!-- Row for Pickup Details -->
                         <div class="col-12 mt-2">
                             <span class="badge bg-danger text-white"><i class="fas fa-calendar-check me-1"></i> Pickup Date/Time:</span> 
                             <strong>${pickupDate} at ${pickupTime}</strong>
                         </div>
-                        <!-- END Row -->
                     </div>
                     
-                    <!-- NEW: Mini Order Tracker for the list view -->
                     ${createOrderTrackerHtml(order.status, true)} 
                     
                 </div>
@@ -3191,6 +3203,7 @@ function createOrderCard(order) {
                         <button class="btn btn-sm btn-danger" onclick="cancelOrder('${order.id}')">Cancel Order</button>
                     ` : ''}
                     <button class="btn btn-sm btn-outline-primary" onclick="viewOrderDetailsModal('${order.id}')">View Details & Track</button>
+                    ${reviewButton}
                 </div>
             </div>
         </div>
@@ -3450,6 +3463,128 @@ async function cancelOrder(orderId) {
         }
     };
 }
+
+// --- REVIEW SYSTEM FUNCTIONS (NEW) ---
+
+// Open Review Modal
+function openReviewModal(orderId, sellerIdString) {
+    document.getElementById('review-order-id').value = orderId;
+    // sellerIds is a string in the order data (e.g., "uid1, uid2"). For simplicity, we rate the primary seller.
+    const primarySellerId = sellerIdString.split(',')[0].trim();
+    document.getElementById('review-seller-id').value = primarySellerId;
+    
+    // Reset form
+    document.getElementById('review-form').reset();
+    
+    const modal = new bootstrap.Modal(document.getElementById('reviewModal'));
+    modal.show();
+}
+
+// Submit Review
+async function submitReview() {
+    const orderId = document.getElementById('review-order-id').value;
+    const sellerId = document.getElementById('review-seller-id').value;
+    
+    // Get ratings
+    const sellerRating = document.querySelector('input[name="sellerRating"]:checked')?.value;
+    const equipmentRating = document.querySelector('input[name="equipmentRating"]:checked')?.value;
+    const experienceRating = document.querySelector('input[name="experienceRating"]:checked')?.value;
+    const comment = document.getElementById('review-comment').value;
+
+    if (!sellerRating || !equipmentRating || !experienceRating) {
+        window.firebaseHelpers.showAlert('Please provide ratings for all categories.', 'warning');
+        return;
+    }
+
+    try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
+        // 1. Save Review
+        const reviewData = {
+            orderId: orderId,
+            sellerId: sellerId,
+            customerId: window.currentUser.uid,
+            customerName: window.currentUser.name,
+            sellerRating: parseInt(sellerRating),
+            equipmentRating: parseInt(equipmentRating),
+            experienceRating: parseInt(experienceRating),
+            // Calculate an average for general display purposes
+            rating: Math.round((parseInt(sellerRating) + parseInt(equipmentRating) + parseInt(experienceRating)) / 3),
+            comment: comment,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        await window.FirebaseDB.collection('reviews').add(reviewData);
+
+        // 2. Mark Order as Reviewed
+        const orderRef = window.FirebaseDB.collection('artifacts').doc(appId)
+            .collection('public').doc('data').collection('orders').doc(orderId);
+        
+        await orderRef.update({
+            isReviewed: true
+        });
+
+        // 3. Update Equipment Ratings (Iterate through items in the order)
+        const orderDoc = await orderRef.get();
+        const orderItems = orderDoc.data().items || [];
+        
+        for (const item of orderItems) {
+            if (item.id) {
+                const equipmentRef = window.FirebaseDB.collection('equipment').doc(item.id);
+                // We use a transaction or simple read-update for simplicity here
+                const equipDoc = await equipmentRef.get();
+                if (equipDoc.exists) {
+                    const currentRating = equipDoc.data().rating || 0; // Default 0
+                    const reviewCount = equipDoc.data().reviewCount || 0;
+                    
+                    const newCount = reviewCount + 1;
+                    // Calculate new running average
+                    const newRating = ((currentRating * reviewCount) + parseInt(equipmentRating)) / newCount;
+                    
+                    await equipmentRef.update({
+                        rating: newRating,
+                        reviewCount: newCount
+                    });
+                }
+            }
+        }
+
+        window.firebaseHelpers.showAlert('Review submitted successfully!', 'success');
+        
+        // Close modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('reviewModal'));
+        modal.hide();
+        
+        // Reload orders to update button state
+        loadOrdersPage();
+
+    } catch (error) {
+        console.error('Error submitting review:', error);
+        window.firebaseHelpers.showAlert('Error submitting review. Please try again.', 'danger');
+    }
+}
+
+// Make globally available
+window.submitReview = submitReview;
+
+// Helper function to create star rating HTML
+function getStarRatingHtml(rating) {
+    if (!rating) return '';
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 >= 0.5;
+    let html = '<div class="star-display text-warning mb-2">';
+    
+    for (let i = 0; i < fullStars; i++) {
+        html += '<i class="fas fa-star filled"></i>';
+    }
+    if (hasHalfStar) {
+        html += '<i class="fas fa-star-half-alt filled"></i>';
+    }
+    // Fill remainder with empty stars if needed, or just leave as is
+    html += `<span class="text-muted ms-1 small">(${rating.toFixed(1)})</span></div>`;
+    return html;
+}
+// --- END REVIEW SYSTEM FUNCTIONS ---
 
 // Update cart count when script loads
 async function updateCartCount() { 
