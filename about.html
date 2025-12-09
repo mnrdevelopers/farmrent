@@ -23,9 +23,20 @@
             <a class="navbar-brand" href="index.html">
                 <i class="fas fa-tractor me-2"></i>FarmRent
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
+            
+            <!-- NEW: Toggler and Icons Container -->
+            <div class="d-flex align-items-center order-lg-3 gap-2">
+                <!-- Auth and Icons links loaded by script.js and always visible (Mobile and Desktop) -->
+                <ul class="navbar-nav flex-row align-items-center" id="navbar-auth">
+                <!-- Icons/Auth links loaded by script.js -->
+                </ul>
+                
+                <!-- Hamburger Menu -->
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+            </div>
+
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
@@ -39,14 +50,6 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="contact.html">Contact</a>
-                    </li>
-                </ul>
-                <ul class="navbar-nav" id="navbar-auth">
-                    <li class="nav-item">
-                        <a class="nav-link" href="cart.html">
-                            <i class="fas fa-shopping-cart"></i> Cart
-                            <span class="badge bg-warning text-dark" id="cart-count">0</span>
-                        </a>
                     </li>
                 </ul>
             </div>
