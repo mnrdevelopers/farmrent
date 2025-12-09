@@ -210,6 +210,72 @@
         </div>
     </div>
 
+    <!-- Rating & Review Modal -->
+    <div class="modal fade" id="reviewModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title"><i class="fas fa-star me-2"></i>Rate & Review</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="review-form">
+                        <input type="hidden" id="review-order-id">
+                        <input type="hidden" id="review-seller-id">
+                        <!-- We will review all items in the order implicitly, or store item IDs if needed -->
+                        
+                        <p class="text-muted text-center mb-4">How was your experience with this rental?</p>
+
+                        <!-- Seller Rating -->
+                        <div class="mb-3 text-center">
+                            <label class="form-label fw-bold">Seller Rating</label>
+                            <div class="star-rating">
+                                <input type="radio" id="seller-5" name="sellerRating" value="5" required><label for="seller-5" title="Excellent"><i class="fas fa-star"></i></label>
+                                <input type="radio" id="seller-4" name="sellerRating" value="4"><label for="seller-4" title="Good"><i class="fas fa-star"></i></label>
+                                <input type="radio" id="seller-3" name="sellerRating" value="3"><label for="seller-3" title="Average"><i class="fas fa-star"></i></label>
+                                <input type="radio" id="seller-2" name="sellerRating" value="2"><label for="seller-2" title="Poor"><i class="fas fa-star"></i></label>
+                                <input type="radio" id="seller-1" name="sellerRating" value="1"><label for="seller-1" title="Terrible"><i class="fas fa-star"></i></label>
+                            </div>
+                        </div>
+
+                        <!-- Equipment Rating -->
+                        <div class="mb-3 text-center">
+                            <label class="form-label fw-bold">Equipment Quality</label>
+                            <div class="star-rating">
+                                <input type="radio" id="equip-5" name="equipmentRating" value="5" required><label for="equip-5" title="Excellent"><i class="fas fa-star"></i></label>
+                                <input type="radio" id="equip-4" name="equipmentRating" value="4"><label for="equip-4" title="Good"><i class="fas fa-star"></i></label>
+                                <input type="radio" id="equip-3" name="equipmentRating" value="3"><label for="equip-3" title="Average"><i class="fas fa-star"></i></label>
+                                <input type="radio" id="equip-2" name="equipmentRating" value="2"><label for="equip-2" title="Poor"><i class="fas fa-star"></i></label>
+                                <input type="radio" id="equip-1" name="equipmentRating" value="1"><label for="equip-1" title="Terrible"><i class="fas fa-star"></i></label>
+                            </div>
+                        </div>
+
+                        <!-- Experience Rating -->
+                        <div class="mb-3 text-center">
+                            <label class="form-label fw-bold">Booking Experience</label>
+                            <div class="star-rating">
+                                <input type="radio" id="exp-5" name="experienceRating" value="5" required><label for="exp-5" title="Excellent"><i class="fas fa-star"></i></label>
+                                <input type="radio" id="exp-4" name="experienceRating" value="4"><label for="exp-4" title="Good"><i class="fas fa-star"></i></label>
+                                <input type="radio" id="exp-3" name="experienceRating" value="3"><label for="exp-3" title="Average"><i class="fas fa-star"></i></label>
+                                <input type="radio" id="exp-2" name="experienceRating" value="2"><label for="exp-2" title="Poor"><i class="fas fa-star"></i></label>
+                                <input type="radio" id="exp-1" name="experienceRating" value="1"><label for="exp-1" title="Terrible"><i class="fas fa-star"></i></label>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="review-comment" class="form-label">Comments (Optional)</label>
+                            <textarea class="form-control" id="review-comment" rows="3" placeholder="Share details about your experience..."></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-warning" onclick="submitReview()">Submit Review</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Footer -->
     <footer class="footer">
         <div class="container">
