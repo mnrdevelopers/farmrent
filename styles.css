@@ -439,3 +439,47 @@ html, body {
 .star-display .empty {
     color: #ddd;
 }
+
+/* Navbar Categories Dropdown */
+#navbar-categories-menu {
+    max-height: 400px;
+    overflow-y: auto;
+    min-width: 250px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+#navbar-categories-menu .dropdown-item {
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    margin: 2px 5px;
+    transition: all 0.2s ease;
+}
+
+#navbar-categories-menu .dropdown-item:hover {
+    background-color: var(--farm-green);
+    color: white;
+    transform: translateX(3px);
+}
+
+#navbar-categories-menu .dropdown-item i {
+    width: 20px;
+    text-align: center;
+}
+
+#navbar-categories-menu .badge {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+}
+
+/* Make dropdown work on hover for desktop */
+@media (min-width: 992px) {
+    .navbar-nav .dropdown:hover .dropdown-menu {
+        display: block;
+        margin-top: 0;
+    }
+    
+    .navbar-nav .dropdown .dropdown-toggle:active {
+        pointer-events: none;
+    }
+}
