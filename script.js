@@ -1761,7 +1761,7 @@ async function loadCheckoutPage() {
 
 // --- REST OF EXISTING FUNCTIONS ---
 
-// Update navbar for logged in user
+// Update navbar for logged in user (MODIFIED to include Cart and Logout inside the dropdown)
 function updateNavbarForLoggedInUser(userData) {
     const navbarAuth = document.getElementById('navbar-auth');
     
@@ -1771,13 +1771,23 @@ function updateNavbarForLoggedInUser(userData) {
          return; 
     }
     
+    // NEW: Cart Icon (Always visible if logged in, part of the mobile/desktop auth cluster)
+    let cartHtml = `
+        <li class="nav-item">
+            <a class="nav-link position-relative" href="cart.html" title="View Cart">
+                <i class="fas fa-shopping-cart fa-lg"></i>
+                <span class="badge bg-danger position-absolute top-0 start-100 translate-middle rounded-pill" id="cart-count">0</span>
+            </a>
+        </li>
+    `;
+
     // NEW: Customer Notification icon/dropdown container
     let notificationsHtml = '';
     if (userData.role === 'customer') {
         notificationsHtml = `
             <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle" href="#" id="notificationDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="fas fa-bell"></i>
+                <a class="nav-link dropdown-toggle position-relative" href="#" id="notificationDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Notifications">
+                    <i class="fas fa-bell fa-lg"></i>
                     <span class="badge bg-danger position-absolute top-0 start-100 translate-middle rounded-pill" id="customer-notification-count">0</span>
                 </a>
                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="notificationDropdown" id="customer-notifications-list">
@@ -1799,10 +1809,10 @@ function updateNavbarForLoggedInUser(userData) {
     let dropdownHtml = `
         ${notificationsHtml}
         <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
-                <i class="fas fa-user-circle me-1"></i> ${userData.name || 'User'}
+            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" title="Profile">
+                <i class="fas fa-user-circle me-1 fa-lg"></i> <span class="d-none d-md-inline">${userData.name || 'User'}</span>
             </a>
-            <ul class="dropdown-menu">
+            <ul class="dropdown-menu dropdown-menu-end">
                 <li><a class="dropdown-item" href="profile.html"><i class="fas fa-user me-2"></i>Profile</a></li>
                 <li><a class="dropdown-item" href="orders.html"><i class="fas fa-clipboard-list me-2"></i>My Orders</a></li>
     `;
@@ -1815,15 +1825,17 @@ function updateNavbarForLoggedInUser(userData) {
         dropdownHtml += '<li><a class="dropdown-item" href="admin.html"><i class="fas fa-user-shield me-2"></i>Admin Panel</a></li>';
     }
     
+    // **LOGOUT ICON** - Included in the dropdown
     dropdownHtml += `
                 <li><hr class="dropdown-divider"></li>
-                <li><a class="dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+                <li><a class="dropdown-item text-danger" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
             </ul>
         </li>
     `;
     
-    // We modify the cart li element's content, so we just update navbarAuth with the dropdown
-    navbarAuth.insertAdjacentHTML('afterbegin', dropdownHtml);
+    // We modify the navbarAuth to first insert the Cart icon, then the rest of the dropdowns/icons
+    // If the user is a customer, they get all three icons (Notifications, Cart, User/Logout)
+    navbarAuth.innerHTML = cartHtml + dropdownHtml;
 }
 
 // NEW: Function to mark customer notifications as read (simulated/client-side)
@@ -1977,7 +1989,7 @@ async function checkCustomerNotifications() {
 }
 // END NEW CUSTOMER NOTIFICATIONS
 
-// Update navbar for logged out user
+// Update navbar for logged out user (MODIFIED to always include Cart for guest users)
 function updateNavbarForLoggedOutUser() {
     const navbarAuth = document.getElementById('navbar-auth');
     
@@ -1986,23 +1998,31 @@ function updateNavbarForLoggedOutUser() {
          return; 
     }
     
-    navbarAuth.innerHTML = `
-        <li class="nav-item dropdown" id="role-dropdown">
-            <a class="nav-link dropdown-toggle" href="#" id="roleDropdown" role="button" data-bs-toggle="dropdown">
-                <i class="fas fa-user-tag me-1"></i> Sign Up As
-            </a>
-            <ul class="dropdown-menu">
-                <li><a class="dropdown-item" href="auth.html?role=customer"><i class="fas fa-user me-2"></i>Customer</a></li>
-                <li><a class="dropdown-item" href="auth.html?role=seller"><i class="fas fa-store me-2"></i>Seller</a></li>
-                <li><a class="dropdown-item" href="auth.html?role=admin"><i class="fas fa-user-shield me-2"></i>Admin</a></li>
-            </ul>
-        </li>
+    // NEW: Cart Icon (Always visible for logged out user too)
+    let cartHtml = `
         <li class="nav-item">
-            <a class="nav-link" href="auth.html?role=customer">
-                <i class="fas fa-sign-in-alt me-1"></i> Login
+            <a class="nav-link position-relative" href="cart.html" title="View Cart">
+                <i class="fas fa-shopping-cart fa-lg"></i>
+                <span class="badge bg-danger position-absolute top-0 start-100 translate-middle rounded-pill" id="cart-count">0</span>
             </a>
         </li>
     `;
+
+    // Dropdown for Sign Up/Login
+    let authHtml = `
+        <li class="nav-item dropdown" id="role-dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="roleDropdown" role="button" data-bs-toggle="dropdown" title="Sign Up/Login">
+                <i class="fas fa-sign-in-alt me-1 fa-lg"></i> <span class="d-none d-md-inline">Login</span>
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="auth.html?role=customer"><i class="fas fa-user me-2"></i>Customer Login/Sign Up</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="auth.html?role=seller"><i class="fas fa-store me-2"></i>Sign Up as Seller</a></li>
+            </ul>
+        </li>
+    `;
+
+    navbarAuth.innerHTML = cartHtml + authHtml;
 }
 
 // Load homepage data
