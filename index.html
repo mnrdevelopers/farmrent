@@ -85,30 +85,11 @@
                     </div>
                 </div>
                 <div class="col-lg-6 text-center">
-                    <!-- UPDATED: Transparent Tractor Image with Animation -->
-                    <div class="tractor-container">
-                        <div class="tractor-image-wrapper">
-                            <img src="images/herotractor.png" 
-                                 alt="Modern Tractor" 
-                                 class="tractor-main-image">
-                            <div class="tractor-overlay"></div>
-                            <div class="floating-icons">
-                                <div class="floating-icon icon-1">
-                                    <i class="fas fa-leaf"></i>
-                                </div>
-                                <div class="floating-icon icon-2">
-                                    <i class="fas fa-seedling"></i>
-                                </div>
-                                <div class="floating-icon icon-3">
-                                    <i class="fas fa-sun"></i>
-                                </div>
-                            </div>
-                            <div class="glowing-circle"></div>
-                        </div>
-                        <div class="tractor-text-overlay">
-                            <h4 class="mb-2">Premium Farm Equipment</h4>
-                            <p class="mb-0">Modern & Well-Maintained</p>
-                        </div>
+                    <!-- SIMPLE 3D Tractor Image -->
+                    <div class="simple-tractor-container">
+                        <img src="images/herotractor.png" 
+                             alt="Premium Modern Tractor" 
+                             class="simple-3d-tractor-image">
                     </div>
                 </div>
             </div>
@@ -380,233 +361,57 @@
     <!-- Custom JavaScript -->
     <script src="script.js"></script>
     
-    <!-- Add CSS for Tractor Animation -->
+    <!-- Simple CSS for 3D Tractor Image -->
     <style>
-        .tractor-container {
+        .simple-tractor-container {
             position: relative;
             height: 300px;
             display: flex;
             justify-content: center;
             align-items: center;
-            overflow: hidden;
+            padding: 20px;
         }
         
-        .tractor-image-wrapper {
-            position: relative;
+        .simple-3d-tractor-image {
             width: 100%;
             height: 100%;
             max-width: 500px;
-            border-radius: 20px;
-            overflow: hidden;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-            transform-style: preserve-3d;
-            perspective: 1000px;
-        }
-        
-        .tractor-main-image {
-            width: 100%;
-            height: 100%;
             object-fit: cover;
-            object-position: center;
-            filter: brightness(1.1) contrast(1.1);
-            animation: floatImage 8s ease-in-out infinite;
-            transform-origin: center center;
-        }
-        
-        .tractor-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, 
-                rgba(43, 92, 43, 0.3) 0%, 
-                rgba(255, 165, 0, 0.2) 50%, 
-                rgba(255, 255, 255, 0.1) 100%);
-            mix-blend-mode: overlay;
-        }
-        
-        .floating-icons {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            top: 0;
-            left: 0;
-        }
-        
-        .floating-icon {
-            position: absolute;
-            width: 40px;
-            height: 40px;
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.2rem;
-            color: var(--farm-green);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-            z-index: 10;
-        }
-        
-        .icon-1 {
-            top: 20%;
-            left: 15%;
-            animation: floatIcon1 6s ease-in-out infinite;
-        }
-        
-        .icon-2 {
-            top: 60%;
-            right: 20%;
-            animation: floatIcon2 7s ease-in-out infinite;
-        }
-        
-        .icon-3 {
-            bottom: 30%;
-            left: 10%;
-            animation: floatIcon3 5s ease-in-out infinite;
-        }
-        
-        .glowing-circle {
-            position: absolute;
-            width: 200px;
-            height: 200px;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: radial-gradient(circle, 
-                rgba(255, 165, 0, 0.4) 0%, 
-                rgba(255, 107, 53, 0.2) 40%, 
-                transparent 70%);
-            border-radius: 50%;
-            animation: pulseGlow 4s ease-in-out infinite;
-            z-index: 1;
-        }
-        
-        .tractor-text-overlay {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(43, 92, 43, 0.85);
-            color: white;
-            padding: 15px 25px;
+            object-position: center 30%;
             border-radius: 15px;
-            text-align: center;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
-            animation: slideUp 1s ease-out;
-            z-index: 10;
-            min-width: 250px;
+            box-shadow: 
+                0 20px 40px rgba(0, 0, 0, 0.3),
+                0 0 60px rgba(43, 92, 43, 0.2);
+            filter: 
+                brightness(1.1) 
+                contrast(1.1)
+                saturate(1.1);
+            transform: perspective(1000px) rotateY(-5deg) rotateX(3deg);
+            transition: transform 0.3s ease;
         }
         
-        .tractor-text-overlay h4 {
-            font-weight: 600;
-            margin-bottom: 5px;
-            color: var(--sun-yellow);
-        }
-        
-        .tractor-text-overlay p {
-            font-size: 0.9rem;
-            opacity: 0.9;
-        }
-        
-        @keyframes floatImage {
-            0%, 100% {
-                transform: translateY(0) scale(1);
-            }
-            50% {
-                transform: translateY(-15px) scale(1.02);
-            }
-        }
-        
-        @keyframes floatIcon1 {
-            0%, 100% {
-                transform: translate(0, 0) rotate(0deg);
-            }
-            25% {
-                transform: translate(10px, -15px) rotate(90deg);
-            }
-            50% {
-                transform: translate(5px, 10px) rotate(180deg);
-            }
-            75% {
-                transform: translate(-10px, -5px) rotate(270deg);
-            }
-        }
-        
-        @keyframes floatIcon2 {
-            0%, 100% {
-                transform: translate(0, 0) scale(1);
-            }
-            33% {
-                transform: translate(-15px, 10px) scale(1.1);
-            }
-            66% {
-                transform: translate(10px, -10px) scale(0.9);
-            }
-        }
-        
-        @keyframes floatIcon3 {
-            0%, 100% {
-                transform: translate(0, 0);
-            }
-            50% {
-                transform: translate(20px, -10px);
-            }
-        }
-        
-        @keyframes pulseGlow {
-            0%, 100% {
-                opacity: 0.5;
-                transform: translate(-50%, -50%) scale(1);
-            }
-            50% {
-                opacity: 0.8;
-                transform: translate(-50%, -50%) scale(1.2);
-            }
-        }
-        
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translate(-50%, 20px);
-            }
-            to {
-                opacity: 1;
-                transform: translate(-50%, 0);
-            }
+        .simple-3d-tractor-image:hover {
+            transform: perspective(1000px) rotateY(0deg) rotateX(0deg);
         }
         
         @media (max-width: 992px) {
-            .tractor-container {
+            .simple-tractor-container {
                 height: 250px;
                 margin-top: 30px;
             }
             
-            .tractor-text-overlay {
-                padding: 10px 20px;
-                min-width: 200px;
-            }
-            
-            .tractor-text-overlay h4 {
-                font-size: 1.1rem;
-            }
-            
-            .tractor-text-overlay p {
-                font-size: 0.8rem;
+            .simple-3d-tractor-image {
+                transform: perspective(800px) rotateY(-3deg) rotateX(2deg);
             }
         }
         
         @media (max-width: 576px) {
-            .tractor-container {
+            .simple-tractor-container {
                 height: 200px;
             }
             
-            .floating-icon {
-                width: 30px;
-                height: 30px;
-                font-size: 1rem;
+            .simple-3d-tractor-image {
+                transform: perspective(600px) rotateY(0deg) rotateX(0deg);
             }
         }
     </style>
