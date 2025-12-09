@@ -10,6 +10,10 @@ let customerPincode = null;
 const CUSTOMER_NOTIFICATIONS_COLLECTION = 'customer_notifications';
 let lastClearTime = 0; // Global variable to store the last notification clear time from Firestore
 
+// Chat system variables
+let activeChatId = null;
+let chatUnsubscribe = null;
+
 // --- NEW HELPER: Get Notification Status Ref ---
 function getCustomerNotificationRef(userId) {
     if (!window.FirebaseDB) return null;
@@ -157,6 +161,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     initializeEventListeners();
     await getPlatformFeeRate(); 
+    
+    // NEW: Initialize Chat Widget on all pages (except seller specific ones handled by seller.js)
+    if (path !== 'seller.html' && path !== 'seller-pending.html' && path !== 'admin.html') {
+        renderChatWidget();
+    }
 });
 
 // --- NEW FUNCTION: Fetch Platform Fee Rate ---
@@ -761,6 +770,11 @@ async function initializeAuthInternal() {
                         
                         updateNavbarForLoggedInUser(window.currentUser);
                         updateCartCount(); 
+                        
+                        // NEW: Load chats after login
+                        if (document.getElementById('chat-body')) {
+                            loadUserConversations();
+                        }
                         
                         const path = window.location.pathname.split('/').pop();
                         if (path === 'browse.html') {
@@ -3224,7 +3238,7 @@ function createOrderCard(order) {
     if (order.status === 'completed' && !order.isReviewed) {
         reviewButton = `
             <button class="btn btn-sm btn-warning ms-2" onclick="openReviewModal('${order.id}', '${order.sellerIds || ''}')">
-                <i class="fas fa-star me-1"></i> Rate & Review
+                <i class="fas fa-star me-1"></i> Rate
             </button>
         `;
     } else if (order.isReviewed) {
@@ -3233,6 +3247,22 @@ function createOrderCard(order) {
                 <i class="fas fa-check-circle me-1"></i> Reviewed
             </button>
         `;
+    }
+
+    // NEW: Chat Button Logic
+    // Allow chat if order is pending, active, pickedup, returned, or completed
+    let chatButton = '';
+    if (['pending', 'active', 'pickedup', 'returned', 'completed'].includes(order.status)) {
+        // Assume first seller for simplicity if multiple, otherwise use sellerIds[0]
+        const sellerId = order.sellerIds ? order.sellerIds[0] : '';
+        const sellerName = order.sellerBusinessNames ? order.sellerBusinessNames.split(',')[0] : 'Seller';
+        if (sellerId) {
+            chatButton = `
+                <button class="btn btn-sm btn-primary ms-2" onclick="openOrderChat('${order.id}', '${sellerId}', '${sellerName.trim()}')">
+                    <i class="fas fa-comments me-1"></i> Chat
+                </button>
+            `;
+        }
     }
 
     return `
@@ -3282,6 +3312,7 @@ function createOrderCard(order) {
                         <button class="btn btn-sm btn-danger" onclick="cancelOrder('${order.id}')">Cancel Order</button>
                     ` : ''}
                     <button class="btn btn-sm btn-outline-primary" onclick="viewOrderDetailsModal('${order.id}')">View Details & Track</button>
+                    ${chatButton}
                     ${reviewButton}
                 </div>
             </div>
@@ -3671,6 +3702,249 @@ function getStarRatingHtml(rating) {
     return html;
 }
 // --- END REVIEW SYSTEM FUNCTIONS ---
+
+// --- CUSTOMER CHAT SYSTEM ---
+
+// 1. Render Chat Widget HTML
+function renderChatWidget() {
+    const container = document.getElementById('chat-widget-container');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="chat-btn-floating" onclick="toggleChatWindow()">
+            <i class="fas fa-comments"></i>
+        </div>
+        <div class="chat-window hidden" id="customer-chat-window">
+            <div class="chat-header">
+                <h6 id="chat-header-title">My Chats</h6>
+                <button class="btn btn-sm btn-link text-white p-0" onclick="toggleChatWindow()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="chat-body" id="chat-body">
+                <!-- Chat list or messages -->
+                <div class="text-center text-muted mt-5">
+                    <p>Login to view your chats</p>
+                </div>
+            </div>
+            <div class="chat-footer hidden" id="chat-input-container">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="chat-message-input" placeholder="Type a message...">
+                    <button class="btn btn-primary" onclick="sendChatMessage()">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Check auth status to load chats if already logged in
+    if (window.currentUser) {
+        loadUserConversations();
+    }
+}
+
+// 2. Toggle Chat Window
+function toggleChatWindow() {
+    const windowEl = document.getElementById('customer-chat-window');
+    if (windowEl) {
+        windowEl.classList.toggle('hidden');
+        if (!windowEl.classList.contains('hidden') && window.currentUser && !activeChatId) {
+            loadUserConversations();
+        }
+    }
+}
+
+// 3. Load User Conversations (List View)
+async function loadUserConversations() {
+    const body = document.getElementById('chat-body');
+    const inputContainer = document.getElementById('chat-input-container');
+    const title = document.getElementById('chat-header-title');
+    
+    if (!body) return;
+    
+    // Reset view to list
+    activeChatId = null;
+    if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
+    
+    inputContainer.classList.add('hidden');
+    title.textContent = 'My Chats';
+    
+    if (!window.currentUser) {
+        body.innerHTML = '<div class="text-center text-muted mt-5"><p>Please login to chat with sellers.</p></div>';
+        return;
+    }
+
+    body.innerHTML = '<div class="text-center mt-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+
+    try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const conversationsRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations');
+        
+        const snapshot = await conversationsRef
+            .where('customerId', '==', window.currentUser.uid)
+            .orderBy('updatedAt', 'desc')
+            .get();
+
+        body.innerHTML = '';
+
+        if (snapshot.empty) {
+            body.innerHTML = '<div class="text-center text-muted mt-5"><p>No active chats found.<br>Go to <strong>My Orders</strong> to start a chat.</p></div>';
+            return;
+        }
+
+        snapshot.forEach(doc => {
+            const chat = doc.data();
+            const time = chat.updatedAt ? window.firebaseHelpers.formatTimeAgo(chat.updatedAt) : '';
+            const unread = chat.unreadCountCustomer > 0 ? `<span class="badge bg-danger rounded-pill">${chat.unreadCountCustomer}</span>` : '';
+            
+            body.innerHTML += `
+                <div class="chat-list-item p-2 rounded" onclick="loadChatMessages('${doc.id}', '${chat.sellerBusinessName}')">
+                    <div class="d-flex justify-content-between">
+                        <strong>${chat.sellerBusinessName}</strong>
+                        <small class="text-muted">${time}</small>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted text-truncate" style="max-width: 200px;">
+                            ${chat.lastMessage || 'Start chatting...'}
+                        </small>
+                        ${unread}
+                    </div>
+                    <small class="text-muted" style="font-size: 0.7rem;">Order #${chat.orderId.substring(0,8)}</small>
+                </div>
+            `;
+        });
+
+    } catch (error) {
+        console.error("Error loading chats:", error);
+        body.innerHTML = '<div class="text-center text-danger mt-3">Error loading chats.</div>';
+    }
+}
+
+// 4. Open Chat for a specific Order (Called from Orders Page)
+async function openOrderChat(orderId, sellerId, businessName) {
+    if (!window.currentUser) {
+        window.firebaseHelpers.showAlert('Please login to chat.', 'warning');
+        return;
+    }
+
+    // Toggle chat window open
+    const windowEl = document.getElementById('customer-chat-window');
+    if (windowEl) windowEl.classList.remove('hidden');
+
+    const chatId = `${orderId}_${sellerId}_${window.currentUser.uid}`;
+    
+    // Check if chat exists, if not create it
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const chatRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations').doc(chatId);
+    
+    const doc = await chatRef.get();
+    if (!doc.exists) {
+        await chatRef.set({
+            orderId: orderId,
+            sellerId: sellerId,
+            customerId: window.currentUser.uid,
+            customerName: window.currentUser.name,
+            sellerBusinessName: businessName,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            unreadCountCustomer: 0,
+            unreadCountSeller: 1 // New chat alert for seller
+        });
+    }
+
+    loadChatMessages(chatId, businessName);
+}
+// Make globally available
+window.openOrderChat = openOrderChat;
+
+// 5. Load Messages for a Chat ID
+function loadChatMessages(chatId, titleName) {
+    activeChatId = chatId;
+    
+    const body = document.getElementById('chat-body');
+    const inputContainer = document.getElementById('chat-input-container');
+    const title = document.getElementById('chat-header-title');
+    const backBtn = '<button class="btn btn-sm btn-link text-white p-0 me-2" onclick="loadUserConversations()"><i class="fas fa-arrow-left"></i></button>';
+    
+    title.innerHTML = `${backBtn} ${titleName}`;
+    inputContainer.classList.remove('hidden');
+    body.innerHTML = '<div class="text-center mt-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const messagesRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data')
+        .collection('conversations').doc(chatId).collection('messages');
+
+    // Real-time listener
+    if (chatUnsubscribe) chatUnsubscribe();
+    
+    chatUnsubscribe = messagesRef.orderBy('timestamp', 'asc').onSnapshot(snapshot => {
+        body.innerHTML = '';
+        
+        if (snapshot.empty) {
+            body.innerHTML = '<div class="text-center text-muted mt-5"><small>Say hello! Start the conversation.</small></div>';
+        } else {
+            snapshot.forEach(doc => {
+                const msg = doc.data();
+                const isMe = msg.senderId === window.currentUser.uid;
+                const date = msg.timestamp ? msg.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '...';
+                
+                body.innerHTML += `
+                    <div class="message-bubble ${isMe ? 'message-sent' : 'message-received'}">
+                        ${msg.text}
+                        <span class="message-time">${date}</span>
+                    </div>
+                `;
+            });
+            // Scroll to bottom
+            body.scrollTop = body.scrollHeight;
+        }
+        
+        // Reset unread count for customer when viewing
+        window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data')
+            .collection('conversations').doc(chatId).update({ unreadCountCustomer: 0 });
+            
+    });
+}
+
+// 6. Send Message
+async function sendChatMessage() {
+    const input = document.getElementById('chat-message-input');
+    const text = input.value.trim();
+    if (!text || !activeChatId || !window.currentUser) return;
+    
+    input.value = ''; // Clear input immediately
+    
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const chatRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations').doc(activeChatId);
+    
+    try {
+        await chatRef.collection('messages').add({
+            senderId: window.currentUser.uid,
+            text: text,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        await chatRef.update({
+            lastMessage: text,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            // Increment unread count for seller using atomic increment
+            unreadCountSeller: firebase.firestore.FieldValue.increment(1) 
+        });
+        
+    } catch (error) {
+        console.error("Error sending message:", error);
+    }
+}
+
+// Add enter key listener for chat input
+document.addEventListener('keypress', function (e) {
+    if (e.key === 'Enter' && document.getElementById('chat-message-input') === document.activeElement) {
+        sendChatMessage();
+    }
+});
+
+// --- END CUSTOMER CHAT SYSTEM ---
 
 // Update cart count when script loads
 async function updateCartCount() { 
