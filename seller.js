@@ -1896,8 +1896,8 @@ function loadSellerChatMessages(chatId, customerName, orderId) {
     input.oninput = () => {
         chatDocRef.set({ typing: { seller: true } }, { merge: true });
         
-        clearTimeout(typingTimeout);
-        typingTimeout = setTimeout(() => {
+        clearTimeout(sellertypingTimeout);
+        sellertypingTimeout = setTimeout(() => {
             chatDocRef.set({ typing: { seller: false } }, { merge: true });
         }, 2000);
     };
@@ -1918,7 +1918,7 @@ async function sendMessage() {
     const chatRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations').doc(sellerActiveChatId);
     
     try {
-        clearTimeout(typingTimeout);
+        clearTimeout(sellertypingTimeout);
         chatRef.set({ typing: { seller: false } }, { merge: true });
 
         await chatRef.collection('messages').add({
