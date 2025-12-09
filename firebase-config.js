@@ -25,7 +25,6 @@ try {
     if (firebase.remoteConfig) {
         remoteConfig = firebase.remoteConfig();
         // Set minimum fetch interval for production (3600000ms = 1 hour)
-        // For development/testing, you might want to set this lower
         remoteConfig.settings.minimumFetchIntervalMillis = 3600000; 
         
         // Set default values for Remote Config keys
@@ -35,8 +34,7 @@ try {
             "razorpay_key_id": "", 
             "post_office_api_url": "",
             "fast2sms_api_key": "",
-            "geoapify_api_key": "",
-            "deepseek_api_key": "" // NEW: OpenAI API Key
+            "geoapify_api_key": "" // NEW: Geoapify API Key
         };
         
         // Fetch and activate the configuration values
@@ -155,12 +153,12 @@ window.firebaseHelpers = {
             // Get the value set in the Firebase console for 'imgbb_api_key'
             const apiKey = remoteConfig.getString('imgbb_api_key');
             if (!apiKey) {
-                 // window.firebaseHelpers.showAlert('ImgBB API key is empty in Remote Config. Upload will fail.', 'danger');
-                 console.warn('ImgBB API key is empty in Remote Config.');
+                 window.firebaseHelpers.showAlert('ImgBB API key is empty in Remote Config. Upload will fail.', 'danger');
             }
             return apiKey;
         } catch (error) {
             console.error("Error retrieving ImgBB API Key:", error);
+            window.firebaseHelpers.showAlert('Failed to retrieve ImgBB API Key from Remote Config.', 'danger');
             return ""; 
         }
     },
@@ -190,7 +188,7 @@ window.firebaseHelpers = {
     },
     
     /**
-     * Fetches the Geoapify API Key from Firebase Remote Config.
+     * NEW: Fetches the Geoapify API Key from Firebase Remote Config.
      * @returns {Promise<string>} The Geoapify API Key.
      */
     getGeoapifyApiKey: async () => {
@@ -211,7 +209,7 @@ window.firebaseHelpers = {
     },
 
     /**
-     * Fetches the India Post Office API URL from Firebase Remote Config.
+     * NEW: Fetches the India Post Office API URL from Firebase Remote Config.
      * @returns {Promise<string>} The Post Office API URL.
      */
     getPostOfficeApiUrl: async () => {
@@ -226,7 +224,7 @@ window.firebaseHelpers = {
     },
 
     /**
-     * Fetches the Fast2SMS API Key from Firebase Remote Config.
+     * NEW: Fetches the Fast2SMS API Key from Firebase Remote Config.
      * @returns {Promise<string>} The Fast2SMS API Key.
      */
     getFast2SmsApiKey: async () => {
@@ -245,31 +243,10 @@ window.firebaseHelpers = {
             return ""; 
         }
     },
-
-    /**
-     * NEW: Fetches the OpenAI API Key from Firebase Remote Config.
-     * @returns {Promise<string>} The OpenAI API Key.
-     */
-    getOpenaiApiKey: async () => {
-        if (!remoteConfig) {
-            console.warn('Remote Config not available for OpenAI key.');
-            return ""; 
-        }
-        try {
-            await remoteConfig.ensureInitialized(); // Ensure values are loaded
-            const apiKey = remoteConfig.getString('deepseek_api_key');
-            if (!apiKey) {
-                 console.warn('OpenAI API key is missing in Remote Config (key: "deepseek_api_key").');
-            }
-            return apiKey;
-        } catch (error) {
-            console.error("Error retrieving OpenAI API Key:", error);
-            return ""; 
-        }
-    },
     
     /**
-     * Sends an SMS alert using the Fast2SMS API.
+     * NEW: Sends an SMS alert using the Fast2SMS API.
+     * NOTE: This is client-side, purely for demonstration. In production, this should be done via a secure server/cloud function.
      * @param {string} mobileNumber - The 10-digit mobile number to send the SMS to.
      * @param {string} message - The message content.
      * @returns {Promise<void>}
@@ -279,6 +256,7 @@ window.firebaseHelpers = {
         
         if (!apiKey || apiKey === "YOUR_FAST2SMS_API_KEY_HERE") {
             console.warn('SMS Alert Skipped: Fast2SMS API Key is missing or invalid in Remote Config.');
+            window.firebaseHelpers.showAlert('SMS Alert Skipped: Missing API Key.', 'warning');
             return;
         }
         
@@ -287,21 +265,40 @@ window.firebaseHelpers = {
             return;
         }
 
+        // NOTE: The 'route' parameter below assumes the use of a standard transactional route, 
+        // but this may need adjustment based on the specific Fast2SMS account and template approval.
         const url = 'https://www.fast2sms.com/dev/bulkV2';
         
+        const params = new URLSearchParams({
+            // NOTE: Fast2SMS API requires numbers to be in a comma-separated string format
+            'variables_values': encodeURIComponent(message), 
+            'route': 'otp', // Using OTP route as a common transactional fallback
+            'sender_id': 'FSTSMS', // Replace with your approved Sender ID
+            'language': 'english',
+            'numbers': mobileNumber,
+        });
+
         try {
+            // Using POST with URLSearchParams in the body often works better for some API setups
+            // However, Fast2SMS sometimes prefers GET or specific JSON body structures.
+            // Using a simple GET structure for demonstration:
             const finalUrl = `${url}?authorization=${apiKey}&message=${encodeURIComponent(message)}&route=q&numbers=${mobileNumber}`;
+            
             const response = await fetch(finalUrl, { method: 'GET' });
+
             const result = await response.json();
 
             if (result.return === true || result.success === true) {
                 console.log('SMS Alert Sent Successfully:', result);
+                window.firebaseHelpers.showAlert(`SMS sent to ${mobileNumber} for notification.`, 'success');
             } else {
                 console.error('SMS Alert Failed from Fast2SMS:', result);
+                window.firebaseHelpers.showAlert('SMS Alert Failed. Check console for Fast2SMS error.', 'danger');
             }
             
         } catch (error) {
             console.error('SMS Alert Network Error:', error);
+            window.firebaseHelpers.showAlert('SMS Alert Network Error.', 'danger');
         }
     },
 
