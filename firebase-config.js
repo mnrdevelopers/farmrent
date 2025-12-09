@@ -36,7 +36,7 @@ try {
             "post_office_api_url": "",
             "fast2sms_api_key": "",
             "geoapify_api_key": "",
-            "openai_api_key": "" // NEW: OpenAI API Key
+            "deepseek_api_key": "" // NEW: OpenAI API Key
         };
         
         // Fetch and activate the configuration values
@@ -257,9 +257,9 @@ window.firebaseHelpers = {
         }
         try {
             await remoteConfig.ensureInitialized(); // Ensure values are loaded
-            const apiKey = remoteConfig.getString('openai_api_key');
+            const apiKey = remoteConfig.getString('deepseek_api_key');
             if (!apiKey) {
-                 console.warn('OpenAI API key is missing in Remote Config (key: "openai_api_key").');
+                 console.warn('OpenAI API key is missing in Remote Config (key: "deepseek_api_key").');
             }
             return apiKey;
         } catch (error) {
