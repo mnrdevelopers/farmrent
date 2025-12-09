@@ -1038,6 +1038,9 @@ function createEquipmentCard(equipment, id, isBrowsePage = false) {
         ? `<button class="btn btn-primary w-100" onclick="showEquipmentDetailsModal('${id}')">View Details</button>`
         : `<a href="item.html?id=${id}" class="btn btn-primary w-100">View Details</a>`;
 
+    // NEW: Generate Star Rating HTML
+    const ratingHtml = getStarRatingHtml(equipment.rating || 0);
+
     return `
         <div class="${cardClass}">
             ${!pincodeMatches && currentPincode ? '<div class="card-header bg-warning text-dark small py-1"><i class="fas fa-map-marker-alt me-1"></i>Different Location</div>' : ''}
@@ -1048,6 +1051,7 @@ function createEquipmentCard(equipment, id, isBrowsePage = false) {
             </div>
             <div class="card-body d-flex flex-column">
                 <h5 class="card-title">${equipment.name}</h5>
+                ${ratingHtml}
                 ${pincodeWarning}
                 <div class="mt-auto">
                     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -3567,21 +3571,28 @@ async function submitReview() {
 // Make globally available
 window.submitReview = submitReview;
 
-// Helper function to create star rating HTML
+// Helper function to create star rating HTML (Improved version)
 function getStarRatingHtml(rating) {
-    if (!rating) return '';
-    const fullStars = Math.floor(rating);
-    const hasHalfStar = rating % 1 >= 0.5;
-    let html = '<div class="star-display text-warning mb-2">';
+    const r = parseFloat(rating) || 0;
+    const fullStars = Math.floor(r);
+    const hasHalfStar = r % 1 >= 0.5;
     
-    for (let i = 0; i < fullStars; i++) {
-        html += '<i class="fas fa-star filled"></i>';
+    let html = '<div class="star-display mb-2">';
+    
+    for (let i = 1; i <= 5; i++) {
+        if (i <= fullStars) {
+            html += '<i class="fas fa-star filled"></i>';
+        } else if (i === fullStars + 1 && hasHalfStar) {
+            html += '<i class="fas fa-star-half-alt filled"></i>';
+        } else {
+            // Empty star
+            html += '<i class="fas fa-star empty"></i>'; 
+        }
     }
-    if (hasHalfStar) {
-        html += '<i class="fas fa-star-half-alt filled"></i>';
-    }
-    // Fill remainder with empty stars if needed, or just leave as is
-    html += `<span class="text-muted ms-1 small">(${rating.toFixed(1)})</span></div>`;
+    
+    // Display text: shows actual rating if > 0, otherwise 'New'
+    const text = r > 0 ? r.toFixed(1) : 'New';
+    html += `<span class="text-muted ms-1 small">(${text})</span></div>`;
     return html;
 }
 // --- END REVIEW SYSTEM FUNCTIONS ---
