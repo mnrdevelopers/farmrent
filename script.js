@@ -6,6 +6,43 @@ let isAuthInitialized = false;
 let platformFeeRate = 0.05; 
 let customerPincode = null;
 
+// NEW: Collection name for user's notification settings (private collection)
+const CUSTOMER_NOTIFICATIONS_COLLECTION = 'customer_notifications';
+let lastClearTime = 0; // Global variable to store the last notification clear time from Firestore
+
+// --- NEW HELPER: Get Notification Status Ref ---
+function getCustomerNotificationRef(userId) {
+    if (!window.FirebaseDB) return null;
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    
+    // Path: /artifacts/{appId}/users/{userId}/customer_notifications/readStatus
+    return window.FirebaseDB.collection('artifacts').doc(appId)
+        .collection('users').doc(userId).collection(CUSTOMER_NOTIFICATIONS_COLLECTION).doc('readStatus');
+}
+
+// --- NEW HELPER: Load persisted clear time ---
+async function loadLastClearTime() {
+    if (!window.currentUser || !window.FirebaseDB) {
+        lastClearTime = 0; // Reset for logged out users
+        return;
+    }
+    
+    try {
+        const docRef = getCustomerNotificationRef(window.currentUser.uid);
+        const doc = await docRef.get();
+        
+        if (doc.exists && doc.data().lastClearTime) {
+            // Firestore timestamp is converted to milliseconds for comparison
+            lastClearTime = doc.data().lastClearTime.toMillis();
+        } else {
+            lastClearTime = 0;
+        }
+    } catch (error) {
+        console.error('Error loading last clear time:', error);
+        lastClearTime = 0;
+    }
+}
+
 
 // --- NEW CART HELPER FUNCTIONS (To resolve ReferenceError: getCartFromFirestore is not defined) ---
 
@@ -719,6 +756,9 @@ async function initializeAuthInternal() {
                         // Note: Setting customerPincode here will correctly update firebase-config.js's getter
                         window.customerPincode = window.currentUser.pincode || localStorage.getItem('customerPincode') || null;
                         
+                        // NEW: Load persisted notification clear time
+                        await loadLastClearTime();
+                        
                         updateNavbarForLoggedInUser(window.currentUser);
                         updateCartCount(); 
                         
@@ -745,6 +785,8 @@ async function initializeAuthInternal() {
                 window.currentUser = null; 
                 // NEW PINCODE LOGIC: Set customerPincode from local storage only
                 window.customerPincode = localStorage.getItem('customerPincode') || null;
+                // NEW: Clear persisted notification clear time for logged out users
+                lastClearTime = 0;
 
                 updateNavbarForLoggedOutUser();
                 updateCartCount();
@@ -772,6 +814,9 @@ async function logout() {
     try {
         window.firebaseHelpers.pincodeSystem.clearPincode(); 
         window.customerPincode = null; 
+        // Clear local notification state
+        lastClearTime = 0; 
+        
         await window.firebaseHelpers.signOut();
         window.location.reload();
     } catch (error) {
@@ -1826,42 +1871,57 @@ function updateNavbarForLoggedInUser(userData) {
     navbarAuth.insertAdjacentHTML('afterbegin', dropdownHtml);
 }
 
-// NEW: Function to mark customer notifications as read (simulated/client-side)
-function markCustomerNotificationsAsRead() {
-    if (!window.currentUser) return;
+// NEW: Function to mark customer notifications as read (UPDATED to use Firestore)
+async function markCustomerNotificationsAsRead() {
+    if (!window.currentUser || !window.FirebaseDB || window.currentUser.role !== 'customer') return;
     
-    const countElement = document.getElementById('customer-notification-count');
-    if (countElement) {
-        countElement.textContent = ''; // Clear the badge
+    try {
+        const docRef = getCustomerNotificationRef(window.currentUser.uid);
+        
+        // 1. Write the current server timestamp to Firestore
+        await docRef.set({
+            lastClearTime: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        
+        // 2. Optimistically update local state and UI
+        lastClearTime = Date.now(); // Update local time immediately for the session
+        
+        const countElement = document.getElementById('customer-notification-count');
+        if (countElement) {
+            countElement.textContent = ''; // Clear the badge
+        }
+        
+        const listElement = document.getElementById('customer-notifications-list');
+        if (listElement) {
+            // Update the list content to show it's cleared/read
+            listElement.innerHTML = '<li><h6 class="dropdown-header">Alerts & Updates</h6></li><li><a class="dropdown-item text-center text-muted" href="#">All caught up! (Database Updated)</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center" href="orders.html">View All Orders</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()"><i class="fas fa-check-double me-1"></i> Clear Alerts</a></li>';
+        }
+
+        // Hide the dropdown menu instance if it exists
+        const dropdownToggle = document.getElementById('notificationDropdown');
+        const dropdown = bootstrap.Dropdown.getInstance(dropdownToggle);
+        if (dropdown) {
+            dropdown.hide();
+        }
+        
+        window.firebaseHelpers.showAlert('Notifications cleared and status saved to database.', 'success');
+        
+    } catch (error) {
+        console.error('Error marking notifications as read in Firestore:', error);
+        window.firebaseHelpers.showAlert('Failed to save read status. Please try again.', 'danger');
     }
-    
-    const listElement = document.getElementById('customer-notifications-list');
-    if (listElement) {
-        // Update the list content to show it's cleared/read (optional, for visual feedback)
-        listElement.innerHTML = '<li><h6 class="dropdown-header">Alerts & Updates</h6></li><li><a class="dropdown-item text-center text-muted" href="#">All caught up!</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()"><i class="fas fa-check-double me-1"></i> Clear Alerts</a></li>';
-    }
-    
-    // Store the last time the user cleared notifications in sessionStorage
-    // This prevents the badge from immediately reappearing on page navigation/refresh within the session.
-    sessionStorage.setItem('lastNotificationClearTime', Date.now());
-    
-    // Hide the dropdown menu instance if it exists
-    const dropdownToggle = document.getElementById('notificationDropdown');
-    const dropdown = bootstrap.Dropdown.getInstance(dropdownToggle);
-    if (dropdown) {
-        dropdown.hide();
-    }
-    
-    window.firebaseHelpers.showAlert('Notifications cleared for this session.', 'info');
 }
 window.markCustomerNotificationsAsRead = markCustomerNotificationsAsRead;
 
 
-// NEW: Check Customer Notifications (Pending orders/status updates)
+// NEW: Check Customer Notifications (Pending orders/status updates) (UPDATED to use Firestore time)
 async function checkCustomerNotifications() {
-    if (!window.currentUser || window.currentUser.role !== 'customer') return;
+    if (!window.currentUser || window.currentUser.role !== 'customer' || !window.FirebaseDB) return;
 
     try {
+        // Ensure lastClearTime is loaded before checking orders
+        await loadLastClearTime(); 
+        
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
 
@@ -1875,8 +1935,8 @@ async function checkCustomerNotifications() {
         const notifications = [];
         let unreadCount = 0;
         
-        // Retrieve the last clear time from sessionStorage
-        const lastClearTime = parseInt(sessionStorage.getItem('lastNotificationClearTime') || 0);
+        // Get the minimum timestamp to be considered 'unread' (which is the last clear time)
+        const unreadThreshold = lastClearTime;
 
         ordersSnapshot.forEach(doc => {
             const order = doc.data();
@@ -1893,15 +1953,10 @@ async function checkCustomerNotifications() {
                 message = `Order #${doc.id.substring(0, 8)} confirmed! Ready for pickup.`;
                 icon = 'fas fa-check-circle';
                 badgeClass = 'bg-success';
-            } else if (order.status === 'cancelled') {
+            } else if (order.status === 'cancelled' || order.status === 'rejected') {
                  // Notify if order was cancelled by seller/admin
-                message = `Order #${doc.id.substring(0, 8)} has been cancelled.`;
+                message = `Order #${doc.id.substring(0, 8)} has been cancelled/rejected.`;
                 icon = 'fas fa-ban';
-                badgeClass = 'bg-danger';
-            } else if (order.status === 'rejected') {
-                 // Notify if order was rejected by seller/admin
-                message = `Order #${doc.id.substring(0, 8)} was rejected by the seller.`;
-                icon = 'fas fa-times-circle';
                 badgeClass = 'bg-danger';
             } else if (order.status === 'returned') {
                  // Notify if order was returned (final payment/check pending)
@@ -1914,9 +1969,18 @@ async function checkCustomerNotifications() {
             }
             
             // Determine unread status: Any new critical status created *after* the last clear time
+            // Note: We use the *updatedAt* field or *createdAt* if available, but for status changes, 
+            // relying on order creation time isn't accurate. Since we don't have a specific `statusChangedAt` field, 
+            // we will rely on the order's `createdAt` for now, assuming only new orders trigger the alert.
+            // **IMPROVEMENT**: In a real-world scenario, you would track status change events/timestamps in a sub-collection.
+            // For now, we compare the order creation time to the last clear time.
             const orderTimestamp = order.createdAt?.toMillis() || 0;
-            if (orderTimestamp > lastClearTime) {
-                unreadCount++;
+            
+            // We consider an order an "alert" if it has a critical status AND was created AFTER the last clear time
+            const isAlert = orderTimestamp > unreadThreshold;
+            
+            if (isAlert) {
+                 unreadCount++;
             }
             
             notifications.push({
@@ -1925,7 +1989,8 @@ async function checkCustomerNotifications() {
                 icon,
                 badgeClass,
                 date: order.createdAt,
-                status: order.status
+                status: order.status,
+                isUnread: isAlert
             });
         });
 
@@ -1936,17 +2001,21 @@ async function checkCustomerNotifications() {
         // Only display the *last 5 most critical* notifications in the dropdown
         const criticalNotifications = notifications.slice(0, 5); 
 
-        if (countElement) countElement.textContent = unreadCount > 0 ? unreadCount : '';
+        if (countElement) {
+             // Only show count if greater than 0 and the user is logged in
+             countElement.textContent = window.currentUser && unreadCount > 0 ? unreadCount : '';
+        }
         if (listElement) listElement.innerHTML = '<li><h6 class="dropdown-header">Alerts & Updates</h6></li>';
 
         if (criticalNotifications.length === 0) {
-             if (listElement) listElement.innerHTML += '<li><a class="dropdown-item text-center text-muted" href="#">No new alerts.</a></li>';
+             if (listElement) listElement.innerHTML += '<li><a class="dropdown-item text-center text-muted" href="#">No recent alerts.</a></li>';
         } else {
             criticalNotifications.forEach(notif => {
                 const timeAgo = notif.date ? window.firebaseHelpers.formatTimeAgo(notif.date) : 'N/A';
+                const unreadClass = notif.isUnread ? 'fw-bold' : 'text-muted'; // Highlight unread
                 if (listElement) listElement.innerHTML += `
                     <li>
-                        <a class="dropdown-item d-flex justify-content-between align-items-center" href="orders.html" title="${notif.message}">
+                        <a class="dropdown-item d-flex justify-content-between align-items-center ${unreadClass}" href="orders.html" title="${notif.message}">
                             <div>
                                 <span class="badge ${notif.badgeClass} me-2"><i class="${notif.icon}"></i></span>
                                 ${notif.message.substring(0, 30)}...
@@ -1973,6 +2042,13 @@ async function checkCustomerNotifications() {
 
     } catch (error) {
         console.error("Error fetching customer notifications:", error);
+        // Ensure UI is stable even on error
+        const countElement = document.getElementById('customer-notification-count');
+        if (countElement) countElement.textContent = '';
+        const listElement = document.getElementById('customer-notifications-list');
+        if (listElement) {
+             listElement.innerHTML = '<li><h6 class="dropdown-header">Alerts & Updates</h6></li><li><a class="dropdown-item text-center text-danger" href="#">Error loading alerts.</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()"><i class="fas fa-check-double me-1"></i> Clear Alerts</a></li>';
+        }
     }
 }
 // END NEW CUSTOMER NOTIFICATIONS
@@ -2845,6 +2921,9 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, total
 
         window.firebaseHelpers.showAlert(successMessage, 'success');
         
+        // Manually trigger a notification check right after order placement to update the navbar badge instantly
+        checkCustomerNotifications();
+        
         setTimeout(() => {
             window.location.href = 'orders.html'; 
         }, 3000);
@@ -3200,8 +3279,8 @@ async function viewOrderDetailsModal(orderId) {
     try {
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
-        
-        // Use an onSnapshot listener for real-time updates while the modal is open
+
+        // *** Use an onSnapshot listener for real-time updates while the modal is open ***
         const modalElement = document.getElementById('orderDetailsModal');
         // Ensure modal instance is fetched/created before the listener
         const modalInstance = new bootstrap.Modal(modalElement);
