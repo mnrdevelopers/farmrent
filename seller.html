@@ -733,20 +733,6 @@
                                 </div>
                             </div>
                             
-                            <div class="mb-3">
-                                <label class="form-label">Profile Picture</label>
-                                <div class="d-flex align-items-center gap-3">
-                                    <img src="https://via.placeholder.com/100" alt="Profile" class="rounded-circle" id="profile-picture" width="100" height="100">
-                                    <div>
-                                        <input type="file" class="form-control d-none" id="profile-picture-upload" accept="image/*">
-                                        <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('profile-picture-upload').click()">
-                                            <i class="fas fa-upload me-2"></i>Upload New Picture
-                                        </button>
-                                        <small class="text-muted d-block mt-1">Recommended: Square image, max 2MB</small>
-                                    </div>
-                                </div>
-                            </div>
-                            
                             <hr>
                             
                             <h5 class="mb-3">Change Password</h5>
@@ -977,33 +963,6 @@
         </div>
     </div>
     
-    <!-- NEW: New Order Notification Popup Modal -->
-    <div class="modal fade" id="newOrderNotificationModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header bg-warning text-dark">
-                    <h5 class="modal-title"><i class="fas fa-bell me-2"></i>New Rental Order Alert!</h5>
-                    <!-- Dismiss button handler added to the close button -->
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="markOrderAlertAsRead(document.getElementById('new-order-id').value)"></button>
-                </div>
-                <div class="modal-body text-center">
-                    <input type="hidden" id="new-order-id">
-                    <i class="fas fa-clipboard-list fa-4x text-warning mb-3"></i>
-                    <h4 class="text-danger">You have <span id="new-order-count-display">1</span> new pending order(s) awaiting confirmation.</h4>
-                    <p class="text-muted">Review this order immediately to confirm the rental and secure the booking.</p>
-                    <p class="small mb-0">Order ID: <strong id="new-order-id-display">#N/A</strong></p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="markOrderAlertAsRead(document.getElementById('new-order-id').value)">Dismiss</button>
-                    <button type="button" class="btn btn-warning" onclick="markOrderAlertAsRead(document.getElementById('new-order-id').value); showSection('orders');">
-                        <i class="fas fa-eye me-2"></i>View Orders Now
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-    <!-- END NEW -->
-
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     
