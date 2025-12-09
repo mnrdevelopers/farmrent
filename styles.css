@@ -403,3 +403,39 @@ html, body {
     overflow-y: auto;
 }
 /* --- END NEW PINCODE SYSTEM STYLES --- */
+
+/* --- STAR RATING WIDGET STYLES --- */
+.star-rating {
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+}
+
+.star-rating input {
+    display: none;
+}
+
+.star-rating label {
+    cursor: pointer;
+    font-size: 1.5rem;
+    color: #ddd;
+    margin: 0 2px;
+    transition: color 0.2s;
+}
+
+.star-rating label:hover,
+.star-rating label:hover ~ label,
+.star-rating input:checked ~ label {
+    color: var(--sun-yellow);
+}
+
+.star-display i {
+    font-size: 0.8rem;
+    margin-right: 1px;
+}
+.star-display .filled {
+    color: var(--sun-yellow);
+}
+.star-display .empty {
+    color: #ddd;
+}
