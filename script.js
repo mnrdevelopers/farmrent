@@ -6,6 +6,296 @@ let isAuthInitialized = false;
 let platformFeeRate = 0.05; 
 let customerPincode = null;
 
+// NEW: Localization Variables
+const DEFAULT_LANGUAGE = 'en';
+// Initialize currentLanguage, defaulting to 'te' if 'hi' was previously set, or 'en'
+let initialLang = localStorage.getItem('appLanguage');
+if (initialLang === 'hi') {
+    initialLang = DEFAULT_LANGUAGE; // Default back to English if Hindi was used (as per request to remove it)
+}
+let currentLanguage = initialLang || DEFAULT_LANGUAGE;
+
+
+// Localization Dictionary (Add more terms as needed)
+const translations = {
+    // General UI terms
+    'FarmRent': { 'hi': 'फार्मरेंट', 'te': 'ఫార్మ్‌రెంట్' },
+    'Home': { 'hi': 'होम', 'te': 'హోమ్' },
+    'Browse Equipment': { 'hi': 'उपकरण ब्राउज़ करें', 'te': 'పరికరాలను బ్రౌజ్ చేయండి' },
+    'About Us': { 'hi': 'हमारे बारे में', 'te': 'మా గురించి' },
+    'Contact': { 'hi': 'संपर्क करें', 'te': 'సంప్రదించండి' },
+    'Cart': { 'hi': 'कार्ट', 'te': 'కార్ట్' },
+    'Profile': { 'hi': 'प्रोफ़ाइल', 'te': 'ప్రొఫైల్' },
+    'My Orders': { 'hi': 'मेरे आदेश', 'te': 'నా ఆర్డర్లు' },
+    'Logout': { 'hi': 'लॉग आउट', 'te': 'లాగ్ అవుట్' },
+    'Sign Up As': { 'hi': 'के रूप में साइन अप करें', 'te': 'గా నమోదు చేయండి' },
+    'Customer': { 'hi': 'ग्राहक', 'te': 'కస్టమర్' },
+    'Seller': { 'hi': 'विक्रेता', 'te': 'విక్రేత' },
+    'Admin': { 'hi': 'व्यवस्थापक', 'te': 'అడ్మిన్' },
+    'Login': { 'hi': 'लॉगिन', 'te': 'లాగిన్' },
+    
+    // Pincode/Location
+    'Location Filter Missing!': { 'hi': 'स्थान फ़िल्टर गायब है!', 'te': 'స్థానం ఫిల్టర్ లేదు!' },
+    'Set Pincode Now': { 'hi': 'पिनकोड सेट करें', 'te': 'పిన కోడ్ సెట్ చేయండి' },
+    'All Locations': { 'hi': 'सभी स्थान', 'te': 'అన్ని స్థానాలు' },
+    'Change Location Filter': { 'hi': 'स्थान फ़िल्టర్ बदलें', 'te': 'స్థాన ఫిల్టర్ మార్చండి' },
+    'Set Location Filter': { 'hi': 'स्थान फ़ిల్టర్ सेट करें', 'te': 'స్థాన ఫిల్టర్ సెట్ చేయండి' },
+    'Use Current Location': { 'hi': 'वर्तमान स्थान का उपयोग करें', 'te': 'ప్రస్తుత స్థానాన్ని ఉపయోగించండి' },
+    'Location Mismatch': { 'hi': 'स्थान बेमेल', 'te': 'స్థానం సరిపోలడం లేదు' },
+    'View All Listings': { 'hi': 'सभी लिस्टिंग देखें', 'te': 'అన్ని జాబితాలను చూడండి' },
+
+    // Equipment/Cart/Checkout
+    'View Details': { 'hi': 'विवरण देखें', 'te': 'వివరాలు చూడండి' },
+    'Pincode': { 'hi': 'पिनकोड', 'te': 'పిన కోడ్' },
+    'Total Amount': { 'hi': 'कुल राशि', 'te': 'మొత్తం మొత్తం' },
+    'Platform Fee': { 'hi': 'प्लेटफ़ॉर्म शुल्क', 'te': 'ప్లాట్‌ఫారమ్ ఫీజు' },
+    'Checkout': { 'hi': 'चेकआउट', 'te': 'చెకౌట్' },
+    'Pickup Date/Time': { 'hi': 'पिकअप की तारीख/समय', 'te': 'పిక్అప్ తేదీ/సమయం' },
+    'Order Placed': { 'hi': 'ऑर्डर दिया गया', 'te': 'ఆర్డర్ ఉంచబడింది' },
+    'Seller Confirmed': { 'hi': 'विक्रेता ने पुष्टि की', 'te': 'విక్రేత నిర్ధారించారు' },
+    'Customer Picked Up': { 'hi': 'ग्राहक ने उठाया', 'te': 'కస్టమర్ తీసుకెళ్లారు' },
+    'Equipment Returned': { 'hi': 'उपकरण लौटाया गया', 'te': 'పరికరాలు తిరిగి ఇచ్చారు' },
+    'Rental Completed': { 'hi': 'किराया पूरा हुआ', 'te': 'అద్దె పూర్తయింది' },
+    'Order Cancelled': { 'hi': 'ऑर्डर रद्द', 'te': 'ఆర్డర్ రద్దు చేయబడింది' },
+    'Order Rejected by Seller': { 'hi': 'विक्रेता द्वारा ऑर्डर अस्वीకరించబడింది', 'te': 'విక్రేత ద్వారా ఆర్డర్ తిరస్కరించబడింది' },
+    'Cancellation requested.': { 'hi': 'रद्दीकरण का अनुरोध किया गया।', 'te': 'రద్దు చేయమని అభ్యర్థన పంపబడింది.' },
+    'Contact seller for details.': { 'hi': 'వివరాల కోసం విక్రేతను సంప్రదించండి', 'te': 'వివరాల కోసం విక్రేతను సంప్రదించండి' },
+    
+    // Notifications
+    'Alerts & Updates': { 'hi': 'अलर्ट और अपडेट', 'te': 'హెచ్చరికలు & నవీకరణలు' },
+    'Clear Alerts': { 'hi': 'अलर्ट साफ़ करें', 'te': 'హెచ్చరికలు క్లియర్ చేయండి' },
+    'All caught up! (Database Updated)': { 'hi': 'सब ठीक है! (डेटाबेस अपडेट किया गया)', 'te': 'అంతా సరిగ్గా ఉంది! (డేటాబేస్ అప్‌డేట్ చేయబడింది)' },
+    'No recent alerts.': { 'hi': 'हालिया कोई अलर्ट नहीं।', 'te': 'తాజా హెచ్చరికలు లేవు.' },
+    'Error loading alerts.': { 'hi': 'अलर्ट लोड करने में त्रुटि।', 'te': 'హెచ్చరికలు లోడ్ చేయడంలో లోపం.' },
+
+    // New translation keys added for other components
+    'Attention Required': { 'hi': 'ध्यान दें', 'te': 'శ్రద్ధ అవసరం' },
+    'Confirm Clear Cart': { 'hi': 'कार्ट खाली करने की पुष्टि करें', 'te': 'కార్ట్‌ను క్లియర్ చేయడాన్ని నిర్ధారించండి' },
+    'Are you sure you want to clear your cart? This action is permanent and will allow you to shop in your new location.': { 'hi': 'क्या आप वाकई अपनी कार्ट खाली करना चाहते हैं? यह कार्रवाई स्थायी है और आपको अपने नए स्थान पर खरीदारी करने की अनुमति देगी।', 'te': 'మీరు మీ కార్ట్‌ను ఖాళీ చేయాలనుకుంటున్నారా? ఈ చర్య శాశ్వతమైనది మరియు మీ కొత్త స్థానంలో షాపింగ్ చేయడానికి మిమ్మల్ని అనుమతిస్తుంది.' },
+    'Clear Cart': { 'hi': 'कार्ट खाली करें', 'te': 'కార్ట్‌ను క్లియర్ చేయండి' },
+    'Change My Location to': { 'hi': 'मेरा स्थान बदलें', 'te': 'నా స్థానాన్ని మార్చండి' },
+    'Continue': { 'hi': 'जारी रखें', 'te': 'కొనసాగించండి' },
+    'Cart Contains Mixed Locations': { 'hi': 'कार्ट में मिश्रित स्थान हैं', 'te': 'కార్ట్‌లో మిశ్రమ స్థానాలు ఉన్నాయి' },
+    'Your cart has equipment from different locations': { 'hi': 'మీ కార్ట్‌లో వివిధ స్థానాల నుండి పరికరాలు ఉన్నాయి', 'te': 'మీ కార్ట్‌లో వివిధ స్థానాల నుండి పరికరాలు ఉన్నాయి' },
+    'You can only checkout items from one location at a time.': { 'hi': 'आप एक समय में केवल एक स्थान से आइटम चेकआउट कर सकते हैं।', 'te': 'మీరు ఒకేసారి ఒకే స్థానం నుండి మాత్రమే వస్తువులను చెకౌట్ చేయగలరు.' },
+    'Resolve Location Conflict': { 'hi': 'स्थान विवाद हल करें', 'te': 'స్థాన వివాదాన్ని పరిష్కరించండి' },
+    'Your cart items are from': { 'hi': 'आपकी कार्ट आइटम हैं', 'te': 'మీ కార్ట్ వస్తువులు ఇవి' },
+    'but your current location filter is': { 'hi': 'लेकिन आपका वर्तमान स्थान फ़िल्टर है', 'te': 'కానీ మీ ప్రస్తుత స్థాన ఫిల్టర్ ఇది' },
+    'Change My Location to': { 'hi': 'मेरा स्थान बदलें', 'te': 'నా స్థానాన్ని మార్చండి' },
+    'Clear Cart & Shop in': { 'hi': 'कार्ट खाली करें और खरीदारी करें', 'te': 'కార్ట్‌ను క్లియర్ చేసి, షాపింగ్ చేయండి' },
+    'Location Required': { 'hi': 'स्थान आवश्यक', 'te': 'స్థానం అవసరం' },
+    'Please set your location to match to proceed.': { 'hi': 'आगे बढ़ने के लिए कृपया अपना स्थान मैच करने के लिए सेट करें।', 'te': 'కొనసాగడానికి దయచేసి మీ స్థానాన్ని సరిపోల్చడానికి సెట్ చేయండి.' },
+    'Set Location': { 'hi': 'स्थान सेट करें', 'te': 'స్థానాన్ని సెట్ చేయండి' },
+    'Data Error': { 'hi': 'డేటా ఎర్రర్', 'te': 'డేటా ఎర్రర్' },
+    'Some items in your cart are missing location data. Please remove and re-add them.': { 'hi': 'आपकी कार्ट में कुछ आइटम में स्थान डेटा गायब है। कृपया उन्हें हटा दें और फिर से जोड़ें।', 'te': 'మీ కార్ట్‌లోని కొన్ని వస్తువులకు స్థాన డేటా లేదు. దయచేసి వాటిని తీసివేసి, మళ్లీ జోడించండి.' },
+    'Checkout Blocked: Location Mismatch': { 'hi': 'चेकआउट अवरुद्ध: स्थान बेमेल', 'te': 'చెకౌట్ నిరోధించబడింది: స్థానం సరిపోలడం లేదు' },
+    'You must set your location to match the equipment location to rent now.': { 'hi': 'अभी किराए पर लेने के लिए आपको अपना स्थान उपकरण स्थान से मेल खाने के लिए सेट करना होगा।', 'te': 'ఇప్పుడే అద్దెకు తీసుకోవడానికి మీరు మీ స్థానాన్ని పరికర స్థానానికి సరిపోయేలా సెట్ చేయాలి.' },
+    'Checkout Blocked': { 'hi': 'చెकआउट నిరోధించబడింది', 'te': 'చెకౌట్ నిరోధించబడింది' },
+    'Please set your location.': { 'hi': 'దయచేసి మీ స్థానాన్ని సెట్ చేయండి.', 'te': 'దయచేసి మీ స్థానాన్ని సెట్ చేయండి.' },
+    "don't match your location": { 'hi': 'మీ స్థానంతో సరిపోలడం లేదు', 'te': 'మీ స్థానంతో సరిపోలడం లేదు' },
+    'Set Location Now': { 'hi': 'ఇప్పుడే స్థానాన్ని సెట్ చేయండి', 'te': 'ఇప్పుడే స్థానాన్ని సెట్ చేయండి' },
+    'Back to Cart': { 'hi': 'కార్ట్‌కి తిరిగి వెళ్లండి', 'te': 'కార్ట్‌కి తిరిగి వెళ్లండి' },
+    'Confirming...': { 'hi': 'నిర్ధారిస్తోంది...', 'te': 'నిర్ధారిస్తోంది...' },
+    'Total Amount': { 'hi': 'మొత్తం మొత్తం', 'te': 'మొత్తం మొత్తం' },
+    'Customer Name': { 'hi': 'కస్టమర్ పేరు', 'te': 'కస్టమర్ పేరు' },
+    'Phone': { 'hi': 'ఫోన్', 'te': 'ఫోన్' },
+    'Email': { 'hi': 'ఇమెయిల్', 'te': 'ఇమెయిల్' },
+    'Notes': { 'hi': 'నోట్స్', 'te': 'నోట్స్' },
+    'None': { 'hi': 'ఏమీ లేదు', 'te': 'ఏమీ లేదు' },
+    'Seller': { 'hi': 'విక్రేత', 'te': 'విక్రేత' },
+    'Address': { 'hi': 'చిరునామా', 'te': 'చిరునామా' },
+    'Total Amount': { 'hi': 'మొత్తం మొత్తం', 'te': 'మొత్తం మొత్తం' },
+    'Platform Fee': { 'hi': 'ప్లాట్‌ఫారమ్ ఫీజు', 'te': 'ప్లాట్‌ఫారమ్ ఫీజు' },
+    'Payment Method': { 'hi': 'చెల్లింపు పద్ధతి', 'te': 'చెల్లింపు పద్ధతి' },
+    'Payment Status': { 'hi': 'చెల్లింపు స్థితి', 'te': 'చెల్లింపు స్థితి' },
+    'Transaction ID': { 'hi': 'లావాదేవీ ఐడి', 'te': 'లావాదేవీ ఐడి' },
+    'Close': { 'hi': 'మూసివేయండి', 'te': 'మూసివేయండి' },
+    'Cancel Order': { 'hi': 'ఆర్డర్ రద్దు చేయండి', 'te': 'ఆర్డర్ రద్దు చేయండి' },
+    'Confirm Cancellation': { 'hi': 'రద్దును నిర్ధారించండి', 'te': 'రద్దును నిర్ధారించండి' },
+    'Are you sure you want to cancel this order? Cancellation is subject to seller approval and refund processing. Only **Pending** orders can be cancelled.': { 'hi': 'क्या आप वाकई इस ऑर्डर को रद्द करना चाहते हैं? रद्दीकरण विक्रेता की स्वीकृति और धनवापसी प्रसंस्करण के अधीन है। केवल **लंबित** ऑर्डर ही रद्द किए जा सकते हैं।', 'te': 'మీరు ఈ ఆర్డర్‌ను రద్దు చేయాలనుకుంటున్నారా? రద్దు చేయడం విక్రేత ఆమోదం మరియు వాపసు ప్రాసెసింగ్‌కు లోబడి ఉంటుంది. **పెండింగ్‌లో** ఉన్న ఆర్డర్‌లు మాత్రమే రద్దు చేయబడతాయి.' },
+    'Yes, Cancel Order': { 'hi': 'అవును, ఆర్డర్‌ను రద్దు చేయండి', 'te': 'అవును, ఆర్డర్‌ను రద్దు చేయండి' },
+    
+    // Complex messages (for alerts/dynamic strings - partial match translation)
+    'Please set your location first to ensure equipment availability.': { 'hi': 'उपकरणों की उपलब्धता सुनिश्चित करने के लिए कृपया पहले अपना स्थान सेट करें।', 'te': 'పరికరాల లభ్యతను నిర్ధారించడానికి దయచేసి ముందుగా మీ స్థానాన్ని సెట్ చేయండి.' },
+    'Equipment missing Pincode information. Cannot add to cart.': { 'hi': 'उपकरण में पिनकोड की जानकारी गायब है। कार्ट में जोड़ा नहीं जा सकता।', 'te': 'పరికరంలో పిన కోడ్ సమాచారం లేదు. కార్ట్‌కు జోడించలేరు.' },
+    'Please select the required Pickup Date and Time.': { 'hi': 'कृपया आवश्यक पिकअप तिथि और समय का चयन करें।', 'te': 'దయచేసి అవసరమైన పిక్అప్ తేదీ మరియు సమయాన్ని ఎంచుకోండి.' },
+    'Please select a valid rental duration.': { 'hi': 'దయచేసి చెల్లుబాటు అయ్యే అద్దె వ్యవధిని ఎంచుకోండి.', 'te': 'దయచేసి చెల్లుబాటు అయ్యే అద్దె వ్యవధిని ఎంచుకోండి.' },
+    'Items must match your active location filter to proceed to checkout.': { 'hi': 'चेकआउट के लिए आगे बढ़ने के लिए आइटम आपके सक्रिय स्थान फ़िल्टर से मेल खाना चाहिए।', 'te': 'చెకౌట్‌కు కొనసాగడానికి వస్తువులు మీ క్రియాశీల స్థాన ఫిల్టర్‌తో సరిపోలాలి.' },
+    'Your cart contains items from': { 'hi': 'आपकी कार्ट में आइटम हैं', 'te': 'మీ కార్ట్‌లో వస్తువులు ఉన్నాయి' },
+    'Clear your cart to order from a different Pincode.': { 'hi': 'एक अलग पिनकोड से ऑर्डर करने के लिए अपनी कार्ट खाली करें।', 'te': 'వేరే పిన కోడ్ నుండి ఆర్డర్ చేయడానికి మీ కార్ట్‌ను క్లియర్ చేయండి.' },
+    'You are viewing a non-persistent cart. Log in to save your cart items.': { 'hi': 'आप एक गैर-स्थायी कार्ट देख रहे हैं। अपनी कार्ट आइटम सहेजने के लिए लॉगिन करें।', 'te': 'మీరు నాన్-పెర్సిస్టెంట్ కార్ట్‌ను చూస్తున్నారు. మీ కార్ట్ వస్తువులను సేవ్ చేయడానికి లాగిన్ చేయండి.' },
+    'Seller': { 'hi': 'विक्रेता', 'te': 'విక్రేత' },
+    'at': { 'hi': 'पर', 'te': 'వద్ద' },
+    'Remove': { 'hi': 'हटाएँ', 'te': 'తొలగించండి' },
+    'Acre(s)': { 'hi': 'एकड़(లు)', 'te': 'ఎకరం(లు)' },
+    'Hour(s)': { 'hi': 'గంట(లు)', 'te': 'గంట(లు)' },
+    'Pickup': { 'hi': 'పిక్అప్', 'te': 'పిక్అప్' },
+    'By': { 'hi': 'ద్వారా', 'te': 'ద్వారా' },
+    'Address': { 'hi': 'చిరునామా', 'te': 'చిరునామా' },
+    'Seller Information': { 'hi': 'విక్రేత సమాచారం', 'te': 'విక్రేత సమాచారం' },
+    'Business': { 'hi': 'వ్యాపారం', 'te': 'వ్యాపారం' },
+    'Contact Person': { 'hi': 'సంప్రదింపు వ్యక్తి', 'te': 'సంప్రదింపు వ్యక్తి' },
+    'Pickup Pincode': { 'hi': 'పిక్అప్ పిన కోడ్', 'te': 'పిక్అప్ పిన కోడ్' },
+    'Clear Pickup Address': { 'hi': 'క్లియర్ పిక్అప్ చిరునామా', 'te': 'క్లియర్ పిక్అప్ చిరునామా' },
+    'Full Address': { 'hi': 'పూర్తి చిరునామా', 'te': 'పూర్తి చిరునామా' },
+    'Listed by': { 'hi': 'జాబితా చేసినవారు', 'te': 'జాబితా చేసినవారు' },
+    'Acre': { 'hi': 'ఎకరం', 'te': 'ఎకరం' },
+    'Hour': { 'hi': 'గంట', 'te': 'గంట' },
+    'Category': { 'hi': 'వర్గం', 'te': 'వర్గం' },
+    'Quantity': { 'hi': 'పరిమాణం', 'te': 'పరిమాణం' },
+    'Specifications': { 'hi': 'స్పెసిఫికేషన్లు', 'te': 'స్పెసిఫికేషన్లు' },
+    'Item Info': { 'hi': 'వస్తువు సమాచారం', 'te': 'వస్తువు సమాచారం' },
+    'All Categories': { 'hi': 'అన్ని వర్గాలు', 'te': 'అన్ని వర్గాలు' },
+    'Set/Change Pincode Now': { 'hi': 'ఇప్పుడే పిన కోడ్ సెట్/మార్చండి', 'te': 'ఇప్పుడే పిన కోడ్ సెట్/మార్చండి' },
+    'User': { 'hi': 'యూజర్', 'te': 'యూజర్' },
+    'Currently Rented': { 'hi': 'ప్రస్తుతం అద్దెకు ఇవ్వబడింది', 'te': 'ప్రస్తుతం అద్దెకు ఇవ్వబడింది' },
+    'Available Now': { 'hi': 'ఇప్పుడు అందుబాటులో ఉంది', 'te': 'ఇప్పుడు అందుబాటులో ఉంది' },
+    'Rented a tractor and cultivator for my 10-acre farm. The equipment was in excellent condition and the seller\'s pickup location was convenient. Saved me from big investment!': { 'hi': 'మేము మా 10 ఎకరాల పొలం కోసం ట్రాక్టర్ మరియు కల్టివేటర్‌ను అద్దెకు తీసుకున్నాము. పరికరాలు అద్భుతమైన స్థితిలో ఉన్నాయి మరియు విక్రేత యొక్క పిక్అప్ స్థానం సౌకర్యవంతంగా ఉంది. పెద్ద పెట్టుబడి నుండి నన్ను రక్షించింది!', 'te': 'నేను నా 10 ఎకరాల పొలం కోసం ట్రాక్టర్ మరియు కల్టివేటర్‌ను అద్దెకు తీసుకున్నాను. పరికరాలు అద్భుతమైన స్థితిలో ఉన్నాయి మరియు విక్రేత యొక్క పిక్అప్ స్థానం సౌకర్యవంతంగా ఉంది. పెద్ద పెట్టుబడి నుండి నన్ను రక్షించింది!' },
+    'Successfully subscribed to newsletter!': { 'hi': 'న్యూస్‌లెటర్‌కు విజయవంతంగా సబ్‌స్క్రైబ్ చేయబడింది!', 'te': 'న్యూస్‌లెటర్‌కు విజయవంతంగా సబ్‌స్క్రైబ్ చేయబడింది!' },
+    'Error subscribing. Please try again.': { 'hi': 'సబ్‌స్క్రైబ్ చేయడంలో లోపం. దయచేసి మళ్లీ ప్రయత్నించండి.', 'te': 'సబ్‌స్క్రైబ్ చేయడంలో లోపం. దయచేసి మళ్లీ ప్రయత్నించండి.' },
+    'Please enter a valid email address': { 'hi': 'దయచేసి చెల్లుబాటు అయ్యే ఇమెయిల్ చిరునామాను నమోదు చేయండి', 'te': 'దయచేసి చెల్లుబాటు అయ్యే ఇమెయిల్ చిరునామాను నమోదు చేయండి' },
+    'Seller User': { 'hi': 'విక్రేత వినియోగదారు', 'te': 'విక్రేత వినియోగదారు' },
+    'Seller Address Missing': { 'hi': 'విక్రేత చిరునామా లేదు', 'te': 'విక్రేత చిరునామా లేదు' },
+    'Address details are missing. Contact Seller.': { 'hi': 'చిరునామా వివరాలు లేవు. విక్రేతను సంప్రదించండి.', 'te': 'చిరునామా వివరాలు లేవు. విక్రేతను సంప్రదించండి.' },
+    'added to cart!': { 'hi': 'కార్ట్‌కు జోడించబడింది!', 'te': 'కార్ట్‌కు జోడించబడింది!' },
+    'The selected equipment is in Pincode': { 'hi': 'ఎంచుకున్న పరికరం పిన కోడ్‌లో ఉంది', 'te': 'ఎంచుకున్న పరికరం పిన కోడ్‌లో ఉంది' },
+    'but your current location filter is set to': { 'hi': 'కానీ మీ ప్రస్తుత స్థాన ఫిల్టర్ దీనికి సెట్ చేయబడింది', 'te': 'కానీ మీ ప్రస్తుత స్థాన ఫిల్టర్ దీనికి సెట్ చేయబడింది' },
+    'Please resolve the location mismatch.': { 'hi': 'దయచేసి స్థానం సరిపోలకపోవడాన్ని పరిష్కరించండి.', 'te': 'దయచేసి స్థానం సరిపోలకపోవడాన్ని పరిష్కరించండి.' },
+    'Location set to': { 'hi': 'స్థానం దీనికి సెట్ చేయబడింది', 'te': 'స్థానం దీనికి సెట్ చేయబడింది' },
+    'Filtering results': { 'hi': 'ఫలితాలను ఫిల్టర్ చేస్తోంది', 'te': 'ఫలితాలను ఫిల్టర్ చేస్తోంది' },
+    'in your Pincode area': { 'hi': 'మీ పిన కోడ్ ప్రాంతంలో', 'te': 'మీ పిన కోడ్ ప్రాంతంలో' },
+    'without a location filter applied': { 'hi': 'స్థాన ఫిల్టర్ వర్తించకుండా', 'te': 'స్థాన ఫిల్టర్ వర్తించకుండా' },
+    'Try selecting "All Locations" or changing your Pincode.': { 'hi': 'దయచేసి "అన్ని స్థానాలు" ఎంచుకోవడానికి లేదా మీ పిన కోడ్‌ను మార్చడానికి ప్రయత్నించండి.', 'te': 'దయచేసి "అన్ని స్థానాలు" ఎంచుకోవడానికి లేదా మీ పిన కోడ్‌ను మార్చడానికి ప్రయత్నించండి.' },
+    'My Orders': { 'hi': 'నా ఆర్డర్లు', 'te': 'నా ఆర్డర్లు' },
+    'Order cannot be cancelled. It is no longer pending.': { 'hi': 'ఆర్డర్ రద్దు చేయబడదు. ఇది ఇకపై పెండింగ్‌లో లేదు.', 'te': 'ఆర్డర్ రద్దు చేయబడదు. ఇది ఇకపై పెండింగ్‌లో లేదు.' },
+    'Cancellation requested. Status will be updated shortly.': { 'hi': 'రద్దు చేయమని అభ్యర్థన పంపబడింది. స్థితి త్వరలో అప్‌డేట్ చేయబడుతుంది.', 'te': 'రద్దు చేయమని అభ్యర్థన పంపబడింది. స్థితి త్వరలో అప్‌డేట్ చేయబడుతుంది.' },
+    'Failed to cancel order. Please contact support.': { 'hi': 'ఆర్డర్‌ను రద్దు చేయడంలో విఫలమైంది. దయచేసి మద్దతును సంప్రదించండి.', 'te': 'ఆర్డర్‌ను రద్దు చేయడంలో విఫలమైంది. దయచేసి మద్దతును సంప్రదించండి.' },
+    'Order not found or deleted.': { 'hi': 'ఆర్డర్ కనుగొనబడలేదు లేదా తొలగించబడింది.', 'te': 'ఆర్డర్ కనుగొనబడలేదు లేదా తొలగించబడింది.' },
+    'Error listening for order updates.': { 'hi': 'ఆర్డర్ అప్‌డేట్‌ల కోసం వినడంలో లోపం.', 'te': 'ఆర్డర్ అప్‌డేట్‌ల కోసం వినడంలో లోపం.' },
+    'Order': { 'hi': 'ఆర్డర్', 'te': 'ఆర్డర్' },
+    'Details': { 'hi': 'వివరాలు', 'te': 'వివరాలు' },
+    'Current Status': { 'hi': 'ప్రస్తుత స్థితి', 'te': 'ప్రస్తుత స్థితి' },
+    'Date Placed': { 'hi': 'ఆర్డర్ తేదీ', 'te': 'ఆర్డర్ తేదీ' },
+    'Customer & Pickup Information': { 'hi': 'కస్టమర్ & పిక్అప్ సమాచారం', 'te': 'కస్టమర్ & పిక్అప్ సమాచారం' },
+    'Equipment Details': { 'hi': 'పరికరాల వివరాలు', 'te': 'పరికరాల వివరాలు' },
+    'Payment Summary': { 'hi': 'చెల్లింపు సారాంశం', 'te': 'చెల్లింపు సారాంశం' },
+    'View Details & Track': { 'hi': 'వివరాలు మరియు ట్రాక్ చూడండి', 'te': 'వివరాలు మరియు ట్రాక్ చూడండి' },
+    'Equipment Rented': { 'hi': 'అద్దెకు తీసుకున్న పరికరాలు', 'te': 'అద్దెకు తీసుకున్న పరికరాలు' },
+    'Placed on': { 'hi': 'తేదీన ఉంచబడింది', 'te': 'తేదీన ఉంచబడింది' },
+    'Self-Pickup': { 'hi': 'స్వీయ పిక్అప్', 'te': 'స్వీయ పిక్అప్' },
+    'Pickup Date/Time': { 'hi': 'పిక్అప్ తేదీ/సమయం', 'te': 'పిక్అప్ తేదీ/సమయం' },
+    'Pickup Pincode': { 'hi': 'పిక్అప్ పిన కోడ్', 'te': 'పిక్అప్ పిన కోడ్' },
+    'Total Amount': { 'hi': 'మొత్తం మొత్తం', 'te': 'మొత్తం మొత్తం' },
+    'Seller': { 'hi': 'విక్రేత', 'te': 'విక్రేత' },
+    'The agricultural drone service helped me monitor my crop health and spray pesticides efficiently. Easy pickup and modern technology at affordable rental rates!': { 'hi': 'వ్యవసాయ డ్రోన్ సేవ పంట ఆరోగ్యాన్ని పర్యవేక్షించడానికి మరియు పురుగుమందులను సమర్థవంతంగా చల్లడానికి నాకు సహాయపడింది. సరసమైన అద్దె రేట్లకు సులభమైన పిక్అప్ మరియు ఆధునిక సాంకేతికత!', 'te': 'వ్యవసాయ డ్రోన్ సేవ పంట ఆరోగ్యాన్ని పర్యవేక్షించడానికి మరియు పురుగుమందులను సమర్థవంతంగా చల్లడానికి నాకు సహాయపడింది. సరసమైన అద్దె రేట్లకు సులభమైన పిక్అప్ మరియు ఆధునిక సాంకేతికత!' },
+    'As a small farmer, I can\'t afford to buy a harvester. FarmRent made harvesting season stress-free with their reliable equipment rental and simple pickup process.': { 'hi': 'ఒక చిన్న రైతుగా, నేను హార్వెస్టర్‌ను కొనుగోలు చేయలేను. ఫార్మ్‌రెంట్ వారి నమ్మకమైన పరికరాల అద్దె మరియు సాధారణ పిక్అప్ ప్రక్రియతో పంట కాలం ఒత్తిడి లేకుండా చేసింది.', 'te': 'ఒక చిన్న రైతుగా, నేను హార్వెస్టర్‌ను కొనుగోలు చేయలేను. ఫార్మ్‌రెంట్ వారి నమ్మకమైన పరికరాల అద్దె మరియు సాధారణ పిక్అప్ ప్రక్రియతో పంట కాలం ఒత్తిడి లేకుండా చేసింది.' },
+    'Tractors': { 'hi': 'ట్రాక్టర్లు', 'te': 'ట్రాక్టర్లు' },
+    'Harvesters': { 'hi': 'హార్వెస్టర్లు', 'te': 'హార్వెస్టర్లు' },
+    'Spray Machines': { 'hi': 'స్ప్రే యంత్రాలు', 'te': 'స్ప్రే యంత్రాలు' },
+    'Agricultural Drones': { 'hi': 'వ్యవసాయ డ్రోన్లు', 'te': 'వ్యవసాయ డ్రోన్లు' },
+    'items available': { 'hi': 'వస్తువులు అందుబాటులో ఉన్నాయి', 'te': 'వస్తువులు అందుబాటులో ఉన్నాయి' },
+    'View Equipment': { 'hi': 'పరికరాలు చూడండి', 'te': 'పరికరాలు చూడండి' },
+    'Happy Farmers': { 'hi': 'సంతోషంగా ఉన్న రైతులు', 'te': 'సంతోషంగా ఉన్న రైతులు' },
+    'Districts Covered': { 'hi': 'కవర్ చేసిన జిల్లాలు', 'te': 'కవర్ చేసిన జిల్లాలు' },
+    'Acres Served': { 'hi': 'సేవ చేసిన ఎకరాలు', 'te': 'సేవ చేసిన ఎకరాలు' },
+    'Farmer Support': { 'hi': 'రైతు మద్దతు', 'te': 'రైతు మద్దతు' },
+    'Browse & Select': { 'hi': 'బ్రౌజ్ చేయండి & ఎంచుకోండి', 'te': 'బ్రౌజ్ చేయండి & ఎంచుకోండి' },
+    'Choose from our wide range of farming equipment. Filter by type, capacity, or location.': { 'hi': 'మా విస్తృత శ్రేణి వ్యవసాయ పరికరాల నుండి ఎంచుకోండి. రకం, సామర్థ్యం లేదా స్థానం ద్వారా ఫిల్టర్ చేయండి.', 'te': 'మా విస్తృత శ్రేణి వ్యవసాయ పరికరాల నుండి ఎంచుకోండి. రకం, సామర్థ్యం లేదా స్థానం ద్వారా ఫిల్టర్ చేయండి.' },
+    'Book Date & Confirm': { 'hi': 'తేదీని బుక్ చేయండి & నిర్ధారించండి', 'te': 'తేదీని బుక్ చేయండి & నిర్ధారించండి' },
+    'Select rental acres/hours, **set your required pickup date/time**, add to cart, and confirm your booking with easy payment options.': { 'hi': 'అద్దె ఎకరాలు/గంటలను ఎంచుకోండి, **మీకు అవసరమైన పిక్అప్ తేదీ/సమయాన్ని సెట్ చేయండి**, కార్ట్‌కు జోడించండి మరియు సులభమైన చెల్లింపు ఎంపికలతో మీ బుకింగ్‌ను నిర్ధారించండి.', 'te': 'అద్దె ఎకరాలు/గంటలను ఎంచుకోండి, **మీకు అవసరమైన పిక్అప్ తేదీ/సమయాన్ని సెట్ చేయండి**, కార్ట్‌కు జోడించండి మరియు సులభమైన చెల్లింపు ఎంపికలతో మీ బుకింగ్‌ను నిర్ధారించండి.' },
+    'Pickup & Use': { 'hi': 'పిక్అప్ & ఉపయోగించండి', 'te': 'పిక్అప్ & ఉపయోగించండి' },
+    'Self-pickup the equipment from the seller\'s location on your selected date/time. Fully serviced and ready for your farming needs.': { 'hi': 'మీరు ఎంచుకున్న తేదీ/సమయంలో విక్రేత స్థానం నుండి పరికరాలను స్వీయ-పిక్అప్ చేసుకోండి. మీ వ్యవసాయ అవసరాల కోసం పూర్తిగా సేవ చేయబడింది మరియు సిద్ధంగా ఉంది.', 'te': 'మీరు ఎంచుకున్న తేదీ/సమయంలో విక్రేత స్థానం నుండి పరికరాలను స్వీయ-పిక్అప్ చేసుకోండి. మీ వ్యవసాయ అవసరాల కోసం పూర్తిగా సేవ చేయబడింది మరియు సిద్ధంగా ఉంది.' },
+    'Suresh Patel': { 'hi': 'సురేష్ పటేల్', 'te': 'సురేష్ పటేల్' },
+    'Farmer, Karimnagar': { 'hi': 'రైతు, కరీంనగర్', 'te': 'రైతు, కరీంనగర్' },
+    'Ramesh': { 'hi': 'రమేష్', 'te': 'రమేష్' },
+    'Farm Owner, Warangal': { 'hi': 'ఫామ్ యజమాని, వరంగల్', 'te': 'ఫామ్ యజమాని, వరంగల్' },
+    'Surya Kumar': { 'hi': 'సూర్య కుమార్', 'te': 'సూర్య కుమార్' },
+    'Small Farmer, Nizamabad': { 'hi': 'చిన్న రైతు, నిజామాబాద్', 'te': 'చిన్న రైతు, నిజామాబాద్' },
+};
+
+// --- NEW HELPER: Get Translation ---
+function getTranslation(key) {
+    if (currentLanguage === DEFAULT_LANGUAGE) {
+        return key;
+    }
+    const translated = translations[key];
+    if (translated && translated[currentLanguage]) {
+        return translated[currentLanguage];
+    }
+    return key; // Fallback to English if translation is missing
+}
+window.getTranslation = getTranslation; // Expose globally if needed elsewhere
+
+// --- NEW FUNCTION: Translate UI elements ---
+function translateUI() {
+    // 1. Translate elements with data-i18n attribute (preferred method for reusable text)
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        el.textContent = getTranslation(key);
+    });
+
+    // 2. Translate placeholders
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        el.placeholder = getTranslation(key);
+    });
+
+    // 3. Translate specific elements like buttons/titles using innerHTML (less ideal but necessary for mixed content)
+    
+    // Nav links (Need to be updated carefully)
+    document.getElementById('nav-home')?.querySelector('a')?.setAttribute('data-i18n', 'Home');
+    document.getElementById('nav-browse')?.querySelector('a')?.setAttribute('data-i18n', 'Browse Equipment');
+    document.getElementById('nav-about')?.querySelector('a')?.setAttribute('data-i18n', 'About Us');
+    document.getElementById('nav-contact')?.querySelector('a')?.setAttribute('data-i18n', 'Contact');
+    
+    // Re-run the data-i18n check after setting attributes dynamically
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        el.textContent = getTranslation(key);
+    });
+
+    // Update language button text
+    const langBtn = document.getElementById('current-language-display');
+    if (langBtn) {
+        langBtn.textContent = currentLanguage.toUpperCase();
+    }
+    
+    // Update language toggle label text (NEW)
+    const langLabel = document.getElementById('language-toggle-label');
+    if (langLabel) {
+        if (currentLanguage === 'te') {
+            langLabel.textContent = 'తెలుగు (TE)';
+        } else {
+            langLabel.textContent = 'English (EN)';
+        }
+    }
+}
+
+// --- NEW FUNCTION: Set Application Language ---
+function setLanguage(lang) {
+    // Restrict languages to 'en' and 'te' for now, as requested
+    if (['en', 'te'].includes(lang)) {
+        currentLanguage = lang;
+        localStorage.setItem('appLanguage', lang);
+        translateUI();
+        // Reload complex dynamic content if necessary (e.g., cart, notifications)
+        const path = window.location.pathname.split('/').pop();
+        if (path === 'cart.html') loadCartPage();
+        if (window.currentUser && window.currentUser.role === 'customer') {
+            checkCustomerNotifications();
+        }
+    }
+}
+window.setLanguage = setLanguage; // Expose globally for UI language selectors
+
+// NEW FUNCTION: Toggle Language between English and Telugu
+function toggleLanguage() {
+    const newLang = currentLanguage === 'en' ? 'te' : 'en';
+    setLanguage(newLang);
+}
+window.toggleLanguage = toggleLanguage;
+
+
 // NEW: Collection name for user's notification settings (private collection)
 const CUSTOMER_NOTIFICATIONS_COLLECTION = 'customer_notifications';
 let lastClearTime = 0; // Global variable to store the last notification clear time from Firestore
@@ -119,6 +409,9 @@ async function updateCartInFirestore(cart) {
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', async () => {
+    // 1. Apply initial translation early before data loads
+    translateUI(); 
+    
     // We await initializeAuth() before proceeding to ensure currentUser is correctly set.
     await initializeAuth(); 
     
@@ -157,6 +450,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     initializeEventListeners();
     await getPlatformFeeRate(); 
+    
+    // Re-run translation after all dynamic content might have been added
+    translateUI();
 });
 
 // --- NEW FUNCTION: Fetch Platform Fee Rate ---
@@ -466,7 +762,8 @@ function showPincodeModal() {
     const buttonElement = document.getElementById('location-access-btn');
     if (buttonElement) {
         buttonElement.disabled = false;
-        buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
+        // Use translation for button text
+        buttonElement.innerHTML = `<i class="fas fa-location-arrow me-2"></i> ${getTranslation('Use Current Location')}`;
     }
     
     const modal = new bootstrap.Modal(modalElement, {
@@ -513,7 +810,7 @@ async function savePincode(pincode) {
         locationInfo = `${postOffices[0].District}, ${postOffices[0].State} (${pincode})`;
     }
 
-    window.firebaseHelpers.showAlert(`Location set to ${locationInfo}. Filtering results.`, 'success');
+    window.firebaseHelpers.showAlert(`${getTranslation('Location set to')} ${locationInfo}. ${getTranslation('Filtering results')}.`, 'success');
     
     // 4. Update the UI and reload content
     updateHomepagePincodeDisplay();
@@ -561,15 +858,15 @@ function skipPincode() {
 function updateHomepagePincodeDisplay() {
     const pincodeValueElement = document.getElementById('current-pincode-value');
     if (pincodeValueElement) {
-        pincodeValueElement.textContent = window.customerPincode ? window.customerPincode : 'All Locations';
+        pincodeValueElement.textContent = window.customerPincode ? window.customerPincode : getTranslation('All Locations');
     }
     // Also update the full display container if it exists
     const homepageDisplay = document.getElementById('homepage-pincode-display');
     if (homepageDisplay) {
          const strongElement = homepageDisplay.querySelector('p strong');
-         if (strongElement) strongElement.textContent = window.customerPincode ? window.customerPincode : 'All Locations';
+         if (strongElement) strongElement.textContent = window.customerPincode ? window.customerPincode : getTranslation('All Locations');
          const buttonElement = homepageDisplay.querySelector('button');
-         if (buttonElement) buttonElement.textContent = window.customerPincode ? 'Change Location Filter' : 'Set Location Filter';
+         if (buttonElement) buttonElement.textContent = window.customerPincode ? getTranslation('Change Location Filter') : getTranslation('Set Location Filter');
     }
 }
 
@@ -577,7 +874,7 @@ function updateHomepagePincodeDisplay() {
 function updateNavbarPincodeDisplay() {
     const navPincodeValueElement = document.getElementById('current-pincode-value-nav');
     if (navPincodeValueElement) {
-        navPincodeValueElement.textContent = window.customerPincode ? window.customerPincode : 'All Locations';
+        navPincodeValueElement.textContent = window.customerPincode ? window.customerPincode : getTranslation('All Locations');
     }
 }
 // --- END PINCODE SYSTEM INTEGRATION FUNCTIONS ---
@@ -592,15 +889,15 @@ async function updateCartForNewPincode() {
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header bg-danger text-white">
-                        <h5 class="modal-title"><i class="fas fa-trash me-2"></i>Confirm Clear Cart</h5>
+                        <h5 class="modal-title"><i class="fas fa-trash me-2"></i>${getTranslation('Confirm Clear Cart')}</h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
-                        <p>Are you sure you want to clear your cart? This action is permanent and will allow you to shop in your new location.</p>
+                        <p>${getTranslation('Are you sure you want to clear your cart? This action is permanent and will allow you to shop in your new location.')}</p>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-danger" id="confirm-clear-cart-btn">Clear Cart</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${getTranslation('Cancel')}</button>
+                        <button type="button" class="btn btn-danger" id="confirm-clear-cart-btn">${getTranslation('Clear Cart')}</button>
                     </div>
                 </div>
             </div>
@@ -685,7 +982,7 @@ function showCustomWarningModal(content) {
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header bg-warning text-dark">
-                        <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>Attention Required</h5>
+                        <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>${getTranslation('Attention Required')}</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
@@ -842,6 +1139,8 @@ async function loadBrowsePageData() {
         showEquipmentDetailsModal(itemId);
         window.history.replaceState(null, null, ' ');
     }
+    // Re-run translation after loading dynamic content
+    translateUI(); 
 }
 
 // Update the Pincode UI in browse.html (NEW FUNCTION)
@@ -858,9 +1157,9 @@ async function updatePincodeDisplay() {
             <div class="alert alert-danger d-flex justify-content-between align-items-center mb-0">
                 <div>
                     <i class="fas fa-exclamation-triangle me-2"></i>
-                    **Location Filter Missing!** Please set your Pincode to view local equipment.
+                    **${getTranslation('Location Filter Missing!')}** ${getTranslation('Please set your Pincode to view local equipment.')}
                 </div>
-                <a href="#" class="btn btn-sm btn-danger text-white" onclick="showPincodeModal()">Set Pincode Now</a>
+                <a href="#" class="btn btn-sm btn-danger text-white" onclick="showPincodeModal()">${getTranslation('Set Pincode Now')}</a>
             </div>
         `;
     } else {
@@ -869,12 +1168,14 @@ async function updatePincodeDisplay() {
             <div class="alert alert-success d-flex justify-content-between align-items-center mb-0">
                 <div>
                     <i class="fas fa-map-marker-alt me-2"></i>
-                    Equipment listings displayed for Pincode: <strong>${pincode}</strong> Only
+                    ${getTranslation('Equipment listings displayed for Pincode')}: <strong>${pincode}</strong> ${getTranslation('Only')}
                 </div>
-                <a href="#" class="btn btn-sm btn-outline-success" onclick="showPincodeModal()">Change Pincode</a>
+                <a href="#" class="btn btn-sm btn-outline-success" onclick="showPincodeModal()">${getTranslation('Change Pincode')}</a>
             </div>
         `;
     }
+    // Re-run translation to catch embedded text
+    translateUI();
 }
 
 // Load all approved equipment for the browse page (MODIFIED FOR PINCODE)
@@ -955,13 +1256,13 @@ async function loadFeaturedEquipment() {
              container.innerHTML = `
                 <div class="col-12 text-center py-5">
                     <i class="fas fa-map-marker-alt fa-3x text-muted mb-3"></i>
-                    <h4>No Equipment Found for Pincode ${pincode}</h4>
-                    <p class="text-muted">Try changing your location or removing the filter to view general listings.</p>
+                    <h4>${getTranslation('No Equipment Found for Pincode')} ${pincode}</h4>
+                    <p class="text-muted">${getTranslation('Try changing your location or removing the filter to view general listings.')}</p>
                     <button class="btn btn-primary mt-3" onclick="showPincodeModal()">
-                        <i class="fas fa-map-marker-alt me-2"></i>Change Location
+                        <i class="fas fa-map-marker-alt me-2"></i>${getTranslation('Change Location')}
                     </button>
                     <button class="btn btn-outline-secondary mt-3 ms-2" onclick="skipPincode()">
-                        <i class="fas fa-globe me-2"></i>View All Listings
+                        <i class="fas fa-globe me-2"></i>${getTranslation('View All Listings')}
                     </button>
                 </div>
             `;
@@ -996,8 +1297,8 @@ async function loadFeaturedEquipment() {
         container.innerHTML = '';
         
         if (equipmentToShow.length === 0) {
-            const pincodeText = pincode ? ` for Pincode ${pincode}` : '';
-            container.innerHTML = `<div class="col-12 text-center py-5"><p>No equipment available to display right now${pincodeText}. Try changing your location filter or checking back later.</p></div>`;
+            const pincodeText = pincode ? ` ${getTranslation('for Pincode')} ${pincode}` : '';
+            container.innerHTML = `<div class="col-12 text-center py-5"><p>${getTranslation('No equipment available to display right now')}${pincodeText}. ${getTranslation('Try changing your location filter or checking back later.')}</p></div>`;
             return;
         }
         
@@ -1028,19 +1329,19 @@ function createEquipmentCard(equipment, id, isBrowsePage = false) {
     const pincodeWarning = !pincodeMatches && currentPincode ? `
         <div class="alert alert-warning p-2 mt-2 mb-2 small">
             <i class="fas fa-exclamation-triangle me-1"></i>
-            <small>Located in ${equipmentPincode} (Your filter: ${currentPincode})</small>
+            <small>${getTranslation('Located in')} ${equipmentPincode} (${getTranslation('Your filter')}: ${currentPincode})</small>
         </div>
     ` : '';
     
     const cardClass = `card equipment-card h-100 ${!pincodeMatches && currentPincode ? 'border-warning' : ''}`;
     
     const actionButtonHtml = isBrowsePage 
-        ? `<button class="btn btn-primary w-100" onclick="showEquipmentDetailsModal('${id}')">View Details</button>`
-        : `<a href="item.html?id=${id}" class="btn btn-primary w-100">View Details</a>`;
+        ? `<button class="btn btn-primary w-100" onclick="showEquipmentDetailsModal('${id}')">${getTranslation('View Details')}</button>`
+        : `<a href="item.html?id=${id}" class="btn btn-primary w-100">${getTranslation('View Details')}</a>`;
 
     return `
         <div class="${cardClass}">
-            ${!pincodeMatches && currentPincode ? '<div class="card-header bg-warning text-dark small py-1"><i class="fas fa-map-marker-alt me-1"></i>Different Location</div>' : ''}
+            ${!pincodeMatches && currentPincode ? `<div class="card-header bg-warning text-dark small py-1"><i class="fas fa-map-marker-alt me-1"></i>${getTranslation('Different Location')}</div>` : ''}
             <div class="position-relative">
                 <img src="${imageUrl}" class="card-img-top" alt="${equipment.name}" style="height: 200px; object-fit: cover;">
                 <span class="category-badge">${equipment.category || 'Equipment'}</span>
@@ -1051,10 +1352,10 @@ function createEquipmentCard(equipment, id, isBrowsePage = false) {
                 ${pincodeWarning}
                 <div class="mt-auto">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <div class="price-tag">₹${equipment.pricePerAcre || 0}/acre</div>
-                        <small class="text-muted">or ₹${equipment.pricePerHour || 0}/hour</small>
+                        <div class="price-tag">₹${equipment.pricePerAcre || 0}/${getTranslation('acre')}</div>
+                        <small class="text-muted">${getTranslation('or')} ₹${equipment.pricePerHour || 0}/${getTranslation('hour')}</small>
                     </div>
-                    <p class="mb-2 small text-muted"><i class="fas fa-map-marker-alt me-1"></i> Pincode: ${equipment.pincode || 'N/A'}</p>
+                    <p class="mb-2 small text-muted"><i class="fas fa-map-marker-alt me-1"></i> ${getTranslation('Pincode')}: ${equipment.pincode || 'N/A'}</p>
                     ${actionButtonHtml}
                 </div>
             </div>
@@ -1151,6 +1452,9 @@ async function showEquipmentDetailsModal(id) {
 
         const modal = new bootstrap.Modal(document.getElementById('equipmentDetailsModal'));
         modal.show();
+        // Run translation on modal content after rendering
+        translateUI(); 
+
 
     } catch (error) {
         console.error('Error opening modal:', error);
@@ -1178,15 +1482,15 @@ function updateRentalDetails() {
 // Helper to build rich modal content (MODIFIED)
 function buildModalContent(equipment, sellerInfo) {
     const imageUrl = equipment.images && equipment.images[0] ? equipment.images[0] : 'https://placehold.co/500x300/2B5C2B/FFFFFF?text=Equipment';
-    const statusText = equipment.availability ? 'Available Now' : 'Currently Rented';
+    const statusText = equipment.availability ? getTranslation('Available Now') : getTranslation('Currently Rented');
     const statusClass = equipment.availability ? 'bg-success' : 'bg-danger';
 
     // NEW: Detailed Seller Information
-    const sellerName = sellerInfo?.name || equipment.sellerName || 'Seller User';
+    const sellerName = sellerInfo?.name || equipment.sellerName || getTranslation('Seller User');
     const businessName = sellerInfo?.businessName || equipment.businessName || 'N/A';
     const pickupAddress = sellerInfo 
-        ? `${sellerInfo.address || 'Seller Address Missing'}, ${sellerInfo.village || ''}, ${sellerInfo.city || ''}, ${sellerInfo.state || ''}`
-        : 'Address details are missing. Contact Seller.';
+        ? `${sellerInfo.address || getTranslation('Seller Address Missing')}, ${sellerInfo.village || ''}, ${sellerInfo.city || ''}, ${sellerInfo.state || ''}`
+        : getTranslation('Address details are missing. Contact Seller.');
     
     return `
         <div class="row">
@@ -1200,35 +1504,35 @@ function buildModalContent(equipment, sellerInfo) {
                     </div>
                 ` : ''}
                 
-                <h5 class="mt-4 text-warning"><i class="fas fa-user-tie me-2"></i>Seller Information</h5>
+                <h5 class="mt-4 text-warning"><i class="fas fa-user-tie me-2"></i>${getTranslation('Seller Information')}</h5>
                 <ul class="list-unstyled">
-                    <li><strong>Business:</strong> ${businessName}</li>
-                    <li><strong>Contact Person:</strong> ${sellerName}</li>
-                    <li><i class="fas fa-map-marker-alt me-2 text-danger"></i> <strong>Pickup Pincode:</strong> ${equipment.pincode || 'N/A'}</li>
+                    <li><strong>${getTranslation('Business')}:</strong> ${businessName}</li>
+                    <li><strong>${getTranslation('Contact Person')}:</strong> ${sellerName}</li>
+                    <li><i class="fas fa-map-marker-alt me-2 text-danger"></i> <strong>${getTranslation('Pickup Pincode')}:</strong> ${equipment.pincode || 'N/A'}</li>
                 </ul>
 
-                <h5 class="mt-4 text-warning"><i class="fas fa-map-marked-alt me-2"></i>Clear Pickup Address</h5>
+                <h5 class="mt-4 text-warning"><i class="fas fa-map-marked-alt me-2"></i>${getTranslation('Clear Pickup Address')}</h5>
                 <div class="alert alert-light border small">
-                    <strong>Full Address:</strong> ${pickupAddress}
+                    <strong>${getTranslation('Full Address')}:</strong> ${pickupAddress}
                 </div>
             </div>
             <div class="col-md-6">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <span class="badge ${statusClass} text-white p-2">${statusText}</span>
-                    <span class="text-muted small">Listed by: <strong>${businessName}</strong></span>
+                    <span class="text-muted small">${getTranslation('Listed by')}: <strong>${businessName}</strong></span>
                 </div>
                 
-                <h3 class="text-primary mb-3">${window.firebaseHelpers.formatCurrency(equipment.pricePerAcre)}/Acre | ${window.firebaseHelpers.formatCurrency(equipment.pricePerHour)}/Hour</h3>
+                <h3 class="text-primary mb-3">₹${equipment.pricePerAcre || 0}/${getTranslation('Acre')} | ₹${equipment.pricePerHour || 0}/${getTranslation('Hour')}</h3>
                 
                 <p>${equipment.description}</p>
                 
                 <ul class="list-unstyled">
-                    <li><i class="fas fa-tags me-2 text-warning"></i> <strong>Category:</strong> ${equipment.category}</li>
-                    <li><i class="fas fa-list-ol me-2 text-warning"></i> <strong>Quantity:</strong> ${equipment.quantity}</li>
+                    <li><i class="fas fa-tags me-2 text-warning"></i> <strong>${getTranslation('Category')}:</strong> ${equipment.category}</li>
+                    <li><i class="fas fa-list-ol me-2 text-warning"></i> <strong>${getTranslation('Quantity')}:</strong> ${equipment.quantity}</li>
                 </ul>
                 
                 ${equipment.specifications && Object.keys(equipment.specifications).length > 0 ? `
-                    <h5 class="mt-4">Specifications (Item Info)</h5>
+                    <h5 class="mt-4">${getTranslation('Specifications')} (${getTranslation('Item Info')})</h5>
                     <div class="row">
                         ${Object.entries(equipment.specifications).map(([key, value]) => `
                             <div class="col-6 mb-2"><strong>${key}:</strong> ${value}</div>
@@ -1277,13 +1581,13 @@ async function addToCartModal() {
     const rentalDetails = item.rentalDetails;
     
     if (!rentalDetails || rentalDetails.calculatedPrice <= 0 || !item.id || !rentalDetails.durationType) {
-        window.firebaseHelpers.showAlert('Please select a valid rental duration.', 'warning');
+        window.firebaseHelpers.showAlert(getTranslation('Please select a valid rental duration.'), 'warning');
         return;
     }
     
     // NEW VALIDATION: Check for required date/time
     if (!rentalDetails.pickupDate || !rentalDetails.pickupTime) {
-        window.firebaseHelpers.showAlert('Please select the required **Pickup Date and Time**.', 'danger');
+        window.firebaseHelpers.showAlert(getTranslation('Please select the required Pickup Date and Time.'), 'danger');
         return;
     }
     // END NEW VALIDATION
@@ -1294,7 +1598,7 @@ async function addToCartModal() {
     
     const itemPincode = item.pincode;
     if (!itemPincode) {
-        window.firebaseHelpers.showAlert('Equipment missing Pincode information. Cannot add to cart.', 'danger');
+        window.firebaseHelpers.showAlert(getTranslation('Equipment missing Pincode information. Cannot add to cart.'), 'danger');
         return;
     }
     
@@ -1303,7 +1607,7 @@ async function addToCartModal() {
     
     // Check if pincode is set
     if (!currentPincode) {
-        window.firebaseHelpers.showAlert('Please set your location first to ensure equipment availability.', 'warning');
+        window.firebaseHelpers.showAlert(getTranslation('Please set your location first to ensure equipment availability.'), 'warning');
         showPincodeModal();
         return;
     }
@@ -1312,16 +1616,16 @@ async function addToCartModal() {
     if (itemPincode !== currentPincode) {
         const warningHtml = `
             <div class="alert alert-warning">
-                <h6><i class="fas fa-map-marker-alt me-2"></i>Location Mismatch</h6>
-                <p>This equipment is located in Pincode <strong>${itemPincode}</strong>, 
-                but your current location filter is <strong>${currentPincode}</strong>.</p>
-                <p class="mb-2"><small>Items must match your active location filter to proceed to checkout.</small></p>
+                <h6><i class="fas fa-map-marker-alt me-2"></i>${getTranslation('Location Mismatch')}</h6>
+                <p>${getTranslation('This equipment is located in Pincode')} <strong>${itemPincode}</strong>, 
+                ${getTranslation('but your current location filter is')} <strong>${currentPincode}</strong>.</p>
+                <p class="mb-2"><small>${getTranslation('Items must match your active location filter to proceed to checkout.')}</small></p>
                 <div class="d-flex gap-2 mt-2">
                     <button class="btn btn-sm btn-warning" onclick="changePincodeToMatchEquipment('${itemPincode}')">
-                        Change My Location to ${itemPincode} & Continue
+                        ${getTranslation('Change My Location to')} ${itemPincode} & ${getTranslation('Continue')}
                     </button>
                     <button class="btn btn-sm btn-outline-secondary" onclick="bootstrap.Modal.getInstance(document.getElementById('custom-warning-modal')).hide();">
-                        Cancel
+                        ${getTranslation('Cancel')}
                     </button>
                 </div>
             </div>
@@ -1338,7 +1642,7 @@ async function addToCartModal() {
         // Since we already ensured itemPincode === currentPincode, 
         // we only need to check cartPincode against currentPincode (which is itemPincode)
         if (cartPincode && cartPincode !== currentPincode) { 
-             window.firebaseHelpers.showAlert(`Cannot add equipment from Pincode ${itemPincode}. Your cart contains items from ${cartPincode}. Clear your cart to order from a different Pincode.`, 'danger');
+             window.firebaseHelpers.showAlert(`${getTranslation('Cannot add equipment from Pincode')} ${itemPincode}. ${getTranslation('Your cart contains items from')} ${cartPincode}. ${getTranslation('Clear your cart to order from a different Pincode')}.`, 'danger');
              return;
         }
     }
@@ -1359,7 +1663,7 @@ async function addToCartModal() {
         pickupDate: pickupDate, // NEW
         pickupTime: pickupTime, // NEW
         // NEW: Include seller address info for clarity in cart/checkout
-        sellerAddress: item.sellerDetails ? `${item.sellerDetails.address}, ${item.sellerDetails.village}, ${item.sellerDetails.city}, ${item.sellerDetails.state}` : 'Address Unavailable',
+        sellerAddress: item.sellerDetails ? `${item.sellerDetails.address}, ${item.sellerDetails.village}, ${item.sellerDetails.city}, ${item.sellerDetails.state}` : getTranslation('Address Unavailable'),
     };
     
     // NOTE: For simplicity, when adding to cart, we replace any existing item with the same ID, 
@@ -1377,7 +1681,7 @@ async function addToCartModal() {
     const modal = bootstrap.Modal.getInstance(document.getElementById('equipmentDetailsModal'));
     if (modal) modal.hide();
     
-    window.firebaseHelpers.showAlert(`${item.name} added to cart!`, 'success');
+    window.firebaseHelpers.showAlert(`${item.name} ${getTranslation('added to cart!')}`, 'success');
 }
 
 // Direct rent/checkout from modal (MODIFIED for Date/Time capture)
@@ -1388,13 +1692,13 @@ async function rentNowModal() {
     const rentalDetails = item.rentalDetails;
     
     if (!rentalDetails || rentalDetails.calculatedPrice <= 0 || !item.id) {
-        window.firebaseHelpers.showAlert('Please select a valid rental duration.', 'warning');
+        window.firebaseHelpers.showAlert(getTranslation('Please select a valid rental duration.'), 'warning');
         return;
     }
 
     // NEW VALIDATION: Check for required date/time
     if (!rentalDetails.pickupDate || !rentalDetails.pickupTime) {
-        window.firebaseHelpers.showAlert('Please select the required **Pickup Date and Time**.', 'danger');
+        window.firebaseHelpers.showAlert(getTranslation('Please select the required Pickup Date and Time.'), 'danger');
         return;
     }
     // END NEW VALIDATION
@@ -1403,34 +1707,34 @@ async function rentNowModal() {
 
     const itemPincode = item.pincode;
     if (!itemPincode) {
-        window.firebaseHelpers.showAlert('Equipment missing Pincode information. Cannot proceed to checkout.', 'danger');
+        window.firebaseHelpers.showAlert(getTranslation('Equipment missing Pincode information. Cannot proceed to checkout.'), 'danger');
         return;
     }
     
     // Check if the current user has a pincode set in their profile
     const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
     if (!userPincode) {
-        window.firebaseHelpers.showAlert('Please set your location Pincode before proceeding to rent.', 'danger');
+        window.firebaseHelpers.showAlert(getTranslation('Please set your location Pincode before proceeding to rent.'), 'danger');
         showPincodeModal();
         return;
     }
     
     // Enforce consistency between user's filter and item's location
     if (userPincode !== itemPincode) {
-        window.firebaseHelpers.showAlert(`The selected equipment is in Pincode ${itemPincode}, but your current location filter is set to ${userPincode}. Please resolve the location mismatch.`, 'danger');
+        window.firebaseHelpers.showAlert(`${getTranslation('The selected equipment is in Pincode')} ${itemPincode}, ${getTranslation('but your current location filter is set to')} ${userPincode}. ${getTranslation('Please resolve the location mismatch.')}`, 'danger');
         
         const warningHtml = `
             <div class="alert alert-danger">
-                <h6><i class="fas fa-map-marker-alt me-2"></i>Checkout Blocked: Location Mismatch</h6>
-                <p>This equipment is located in Pincode <strong>${itemPincode}</strong>, 
-                but your current location filter is <strong>${userPincode}</strong>.</p>
-                <p class="mb-2"><small>You must set your location to match the equipment location to rent now.</small></p>
+                <h6><i class="fas fa-map-marker-alt me-2"></i>${getTranslation('Checkout Blocked: Location Mismatch')}</h6>
+                <p>${getTranslation('This equipment is located in Pincode')} <strong>${itemPincode}</strong>, 
+                ${getTranslation('but your current location filter is')} <strong>${userPincode}</strong>.</p>
+                <p class="mb-2"><small>${getTranslation('You must set your location to match the equipment location to rent now.')}</small></p>
                 <div class="d-flex gap-2 mt-2">
                     <button class="btn btn-sm btn-warning" onclick="changePincodeToMatchEquipment('${itemPincode}'); window.location.href='checkout.html'">
-                        Change My Location to ${itemPincode} & Checkout
+                        ${getTranslation('Change My Location to')} ${itemPincode} & ${getTranslation('Checkout')}
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="bootstrap.Modal.getInstance(document.getElementById('custom-warning-modal')).hide();">
-                        Cancel
+                        ${getTranslation('Cancel')}
                     </button>
                 </div>
             </div>
@@ -1457,7 +1761,7 @@ async function rentNowModal() {
             pickupDate: pickupDate, // NEW
             pickupTime: pickupTime, // NEW
             // NEW: Include seller address info for clarity in cart/checkout
-            sellerAddress: item.sellerDetails ? `${item.sellerDetails.address}, ${item.sellerDetails.village}, ${item.sellerDetails.city}, ${item.sellerDetails.state}` : 'Address Unavailable',
+            sellerAddress: item.sellerDetails ? `${item.sellerDetails.address}, ${item.sellerDetails.village}, ${item.sellerDetails.city}, ${item.sellerDetails.state}` : getTranslation('Address Unavailable'),
         }
     ];
 
@@ -1487,6 +1791,8 @@ async function loadCartPage() {
     await checkCartPincodeCompatibility(cart);
     
     displayCartItems(cart); 
+    // Re-run translation after loading dynamic content
+    translateUI();
 }
 
 // NEW: Check cart compatibility on cart.html
@@ -1518,16 +1824,16 @@ async function checkCartPincodeCompatibility(cart) {
     if (pincodes.length > 1) {
         warningContainer.innerHTML = `
             <div class="alert alert-danger">
-                <h6><i class="fas fa-exclamation-circle me-2"></i>Cart Contains Mixed Locations</h6>
-                <p>Your cart has equipment from different locations:</p>
+                <h6><i class="fas fa-exclamation-circle me-2"></i>${getTranslation('Cart Contains Mixed Locations')}</h6>
+                <p>${getTranslation('Your cart has equipment from different locations')}:</p>
                 <ul class="mb-2">
                     ${pincodes.map(pincode => 
-                        `<li>${itemsByPincode[pincode].length} item(s) from Pincode ${pincode}</li>`
+                        `<li>${itemsByPincode[pincode].length} ${getTranslation('item(s)')} ${getTranslation('from Pincode')} ${pincode}</li>`
                     ).join('')}
                 </ul>
-                <p><strong>You can only checkout items from one location at a time.</strong></p>
+                <p><strong>${getTranslation('You can only checkout items from one location at a time.')}</strong></p>
                 <button class="btn btn-sm btn-danger" onclick="resolveMixedPincodeCart()">
-                    <i class="fas fa-sync-alt me-1"></i>Resolve Location Conflict
+                    <i class="fas fa-sync-alt me-1"></i>${getTranslation('Resolve Location Conflict')}
                 </button>
             </div>
         `;
@@ -1540,15 +1846,15 @@ async function checkCartPincodeCompatibility(cart) {
     if (cartPincode && currentPincode && cartPincode !== currentPincode) {
         warningContainer.innerHTML = `
             <div class="alert alert-warning">
-                <h6><i class="fas fa-map-marker-alt me-2"></i>Location Mismatch</h6>
-                <p>Your cart items are from <strong>Pincode ${cartPincode}</strong>, 
-                but your current location filter is <strong>${currentPincode}</strong>.</p>
+                <h6><i class="fas fa-map-marker-alt me-2"></i>${getTranslation('Location Mismatch')}</h6>
+                <p>${getTranslation('Your cart items are from')} <strong>${getTranslation('Pincode')} ${cartPincode}</strong>, 
+                ${getTranslation('but your current location filter is')} <strong>${currentPincode}</strong>.</p>
                 <div class="d-flex gap-2 mt-2">
                     <button class="btn btn-sm btn-warning" onclick="changePincodeToMatchCart('${cartPincode}')">
-                        Change My Location to ${cartPincode}
+                        ${getTranslation('Change My Location to')} ${cartPincode}
                     </button>
                     <button class="btn btn-sm btn-outline-danger" onclick="clearCartForCurrentLocation()">
-                        Clear Cart & Shop in ${currentPincode}
+                        ${getTranslation('Clear Cart & Shop in')} ${currentPincode}
                     </button>
                 </div>
             </div>
@@ -1559,10 +1865,10 @@ async function checkCartPincodeCompatibility(cart) {
         // Case 3: Cart has items from one location, but no filter is set
         warningContainer.innerHTML = `
             <div class="alert alert-info">
-                <h6><i class="fas fa-info-circle me-2"></i>Location Required</h6>
-                <p>Your cart is for <strong>Pincode ${cartPincode}</strong>. Please set your location to match to proceed.</p>
+                <h6><i class="fas fa-info-circle me-2"></i>${getTranslation('Location Required')}</h6>
+                <p>${getTranslation('Your cart is for Pincode')} <strong>${cartPincode}</strong>. ${getTranslation('Please set your location to match to proceed.')}</p>
                 <button class="btn btn-sm btn-primary" onclick="showPincodeModal()">
-                    <i class="fas fa-map-marker-alt me-1"></i>Set Location
+                    <i class="fas fa-map-marker-alt me-1"></i>${getTranslation('Set Location')}
                 </button>
             </div>
         `;
@@ -1572,8 +1878,8 @@ async function checkCartPincodeCompatibility(cart) {
         // Case 4: Cart items are missing pincode data (System/Data error)
         warningContainer.innerHTML = `
             <div class="alert alert-danger">
-                <h6><i class="fas fa-exclamation-circle me-2"></i>Data Error</h6>
-                <p>Some items in your cart are missing location data. Please remove and re-add them.</p>
+                <h6><i class="fas fa-exclamation-circle me-2"></i>${getTranslation('Data Error')}</h6>
+                <p>${getTranslation('Some items in your cart are missing location data. Please remove and re-add them.')}</p>
             </div>
         `;
         checkoutBtn.disabled = true;
@@ -1604,15 +1910,15 @@ async function resolveMixedPincodeCart() {
             <input class="form-check-input" type="radio" name="selectedPincode" 
                     id="pincode-${pincode}" value="${pincode}">
             <label class="form-check-label" for="pincode-${pincode}">
-                <strong>Pincode ${pincode}</strong> - ${items.length} item(s)
+                <strong>${getTranslation('Pincode')} ${pincode}</strong> - ${items.length} ${getTranslation('item(s)')}
                 <br><small>${items.map(item => item.name).join(', ')}</small>
             </label>
         </div>
     `).join('');
     
     const modalContent = `
-        <h5>Resolve Location Conflict</h5>
-        <p>Your cart contains items from multiple locations. Please choose which location to keep:</p>
+        <h5>${getTranslation('Resolve Location Conflict')}</h5>
+        <p>${getTranslation('Your cart contains items from multiple locations. Please choose which location to keep')}:</p>
         
         <div id="pincode-options" class="my-3">
             ${optionsHtml}
@@ -1620,13 +1926,13 @@ async function resolveMixedPincodeCart() {
         
         <div class="alert alert-info">
             <i class="fas fa-info-circle me-2"></i>
-            Items from other locations will be removed from your cart. Your current location filter will be updated to match your choice.
+            ${getTranslation('Items from other locations will be removed from your cart. Your current location filter will be updated to match your choice.')}
         </div>
         
         <div class="modal-footer justify-content-between">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${getTranslation('Cancel')}</button>
             <button type="button" class="btn btn-primary" id="confirm-pincode-choice">
-                Keep Selected Location
+                ${getTranslation('Keep Selected Location')}
             </button>
         </div>
     `;
@@ -1655,7 +1961,7 @@ async function resolveMixedPincodeCart() {
                     const modal = bootstrap.Modal.getInstance(document.getElementById('custom-warning-modal'));
                     if (modal) modal.hide();
                 } else {
-                    window.firebaseHelpers.showAlert('Please select a pincode to resolve the conflict.', 'warning');
+                    window.firebaseHelpers.showAlert(getTranslation('Please select a pincode to resolve the conflict.'), 'warning');
                 }
             };
         }
@@ -1678,7 +1984,7 @@ async function clearCartForCurrentLocation() {
 // Start checkout (MODIFIED for mandatory Pincode check)
 async function startCheckout() {
     if (!window.currentUser) {
-        window.firebaseHelpers.showAlert('Please log in before proceeding to checkout.', 'warning');
+        window.firebaseHelpers.showAlert(getTranslation('Please log in before proceeding to checkout.'), 'warning');
         setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 1500);
         return;
     }
@@ -1687,7 +1993,7 @@ async function startCheckout() {
     const cart = await getCartFromFirestore();
 
     if (cart.length === 0) {
-        window.firebaseHelpers.showAlert('Your cart is empty. Please add items to proceed.', 'warning');
+        window.firebaseHelpers.showAlert(getTranslation('Your cart is empty. Please add items to proceed.'), 'warning');
         setTimeout(() => { window.location.href = 'browse.html'; }, 2000);
         return;
     }
@@ -1695,14 +2001,14 @@ async function startCheckout() {
     // NEW VALIDATION: Check if all items have pickup date/time set
     const missingDetails = cart.some(item => !item.pickupDate || !item.pickupTime);
     if (missingDetails) {
-        window.firebaseHelpers.showAlert('Please set the required **Pickup Date and Time** for all items in your cart.', 'danger');
+        window.firebaseHelpers.showAlert(getTranslation('Please set the required Pickup Date and Time for all items in your cart.'), 'danger');
         return;
     }
     // END NEW VALIDATION
 
     // Check 1: Is user pincode set?
     if (!userPincode) {
-        window.firebaseHelpers.showAlert('Location required! Please set your Pincode to finalize the rental location.', 'danger');
+        window.firebaseHelpers.showAlert(getTranslation('Location required! Please set your Pincode to finalize the rental location.'), 'danger');
         showPincodeModal();
         return;
     }
@@ -1712,7 +2018,7 @@ async function startCheckout() {
     
     if (cartPincode !== userPincode) {
         // This should ideally not happen if cart.html was loaded correctly, but acts as a final safety check
-        window.firebaseHelpers.showAlert(`Your cart items are from Pincode ${cartPincode}, but your current Pincode is ${userPincode}. Please resolve the location mismatch in your cart.`, 'danger');
+        window.firebaseHelpers.showAlert(`${getTranslation('Your cart items are from Pincode')} ${cartPincode}, ${getTranslation('but your current Pincode is')} ${userPincode}. ${getTranslation('Please resolve the location mismatch in your cart.')}`, 'danger');
         setTimeout(() => { window.location.href = 'cart.html'; }, 1500);
         return;
     }
@@ -1738,10 +2044,10 @@ async function loadCheckoutPage() {
 
     if (!user || cart.length === 0) {
         if (!user) {
-            window.firebaseHelpers.showAlert('You must be logged in to checkout.', 'danger');
+            window.firebaseHelpers.showAlert(getTranslation('You must be logged in to checkout.'), 'danger');
             setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 2000);
         } else {
-            window.firebaseHelpers.showAlert('Your cart is empty. Please add items to proceed.', 'warning');
+            window.firebaseHelpers.showAlert(getTranslation('Your cart is empty. Please add items to proceed.'), 'warning');
             setTimeout(() => { window.location.href = 'browse.html'; }, 2000);
         }
         return;
@@ -1752,29 +2058,29 @@ async function loadCheckoutPage() {
 
     // Final Pincode Validation
     if (!userPincode || cart[0].pincode !== userPincode) {
-        let message = 'Location Mismatch: ';
+        let message = `${getTranslation('Location Mismatch')}: `;
         if (!userPincode) {
-            message += 'Please set your location.';
+            message += getTranslation('Please set your location.');
         } else {
-            message += `Cart items (${cart[0].pincode}) don't match your location (${userPincode}).`;
+            message += `${getTranslation('Cart items')} (${cart[0].pincode}) ${getTranslation("don't match your location")} (${userPincode}).`;
         }
         
         const warningHtml = `
             <div class="alert alert-danger p-4">
-                <h6><i class="fas fa-exclamation-triangle me-2"></i>Checkout Blocked</h6>
+                <h6><i class="fas fa-exclamation-triangle me-2"></i>${getTranslation('Checkout Blocked')}</h6>
                 <p>${message}</p>
                 <div class="d-flex gap-2 mt-3">
                     ${!userPincode ? `
                         <button class="btn btn-sm btn-primary" onclick="showPincodeModal()">
-                            <i class="fas fa-map-marker-alt me-2"></i>Set Location Now
+                            <i class="fas fa-map-marker-alt me-2"></i>${getTranslation('Set Location Now')}
                         </button>
                     ` : `
                         <button class="btn btn-sm btn-warning" onclick="changePincodeToMatchCart('${cart[0].pincode}')">
-                            Change Location to ${cart[0].pincode}
+                            ${getTranslation('Change Location to')} ${cart[0].pincode}
                         </button>
                     `}
                     <button class="btn btn-sm btn-outline-secondary" onclick="window.location.href='cart.html'">
-                        <i class="fas fa-shopping-cart me-2"></i>Back to Cart
+                        <i class="fas fa-shopping-cart me-2"></i>${getTranslation('Back to Cart')}
                     </button>
                 </div>
             </div>
@@ -1788,7 +2094,7 @@ async function loadCheckoutPage() {
         const payBtn = document.getElementById('pay-now-btn');
         if (payBtn) payBtn.disabled = true;
         const payAmount = document.getElementById('pay-button-amount');
-        if (payAmount) payAmount.textContent = 'Error';
+        if (payAmount) payAmount.textContent = getTranslation('Error');
         return;
     }
     
@@ -1801,6 +2107,8 @@ async function loadCheckoutPage() {
     if (customerPhoneInput) customerPhoneInput.value = user.mobile || '';
 
     displayCheckoutSummary(cart);
+    // Re-run translation after loading dynamic content
+    translateUI();
 }
 
 
@@ -1826,12 +2134,12 @@ function updateNavbarForLoggedInUser(userData) {
                     <span class="badge bg-danger position-absolute top-0 start-100 translate-middle rounded-pill" id="customer-notification-count">0</span>
                 </a>
                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="notificationDropdown" id="customer-notifications-list">
-                    <li><h6 class="dropdown-header">Alerts & Updates</h6></li>
-                    <li><a class="dropdown-item text-center text-muted" href="#" onclick="showSection('orders')">Loading...</a></li>
+                    <li><h6 class="dropdown-header">${getTranslation('Alerts & Updates')}</h6></li>
+                    <li><a class="dropdown-item text-center text-muted" href="#" onclick="showSection('orders')">${getTranslation('Loading...')}</a></li>
                     <li><hr class="dropdown-divider"></li>
                     <!-- NEW: Clear Button added to Customer Notification Dropdown -->
                     <li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()">
-                        <i class="fas fa-check-double me-1"></i> Clear Alerts
+                        <i class="fas fa-check-double me-1"></i> ${getTranslation('Clear Alerts')}
                     </a></li>
                 </ul>
             </li>
@@ -1839,36 +2147,49 @@ function updateNavbarForLoggedInUser(userData) {
         // Load notifications upon login/navbar update
         checkCustomerNotifications();
     }
+    
+    // Determine language display for the toggle
+    const langDisplay = currentLanguage === 'te' ? 'తెలుగు (TE)' : 'English (EN)';
 
 
     let dropdownHtml = `
         ${notificationsHtml}
         <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
-                <i class="fas fa-user-circle me-1"></i> ${userData.name || 'User'}
+                <i class="fas fa-user-circle me-1"></i> ${userData.name || getTranslation('User')}
             </a>
             <ul class="dropdown-menu">
-                <li><a class="dropdown-item" href="profile.html"><i class="fas fa-user me-2"></i>Profile</a></li>
-                <li><a class="dropdown-item" href="orders.html"><i class="fas fa-clipboard-list me-2"></i>My Orders</a></li>
+                <li><a class="dropdown-item" href="profile.html"><i class="fas fa-user me-2"></i>${getTranslation('Profile')}</a></li>
+                <li><a class="dropdown-item" href="orders.html"><i class="fas fa-clipboard-list me-2"></i>${getTranslation('My Orders')}</a></li>
     `;
     
     if (userData.role === 'seller') {
-        dropdownHtml += '<li><a class="dropdown-item" href="seller.html"><i class="fas fa-store me-2"></i>Seller Dashboard</a></li>';
+        dropdownHtml += `<li><a class="dropdown-item" href="seller.html"><i class="fas fa-store me-2"></i>${getTranslation('Seller Dashboard')}</a></li>`;
     }
     
     if (userData.role === 'admin') {
-        dropdownHtml += '<li><a class="dropdown-item" href="admin.html"><i class="fas fa-user-shield me-2"></i>Admin Panel</a></li>';
+        dropdownHtml += `<li><a class="dropdown-item" href="admin.html"><i class="fas fa-user-shield me-2"></i>${getTranslation('Admin Panel')}</a></li>`;
     }
     
     dropdownHtml += `
                 <li><hr class="dropdown-divider"></li>
-                <li><a class="dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+                <li><a class="dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>${getTranslation('Logout')}</a></li>
             </ul>
+        </li>
+        <!-- Language Toggle (Simple Button based on request) -->
+        <li class="nav-item">
+            <button class="btn btn-sm btn-outline-light nav-link mx-2" onclick="toggleLanguage()" style="padding: 0.375rem 0.75rem;">
+                <i class="fas fa-language me-1"></i> 
+                <span id="language-toggle-label">${langDisplay}</span>
+            </button>
         </li>
     `;
     
     // We modify the cart li element's content, so we just update navbarAuth with the dropdown
     navbarAuth.insertAdjacentHTML('afterbegin', dropdownHtml);
+    
+    // Re-run the main UI translation to catch the new dynamic elements
+    translateUI(); 
 }
 
 // NEW: Function to mark customer notifications as read (UPDATED to use Firestore)
@@ -1894,7 +2215,7 @@ async function markCustomerNotificationsAsRead() {
         const listElement = document.getElementById('customer-notifications-list');
         if (listElement) {
             // Update the list content to show it's cleared/read
-            listElement.innerHTML = '<li><h6 class="dropdown-header">Alerts & Updates</h6></li><li><a class="dropdown-item text-center text-muted" href="#">All caught up! (Database Updated)</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center" href="orders.html">View All Orders</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()"><i class="fas fa-check-double me-1"></i> Clear Alerts</a></li>';
+            listElement.innerHTML = `<li><h6 class="dropdown-header">${getTranslation('Alerts & Updates')}</h6></li><li><a class="dropdown-item text-center text-muted" href="#">${getTranslation('All caught up! (Database Updated)')}</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center" href="orders.html">${getTranslation('View All Orders')}</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()"><i class="fas fa-check-double me-1"></i> ${getTranslation('Clear Alerts')}</a></li>`;
         }
 
         // Hide the dropdown menu instance if it exists
@@ -1904,11 +2225,11 @@ async function markCustomerNotificationsAsRead() {
             dropdown.hide();
         }
         
-        window.firebaseHelpers.showAlert('Notifications cleared and status saved to database.', 'success');
+        window.firebaseHelpers.showAlert(getTranslation('Notifications cleared and status saved to database.'), 'success');
         
     } catch (error) {
         console.error('Error marking notifications as read in Firestore:', error);
-        window.firebaseHelpers.showAlert('Failed to save read status. Please try again.', 'danger');
+        window.firebaseHelpers.showAlert(getTranslation('Failed to save read status. Please try again.'), 'danger');
     }
 }
 window.markCustomerNotificationsAsRead = markCustomerNotificationsAsRead;
@@ -1946,21 +2267,21 @@ async function checkCustomerNotifications() {
             
             // Critical statuses for notification
             if (order.status === 'pending') {
-                message = `Order #${doc.id.substring(0, 8)} is pending seller confirmation.`;
+                message = getTranslation(`Order #${doc.id.substring(0, 8)} is pending seller confirmation.`);
                 icon = 'fas fa-clock';
                 badgeClass = 'bg-warning';
             } else if (order.status === 'active') {
-                message = `Order #${doc.id.substring(0, 8)} confirmed! Ready for pickup.`;
+                message = getTranslation(`Order #${doc.id.substring(0, 8)} confirmed! Ready for pickup.`);
                 icon = 'fas fa-check-circle';
                 badgeClass = 'bg-success';
             } else if (order.status === 'cancelled' || order.status === 'rejected') {
                  // Notify if order was cancelled by seller/admin
-                message = `Order #${doc.id.substring(0, 8)} has been cancelled/rejected.`;
+                message = getTranslation(`Order #${doc.id.substring(0, 8)} has been cancelled/rejected.`);
                 icon = 'fas fa-ban';
                 badgeClass = 'bg-danger';
             } else if (order.status === 'returned') {
                  // Notify if order was returned (final payment/check pending)
-                message = `Order #${doc.id.substring(0, 8)} equipment returned. Final review pending.`;
+                message = getTranslation(`Order #${doc.id.substring(0, 8)} equipment returned. Final review pending.`);
                 icon = 'fas fa-undo-alt';
                 badgeClass = 'bg-info';
             } else {
@@ -2005,13 +2326,13 @@ async function checkCustomerNotifications() {
              // Only show count if greater than 0 and the user is logged in
              countElement.textContent = window.currentUser && unreadCount > 0 ? unreadCount : '';
         }
-        if (listElement) listElement.innerHTML = '<li><h6 class="dropdown-header">Alerts & Updates</h6></li>';
+        if (listElement) listElement.innerHTML = `<li><h6 class="dropdown-header">${getTranslation('Alerts & Updates')}</h6></li>`;
 
         if (criticalNotifications.length === 0) {
-             if (listElement) listElement.innerHTML += '<li><a class="dropdown-item text-center text-muted" href="#">No recent alerts.</a></li>';
+             if (listElement) listElement.innerHTML += `<li><a class="dropdown-item text-center text-muted" href="#">${getTranslation('No recent alerts.')}</a></li>`;
         } else {
             criticalNotifications.forEach(notif => {
-                const timeAgo = notif.date ? window.firebaseHelpers.formatTimeAgo(notif.date) : 'N/A';
+                const timeAgo = notif.date ? window.firebaseHelpers.formatTimeAgo(notif.date) : getTranslation('N/A');
                 const unreadClass = notif.isUnread ? 'fw-bold' : 'text-muted'; // Highlight unread
                 if (listElement) listElement.innerHTML += `
                     <li>
@@ -2031,10 +2352,10 @@ async function checkCustomerNotifications() {
         if (listElement) {
              listElement.innerHTML += `
                 <li><hr class="dropdown-divider"></li>
-                <li><a class="dropdown-item text-center" href="orders.html">View All Orders</a></li>
+                <li><a class="dropdown-item text-center" href="orders.html">${getTranslation('View All Orders')}</a></li>
                 <li><hr class="dropdown-divider"></li>
                 <li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()">
-                    <i class="fas fa-check-double me-1"></i> Clear Alerts
+                    <i class="fas fa-check-double me-1"></i> ${getTranslation('Clear Alerts')}
                 </a></li>
             `;
         }
@@ -2047,7 +2368,7 @@ async function checkCustomerNotifications() {
         if (countElement) countElement.textContent = '';
         const listElement = document.getElementById('customer-notifications-list');
         if (listElement) {
-             listElement.innerHTML = '<li><h6 class="dropdown-header">Alerts & Updates</h6></li><li><a class="dropdown-item text-center text-danger" href="#">Error loading alerts.</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()"><i class="fas fa-check-double me-1"></i> Clear Alerts</a></li>';
+             listElement.innerHTML = `<li><h6 class="dropdown-header">${getTranslation('Alerts & Updates')}</h6></li><li><a class="dropdown-item text-center text-danger" href="#">${getTranslation('Error loading alerts.')}</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()"><i class="fas fa-check-double me-1"></i> ${getTranslation('Clear Alerts')}</a></li>`;
         }
     }
 }
@@ -2062,21 +2383,31 @@ function updateNavbarForLoggedOutUser() {
          return; 
     }
     
+    // Determine language display for the toggle
+    const langDisplay = currentLanguage === 'te' ? 'తెలుగు (TE)' : 'English (EN)';
+
     navbarAuth.innerHTML = `
         <li class="nav-item dropdown" id="role-dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="roleDropdown" role="button" data-bs-toggle="dropdown">
-                <i class="fas fa-user-tag me-1"></i> Sign Up As
+                <i class="fas fa-user-tag me-1"></i> ${getTranslation('Sign Up As')}
             </a>
             <ul class="dropdown-menu">
-                <li><a class="dropdown-item" href="auth.html?role=customer"><i class="fas fa-user me-2"></i>Customer</a></li>
-                <li><a class="dropdown-item" href="auth.html?role=seller"><i class="fas fa-store me-2"></i>Seller</a></li>
-                <li><a class="dropdown-item" href="auth.html?role=admin"><i class="fas fa-user-shield me-2"></i>Admin</a></li>
+                <li><a class="dropdown-item" href="auth.html?role=customer"><i class="fas fa-user me-2"></i>${getTranslation('Customer')}</a></li>
+                <li><a class="dropdown-item" href="auth.html?role=seller"><i class="fas fa-store me-2"></i>${getTranslation('Seller')}</a></li>
+                <li><a class="dropdown-item" href="auth.html?role=admin"><i class="fas fa-user-shield me-2"></i>${getTranslation('Admin')}</a></li>
             </ul>
         </li>
         <li class="nav-item">
             <a class="nav-link" href="auth.html?role=customer">
-                <i class="fas fa-sign-in-alt me-1"></i> Login
+                <i class="fas fa-sign-in-alt me-1"></i> ${getTranslation('Login')}
             </a>
+        </li>
+        <!-- Language Toggle (Simple Button based on request) -->
+        <li class="nav-item">
+            <button class="btn btn-sm btn-outline-light nav-link mx-2" onclick="toggleLanguage()" style="padding: 0.375rem 0.75rem;">
+                <i class="fas fa-language me-1"></i> 
+                <span id="language-toggle-label">${langDisplay}</span>
+            </button>
         </li>
     `;
 }
@@ -2092,6 +2423,8 @@ async function loadHomepageData() {
         await loadPopularEquipmentFooter();
         updateHomepagePincodeDisplay();
         
+        // Re-run translation after loading dynamic content
+        translateUI(); 
     } catch (error) {
         console.error('Error loading homepage data:', error);
     }
@@ -2133,7 +2466,7 @@ async function loadCategories() {
         container.innerHTML = '';
         
         if (categories.length === 0) {
-            container.innerHTML = '<div class="col-12 text-center"><p>No equipment or categories found.</p></div>';
+            container.innerHTML = `<div class="col-12 text-center"><p>${getTranslation('No equipment or categories found.')}</p></div>`;
             return;
         }
         
@@ -2147,8 +2480,8 @@ async function loadCategories() {
                         <i class="${category.icon || 'fas fa-question-circle'}"></i>
                     </div>
                     <h5>${category.name}</h5>
-                    <p class="text-muted">${category.count} items available</p>
-                    <a href="browse.html?category=${category.name.toLowerCase()}" class="btn btn-outline-primary mt-auto">View Equipment</a>
+                    <p class="text-muted">${category.count} ${getTranslation('items available')}</p>
+                    <a href="browse.html?category=${category.name.toLowerCase()}" class="btn btn-outline-primary mt-auto">${getTranslation('View Equipment')}</a>
                 </div>
             `;
             container.appendChild(col);
@@ -2179,25 +2512,25 @@ async function loadStats() {
             <div class="col-md-3 col-6">
                 <div class="stat-item">
                     <div class="stat-number">${stats.happyFarmers}+</div>
-                    <div class="stat-label">Happy Farmers</div>
+                    <div class="stat-label">${getTranslation('Happy Farmers')}</div>
                 </div>
             </div>
             <div class="col-md-3 col-6">
                 <div class="stat-item">
                     <div class="stat-number">${stats.districtsCovered}+</div>
-                    <div class="stat-label">Districts Covered</div>
+                    <div class="stat-label">${getTranslation('Districts Covered')}</div>
                 </div>
             </div>
             <div class="col-md-3 col-6">
                 <div class="stat-item">
                     <div class="stat-number">${stats.acresServed}+</div>
-                    <div class="stat-label">Acres Served</div>
+                    <div class="stat-label">${getTranslation('Acres Served')}</div>
                 </div>
             </div>
             <div class="col-md-3 col-6">
                 <div class="stat-item">
                     <div class="stat-number">${stats.supportHours}</div>
-                    <div class="stat-label">Farmer Support</div>
+                    <div class="stat-label">${getTranslation('Farmer Support')}</div>
                 </div>
             </div>
         `;
@@ -2215,18 +2548,18 @@ function loadHowItWorks() {
     const steps = [
         {
             icon: 'fas fa-search',
-            title: 'Browse & Select',
-            description: 'Choose from our wide range of farming equipment. Filter by type, capacity, or location.'
+            titleKey: 'Browse & Select',
+            descriptionKey: 'Choose from our wide range of farming equipment. Filter by type, capacity, or location.'
         },
         {
             icon: 'fas fa-calendar-check',
-            title: 'Book Date & Confirm', // UPDATED TITLE
-            description: 'Select rental acres/hours, **set your required pickup date/time**, add to cart, and confirm your booking with easy payment options.' // Updated text
+            titleKey: 'Book Date & Confirm', // UPDATED TITLE
+            descriptionKey: 'Select rental acres/hours, **set your required pickup date/time**, add to cart, and confirm your booking with easy payment options.' // Updated text
         },
         {
             icon: 'fas fa-hand-paper', // Changed icon from truck to hand-paper for pickup
-            title: 'Pickup & Use', // Changed title
-            description: 'Self-pickup the equipment from the seller\'s location on your selected date/time. Fully serviced and ready for your farming needs.' // Changed description
+            titleKey: 'Pickup & Use', // Changed title
+            descriptionKey: 'Self-pickup the equipment from the seller\'s location on your selected date/time. Fully serviced and ready for your farming needs.' // Changed description
         }
     ];
     
@@ -2236,8 +2569,8 @@ function loadHowItWorks() {
                 <div class="step-icon">
                     <i class="${step.icon}"></i>
                 </div>
-                <h4>${step.title}</h4>
-                <p>${step.description}</p>
+                <h4>${getTranslation(step.titleKey)}</h4>
+                <p>${getTranslation(step.descriptionKey)}</p>
             </div>
         </div>
     `).join('');
@@ -2287,8 +2620,10 @@ async function loadTestimonials() {
 
 // Create testimonial card
 function createTestimonialCard(testimonial) {
-    const initials = testimonial.customerName ? testimonial.customerName.split(' ').map(n => n[0]).join('').toUpperCase() : 'CU';
+    const initials = testimonial.customerName ? testimonial.customerName.split(' ').map(n => n[0]).join('').toUpperCase() : getTranslation('CU');
     
+    // Note: Testimonial text and location are dynamic, but we can't reliably translate them without a full translation service.
+    // We only translate the labels/role text.
     return `
         <div class="testimonial-card h-100">
             <div class="testimonial-text">
@@ -2297,27 +2632,27 @@ function createTestimonialCard(testimonial) {
             <div class="client-info">
                 <div class="client-avatar">${initials}</div>
                 <div>
-                    <h5 class="mb-0">${testimonial.customerName || 'Customer'}</h5>
-                    <small class="text-muted">${testimonial.location || 'Farm Owner'}</small>
+                    <h5 class="mb-0">${testimonial.customerName || getTranslation('Customer')}</h5>
+                    <small class="text-muted">${testimonial.location || getTranslation('Farm Owner')}</small>
                 </div>
             </div>
         </div>
     `;
 }
 
-// Get default testimonials
+// Get default testimonials (MODIFIED for translation)
 function getDefaultTestimonials() {
     return `
         <div class="col-md-4">
             <div class="testimonial-card">
                 <div class="testimonial-text">
-                    "Rented a tractor and cultivator for my 10-acre farm. The equipment was in excellent condition and the seller's pickup location was convenient. Saved me from big investment!"
+                    "${getTranslation("Rented a tractor and cultivator for my 10-acre farm. The equipment was in excellent condition and the seller's pickup location was convenient. Saved me from big investment!")}"
                 </div>
                 <div class="client-info">
                     <div class="client-avatar">SP</div>
                     <div>
-                        <h5 class="mb-0">Suresh Patel</h5>
-                        <small class="text-muted">Farmer, Karimnagar</small>
+                        <h5 class="mb-0">${getTranslation('Suresh Patel')}</h5>
+                        <small class="text-muted">${getTranslation('Farmer, Karimnagar')}</small>
                     </div>
                 </div>
             </div>
@@ -2325,13 +2660,13 @@ function getDefaultTestimonials() {
         <div class="col-md-4">
             <div class="testimonial-card">
                 <div class="testimonial-text">
-                    "The agricultural drone service helped me monitor my crop health and spray pesticides efficiently. Easy pickup and modern technology at affordable rental rates!"
+                    "${getTranslation("The agricultural drone service helped me monitor my crop health and spray pesticides efficiently. Easy pickup and modern technology at affordable rental rates!")}"
                 </div>
                 <div class="client-info">
                     <div class="client-avatar">RM</div>
                     <div>
-                        <h5 class="mb-0">Ramesh</h5>
-                        <small class="text-muted">Farm Owner, Warangal</small>
+                        <h5 class="mb-0">${getTranslation('Ramesh')}</h5>
+                        <small class="text-muted">${getTranslation('Farm Owner, Warangal')}</small>
                     </div>
                 </div>
             </div>
@@ -2339,13 +2674,13 @@ function getDefaultTestimonials() {
         <div class="col-md-4">
             <div class="testimonial-card">
                 <div class="testimonial-text">
-                    "As a small farmer, I can't afford to buy a harvester. FarmRent made harvesting season stress-free with their reliable equipment rental and simple pickup process."
+                    "${getTranslation("As a small farmer, I can't afford to buy a harvester. FarmRent made harvesting season stress-free with their reliable equipment rental and simple pickup process.")}"
                 </div>
                 <div class="client-info">
                     <div class="client-avatar">PK</div>
                     <div>
-                        <h5 class="mb-0">Surya Kumar</h5>
-                        <small class="text-muted">Small Farmer, Nizamabad</small>
+                        <h5 class="mb-0">${getTranslation('Surya Kumar')}</h5>
+                        <small class="text-muted">${getTranslation('Small Farmer, Nizamabad')}</small>
                     </div>
                 </div>
             </div>
@@ -2367,10 +2702,10 @@ async function loadPopularEquipmentFooter() {
         
         if (snapshot.empty) {
             container.innerHTML = `
-                <li><a href="browse.html?category=tractor" class="text-decoration-none text-light">Tractors</a></li>
-                <li><a href="browse.html?category=harvester" class="text-decoration-none text-light">Harvesters</a></li>
-                <li><a href="browse.html?category=spray" class="text-decoration-none text-light">Spray Machines</a></li>
-                <li><a href="browse.html?category=drone" class="text-decoration-none text-light">Agricultural Drones</a></li>
+                <li><a href="browse.html?category=tractor" class="text-decoration-none text-light">${getTranslation('Tractors')}</a></li>
+                <li><a href="browse.html?category=harvester" class="text-decoration-none text-light">${getTranslation('Harvesters')}</a></li>
+                <li><a href="browse.html?category=spray" class="text-decoration-none text-light">${getTranslation('Spray Machines')}</a></li>
+                <li><a href="browse.html?category=drone" class="text-decoration-none text-light">${getTranslation('Agricultural Drones')}</a></li>
             `;
             return;
         }
@@ -2393,7 +2728,7 @@ async function subscribeNewsletter() {
     const email = emailInput.value.trim();
     
     if (!email || !validateEmail(email)) {
-        window.firebaseHelpers.showAlert('Please enter a valid email address', 'warning');
+        window.firebaseHelpers.showAlert(getTranslation('Please enter a valid email address'), 'warning');
         return;
     }
     
@@ -2407,12 +2742,12 @@ async function subscribeNewsletter() {
             active: true
         });
         
-        window.firebaseHelpers.showAlert('Successfully subscribed to newsletter!', 'success');
+        window.firebaseHelpers.showAlert(getTranslation('Successfully subscribed to newsletter!'), 'success');
         emailInput.value = '';
         
     } catch (error) {
         console.error('Error subscribing to newsletter:', error);
-        window.firebaseHelpers.showAlert('Error subscribing. Please try again.', 'danger');
+        window.firebaseHelpers.showAlert(getTranslation('Error subscribing. Please try again.'), 'danger');
     }
 }
 
@@ -2504,7 +2839,7 @@ async function loadCategoriesForFilter() {
 
         const filterSelect = document.getElementById('category-filter');
         if (filterSelect) {
-            filterSelect.innerHTML = '<option value="all">All Categories</option>';
+            filterSelect.innerHTML = `<option value="all">${getTranslation('All Categories')}</option>`;
             
             // Convert Set to Array, sort, and populate dropdown
             const sortedCategories = Array.from(categorySet).sort();
@@ -2585,13 +2920,13 @@ function displayEquipmentGrid(equipmentList) {
     const pincode = window.customerPincode || 'N/A';
 
     if (equipmentList.length === 0) {
-        const pincodeText = pincode !== 'N/A' ? ` in your Pincode area (${pincode})` : ' without a location filter applied';
+        const pincodeText = pincode !== 'N/A' ? ` ${getTranslation('in your Pincode area')} (${pincode})` : ` ${getTranslation('without a location filter applied')}`;
         container.innerHTML = `
             <div class="col-12 text-center py-5">
                 <i class="fas fa-search-minus fa-3x text-muted mb-3"></i>
-                <p class="mt-3">No equipment found${pincodeText}.</p>
-                <p class="text-muted small">Try selecting "All Locations" or changing your Pincode.</p>
-                <a href="#" class="btn btn-primary mt-3" onclick="showPincodeModal()">Set/Change Pincode Now</a>
+                <p class="mt-3">${getTranslation('No equipment found')}${pincodeText}.</p>
+                <p class="text-muted small">${getTranslation('Try selecting "All Locations" or changing your Pincode.')}</p>
+                <a href="#" class="btn btn-primary mt-3" onclick="showPincodeModal()">${getTranslation('Set/Change Pincode Now')}</a>
             </div>
         `;
         return;
@@ -2609,7 +2944,7 @@ function displayEquipmentGrid(equipmentList) {
 // Display items currently in the cart
 async function displayCartItems(cart) { 
     if (!window.currentUser && cart.length > 0) {
-        window.firebaseHelpers.showAlert('You are viewing a non-persistent cart. Log in to save your cart items.', 'info');
+        window.firebaseHelpers.showAlert(getTranslation('You are viewing a non-persistent cart. Log in to save your cart items.'), 'info');
     }
 
     const container = document.getElementById('cart-items-container');
@@ -2622,9 +2957,9 @@ async function displayCartItems(cart) {
         if(container) container.innerHTML = `
             <div class="text-center py-5">
                 <i class="fas fa-shopping-basket fa-3x text-muted mb-3"></i>
-                <h4>Your cart is empty</h4>
-                <p class="text-muted">Browse our equipment to find something to rent!</p>
-                <a href="browse.html" class="btn btn-primary mt-3">Start Browsing</a>
+                <h4>${getTranslation('Your cart is empty')}</h4>
+                <p class="text-muted">${getTranslation('Browse our equipment to find something to rent!')}</p>
+                <a href="browse.html" class="btn btn-primary mt-3">${getTranslation('Start Browsing')}</a>
             </div>
         `;
         updateCartSummary(0, 0, 0, true); 
@@ -2645,21 +2980,21 @@ async function displayCartItems(cart) {
                 <img src="${item.imageUrl || 'https://placehold.co/80x80'}" class="rounded me-3" style="width: 80px; height: 80px; object-fit: cover;">
                 <div class="flex-grow-1">
                     <h5 class="mb-0">${item.name}</h5>
-                    <p class="mb-0 small text-muted">Seller: ${item.businessName} (Pincode: ${item.pincode || 'N/A'})</p>
+                    <p class="mb-0 small text-muted">${getTranslation('Seller')}: ${item.businessName} (${getTranslation('Pincode')}: ${item.pincode || 'N/A'})</p>
                     <p class="mb-0 small text-primary">
-                        ${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'}
-                        (@ ${window.firebaseHelpers.formatCurrency(item.rentalType === 'acre' ? item.pricePerAcre : item.pricePerHour)}/${item.rentalType})
+                        ${item.rentalValue} ${item.rentalType === 'acre' ? getTranslation('Acre(s)') : getTranslation('Hour(s)')}
+                        (@ ${window.firebaseHelpers.formatCurrency(item.rentalType === 'acre' ? item.pricePerAcre : item.pricePerHour)}/${item.rentalType === 'acre' ? getTranslation('acre') : getTranslation('hour')})
                     </p>
                     <!-- NEW: Display pickup date/time -->
                     <p class="mb-0 small text-danger">
-                        <i class="fas fa-calendar-check me-1"></i> Pickup: ${item.pickupDate} at ${item.pickupTime}
+                        <i class="fas fa-calendar-check me-1"></i> ${getTranslation('Pickup')}: ${item.pickupDate} ${getTranslation('at')} ${item.pickupTime}
                     </p>
                     <!-- END NEW -->
                 </div>
                 <div class="text-end">
                     <strong class="text-success h5">${window.firebaseHelpers.formatCurrency(item.price)}</strong>
                     <button class="btn btn-sm btn-outline-danger d-block mt-2" onclick="removeItemFromCart(${index})">
-                        <i class="fas fa-trash"></i> Remove
+                        <i class="fas fa-trash"></i> ${getTranslation('Remove')}
                     </button>
                 </div>
             </div>
@@ -2679,7 +3014,7 @@ async function removeItemFromCart(index) {
     
     await updateCartInFirestore(cart); 
     
-    window.firebaseHelpers.showAlert('Item removed from cart.', 'info');
+    window.firebaseHelpers.showAlert(getTranslation('Item removed from cart.'), 'info');
     loadCartPage(); // Reload the cart page completely to re-run compatibility checks
 }
 
@@ -2714,7 +3049,7 @@ function displayCheckoutSummary(cart) {
 
     // Pre-fill the single "Rental Duration" field with details from the first item
     if (pickupDateInput && firstItem) {
-        pickupDateInput.value = `${firstItem.rentalValue} ${firstItem.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'} | Pickup: ${firstItem.pickupDate} @ ${firstItem.pickupTime}`;
+        pickupDateInput.value = `${firstItem.rentalValue} ${firstItem.rentalType === 'acre' ? getTranslation('Acre(s)') : getTranslation('Hour(s)')} | ${getTranslation('Pickup')}: ${firstItem.pickupDate} ${getTranslation('at')} ${firstItem.pickupTime}`;
     }
     
     // NEW: Set pickup date/time in razorpayContext for order placement
@@ -2734,9 +3069,9 @@ function displayCheckoutSummary(cart) {
                 <div>
                     <strong>${item.name}</strong>
                     <div class="small text-muted">
-                        ${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'} | By: ${item.businessName} (Pincode: ${item.pincode})
-                        <br><i class="fas fa-calendar-check me-1"></i> Pickup: ${item.pickupDate} @ ${item.pickupTime}
-                        <br><i class="fas fa-map-marked-alt me-1"></i> Address: ${item.sellerAddress}
+                        ${item.rentalValue} ${item.rentalType === 'acre' ? getTranslation('Acre(s)') : getTranslation('Hour(s)')} | ${getTranslation('By')}: ${item.businessName} (${getTranslation('Pincode')}: ${item.pincode})
+                        <br><i class="fas fa-calendar-check me-1"></i> ${getTranslation('Pickup')}: ${item.pickupDate} ${getTranslation('at')} ${item.pickupTime}
+                        <br><i class="fas fa-map-marked-alt me-1"></i> ${getTranslation('Address')}: ${item.sellerAddress}
                     </div>
                 </div>
                 <strong class="text-success">${window.firebaseHelpers.formatCurrency(item.price)}</strong>
@@ -2749,7 +3084,7 @@ function displayCheckoutSummary(cart) {
     
     const feeLabelElement = document.getElementById('checkout-fees-label');
     if (feeLabelElement) {
-        feeLabelElement.textContent = `Platform Fee (${(platformFeeRate * 100).toFixed(0)}%):`;
+        feeLabelElement.textContent = `${getTranslation('Platform Fee')} (${(platformFeeRate * 100).toFixed(0)}%):`;
     }
 
     const subtotalEl = document.getElementById('checkout-subtotal');
@@ -2769,7 +3104,7 @@ async function processPayment() {
     const form = document.getElementById('checkout-form');
     if (!form.checkValidity()) {
         form.reportValidity();
-        window.firebaseHelpers.showAlert('Please fill all required customer details.', 'warning');
+        window.firebaseHelpers.showAlert(getTranslation('Please fill all required customer details.'), 'warning');
         return;
     }
     
@@ -2777,7 +3112,7 @@ async function processPayment() {
     
     const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
     if (!userPincode) {
-        window.firebaseHelpers.showAlert('Critical Error: Customer Pincode is not set. Cannot proceed.', 'danger');
+        window.firebaseHelpers.showAlert(getTranslation('Critical Error: Customer Pincode is not set. Cannot proceed.'), 'danger');
         const payBtn = document.getElementById('pay-now-btn');
         if (payBtn) payBtn.disabled = true;
         return;
@@ -2807,7 +3142,7 @@ async function processPayment() {
         // Option 1: Cash On Pickup (Test/Simulation ONLY) - Skip payment, place order immediately
         const payBtn = document.getElementById('pay-now-btn');
         const originalText = payBtn.innerHTML;
-        payBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Confirming...';
+        payBtn.innerHTML = `<i class="fas fa-spinner fa-spin me-2"></i> ${getTranslation('Confirming...')}`;
         payBtn.disabled = true;
 
         try {
@@ -2816,7 +3151,7 @@ async function processPayment() {
             // The function placeOrderInFirestore will handle success alerts and redirects
         } catch (error) {
             console.error('Test Order Placement Failed:', error);
-            window.firebaseHelpers.showAlert('Test order placement failed. See console for details.', 'danger');
+            window.firebaseHelpers.showAlert(getTranslation('Test order placement failed. See console for details.'), 'danger');
         } finally {
             payBtn.innerHTML = originalText;
             payBtn.disabled = false;
@@ -2826,7 +3161,7 @@ async function processPayment() {
         // Option 2: Razorpay (Real Payment) - Proceed with Razorpay flow
         const keyId = await window.firebaseHelpers.getRazorpayKeyId();
         if (!keyId) {
-            window.firebaseHelpers.showAlert('Payment gateway key missing. Cannot proceed.', 'danger');
+            window.firebaseHelpers.showAlert(getTranslation('Payment gateway key missing. Cannot proceed.'), 'danger');
             return;
         }
 
@@ -2834,8 +3169,8 @@ async function processPayment() {
             key: keyId, 
             amount: totalInPaise, 
             currency: "INR",
-            name: "FarmRent",
-            description: "Rental Equipment Booking",
+            name: getTranslation("FarmRent"),
+            description: getTranslation("Rental Equipment Booking"),
             handler: async function (response) {
                 // On successful payment, place order with 'paid' status
                 await placeOrderInFirestore(orderId, customerData, response.razorpay_payment_id, total, 'paid', 'Razorpay');
@@ -2854,7 +3189,7 @@ async function processPayment() {
         const rzp = new window.Razorpay(options);
         rzp.on('payment.failed', function (response) {
             console.error('Payment Failed:', response.error);
-            window.firebaseHelpers.showAlert('Payment failed: ' + response.error.description, 'danger');
+            window.firebaseHelpers.showAlert(getTranslation('Payment failed: ') + response.error.description, 'danger');
         });
 
         rzp.open();
@@ -2867,7 +3202,7 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, total
     const cart = await getCartFromFirestore();
     
     if (cart.length === 0) {
-        window.firebaseHelpers.showAlert('Cart is empty, cannot place order.', 'danger');
+        window.firebaseHelpers.showAlert(getTranslation('Cart is empty, cannot place order.'), 'danger');
         return;
     }
     
@@ -2916,8 +3251,8 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, total
         
         // Show context-specific alert
         const successMessage = paymentStatus === 'paid' 
-            ? `Order #${orderId.substring(0, 8)} placed successfully! Payment confirmed. You will be redirected to My Orders.`
-            : `Test Order #${orderId.substring(0, 8)} placed successfully! Payment is **Pending**. You will be redirected to My Orders.`;
+            ? getTranslation(`Order #${orderId.substring(0, 8)} placed successfully! Payment confirmed. You will be redirected to My Orders.`)
+            : getTranslation(`Test Order #${orderId.substring(0, 8)} placed successfully! Payment is **Pending**. You will be redirected to My Orders.`);
 
         window.firebaseHelpers.showAlert(successMessage, 'success');
         
@@ -2930,7 +3265,7 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, total
 
     } catch (error) {
         console.error('Error placing order:', error);
-        window.firebaseHelpers.showAlert('Order placement failed in database. Please contact support.', 'danger');
+        window.firebaseHelpers.showAlert(getTranslation('Order placement failed in database. Please contact support.'), 'danger');
     }
 }
 
@@ -2938,7 +3273,7 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, total
 async function loadProfilePage() {
     const user = await window.firebaseHelpers.getCurrentUser();
     if (!user) {
-        window.firebaseHelpers.showAlert('You must be logged in to view your profile.', 'danger');
+        window.firebaseHelpers.showAlert(getTranslation('You must be logged in to view your profile.'), 'danger');
         setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 2000);
         return;
     }
@@ -2959,7 +3294,7 @@ async function loadProfilePage() {
     if (profilePincodeEl) profilePincodeEl.value = user.pincode || '';
     
     const profileUserNameEl = document.getElementById('profile-user-name');
-    if (profileUserNameEl) profileUserNameEl.textContent = user.name || 'User';
+    if (profileUserNameEl) profileUserNameEl.textContent = user.name || getTranslation('User');
 
     // Check if user is a seller and has a pincode set
     const isSeller = user.role === 'seller';
@@ -2977,7 +3312,7 @@ async function loadProfilePage() {
             if (!pincodeGroup.querySelector('.alert')) {
                 pincodeGroup.innerHTML += `
                     <div class="alert alert-warning p-2 mt-2 small">
-                        <i class="fas fa-lock me-1"></i> Your Seller Pincode is permanent for consistency. Contact support to change location.
+                        <i class="fas fa-lock me-1"></i> ${getTranslation('Your Seller Pincode is permanent for consistency. Contact support to change location.')}
                     </div>
                 `;
             }
@@ -3011,6 +3346,9 @@ async function loadProfilePage() {
     // Handle form submission
     const profileForm = document.getElementById('profile-form');
     if (profileForm) profileForm.addEventListener('submit', handleProfileUpdate);
+    
+    // Re-run translation after loading dynamic content
+    translateUI(); 
 }
 
 // Handle profile form submission
@@ -3023,15 +3361,15 @@ async function handleProfileUpdate(e) {
     
     // Mandatory check even if readOnly, in case of client-side bypass
     if (!pincodeInput || !window.firebaseHelpers.pincodeSystem.validatePincode(pincodeInput)) {
-        window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
+        window.firebaseHelpers.showAlert(getTranslation('Please enter a valid 6-digit Pincode.'), 'danger');
         return;
     }
     if (villageSelect && !villageSelect.value) {
-        window.firebaseHelpers.showAlert('Please select your Village/Post Office.', 'danger');
+        window.firebaseHelpers.showAlert(getTranslation('Please select your Village/Post Office.'), 'danger');
         return;
     }
     if (!document.getElementById('profile-city').value || !document.getElementById('profile-state').value) {
-        window.firebaseHelpers.showAlert('Pincode lookup failed. Please try again or verify your Pincode.', 'danger');
+        window.firebaseHelpers.showAlert(getTranslation('Pincode lookup failed. Please try again or verify your Pincode.'), 'danger');
         return;
     }
 
@@ -3054,7 +3392,7 @@ async function handleProfileUpdate(e) {
 
     try {
         await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(updates);
-        window.firebaseHelpers.showAlert('Profile updated successfully!', 'success');
+        window.firebaseHelpers.showAlert(getTranslation('Profile updated successfully!'), 'success');
         
         window.currentUser = { ...window.currentUser, ...updates };
         
@@ -3070,7 +3408,7 @@ async function handleProfileUpdate(e) {
 
     } catch (error) {
         console.error('Error updating profile:', error);
-        window.firebaseHelpers.showAlert('Error updating profile. Please try again.', 'danger');
+        window.firebaseHelpers.showAlert(getTranslation('Error updating profile. Please try again.'), 'danger');
     }
 }
 
@@ -3078,7 +3416,7 @@ async function handleProfileUpdate(e) {
 async function loadOrdersPage() {
     const user = await window.firebaseHelpers.getCurrentUser();
     if (!user) {
-        window.firebaseHelpers.showAlert('You must be logged in to view your orders.', 'danger');
+        window.firebaseHelpers.showAlert(getTranslation('You must be logged in to view your orders.'), 'danger');
         setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 2000);
         return;
     }
@@ -3102,9 +3440,9 @@ async function loadOrdersPage() {
             if (container) container.innerHTML = `
                 <div class="col-12 text-center py-5">
                     <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
-                    <h4>You have no rental history</h4>
-                    <p>Start browsing to place your first order.</p>
-                    <a href="browse.html" class="btn btn-primary mt-3">Browse Equipment</a>
+                    <h4>${getTranslation('You have no rental history')}</h4>
+                    <p>${getTranslation('Start browsing to place your first order.')}</p>
+                    <a href="browse.html" class="btn btn-primary mt-3">${getTranslation('Browse Equipment')}</a>
                 </div>
             `;
             return;
@@ -3121,21 +3459,23 @@ async function loadOrdersPage() {
         if (container) container.innerHTML = `
             <div class="col-12 text-center py-5 text-danger">
                 <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
-                <h4>Error loading orders</h4>
-                <p>Please try again later.</p>
+                <h4>${getTranslation('Error loading orders')}</h4>
+                <p>${getTranslation('Please try again later.')}</p>
             </div>
         `;
     } finally {
         if(loadingEl) loadingEl.style.display = 'none';
+        // Re-run translation after loading dynamic content
+        translateUI(); 
     }
 }
 
 // Create HTML card for an order (MODIFIED to include dynamic order tracker and more details)
 function createOrderCard(order) {
     const statusClass = `order-status-${order.status || 'pending'}`;
-    const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
+    const statusText = getTranslation((order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1));
     const date = window.firebaseHelpers.formatDate(order.createdAt);
-    const deliveryType = '<span class="badge bg-warning text-dark me-2"><i class="fas fa-hand-paper me-1"></i>Self-Pickup</span>';
+    const deliveryType = `<span class="badge bg-warning text-dark me-2"><i class="fas fa-hand-paper me-1"></i>${getTranslation('Self-Pickup')}</span>`;
     
     // NEW: Extract pickup details
     const pickupDate = order.pickupDate || 'N/A';
@@ -3146,8 +3486,8 @@ function createOrderCard(order) {
             <div class="card order-card shadow-sm">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <div>
-                        <h5 class="mb-0">Order #${order.id.substring(0, 8)}</h5>
-                        <small class="text-muted">Placed on: ${date}</small>
+                        <h5 class="mb-0">${getTranslation('Order')} #${order.id.substring(0, 8)}</h5>
+                        <small class="text-muted">${getTranslation('Placed on')}: ${date}</small>
                     </div>
                     <div>
                         ${deliveryType}
@@ -3155,29 +3495,29 @@ function createOrderCard(order) {
                     </div>
                 </div>
                 <div class="card-body">
-                    <h6>Equipment Rented:</h6>
+                    <h6>${getTranslation('Equipment Rented')}:</h6>
                     <ul class="list-unstyled mb-3">
                         ${order.items.map(item => `
                             <li class="d-flex align-items-center mb-1">
                                 <img src="${item.imageUrl || 'https://placehold.co/40x40'}" class="rounded me-2" style="width: 40px; height: 40px; object-fit: cover;">
                                 <div>
-                                    <strong>${item.name}</strong> - ${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'}
-                                    <small class="text-muted d-block">Seller: ${item.businessName} (Pincode: ${item.pincode || 'N/A'})</small>
+                                    <strong>${item.name}</strong> - ${item.rentalValue} ${item.rentalType === 'acre' ? getTranslation('Acre(s)') : getTranslation('Hour(s)')}
+                                    <small class="text-muted d-block">${getTranslation('Seller')}: ${item.businessName} (${getTranslation('Pincode')}: ${item.pincode || 'N/A'})</small>
                                 </div>
                             </li>
                         `).join('')}
                     </ul>
                     <div class="row border-top pt-2">
                         <div class="col-md-6">
-                            <strong>Total Amount:</strong> <span class="text-primary">${window.firebaseHelpers.formatCurrency(order.totalAmount)}</span>
+                            <strong>${getTranslation('Total Amount')}:</strong> <span class="text-primary">${window.firebaseHelpers.formatCurrency(order.totalAmount)}</span>
                         </div>
                         <div class="col-md-6 text-md-end">
-                            <strong>Pickup Pincode:</strong> ${order.orderPincode || 'N/A'}
+                            <strong>${getTranslation('Pickup Pincode')}:</strong> ${order.orderPincode || 'N/A'}
                         </div>
                         <!-- Row for Pickup Details -->
                         <div class="col-12 mt-2">
-                            <span class="badge bg-danger text-white"><i class="fas fa-calendar-check me-1"></i> Pickup Date/Time:</span> 
-                            <strong>${pickupDate} at ${pickupTime}</strong>
+                            <span class="badge bg-danger text-white"><i class="fas fa-calendar-check me-1"></i> ${getTranslation('Pickup Date/Time')}:</span> 
+                            <strong>${pickupDate} ${getTranslation('at')} ${pickupTime}</strong>
                         </div>
                         <!-- END Row -->
                     </div>
@@ -3188,9 +3528,9 @@ function createOrderCard(order) {
                 </div>
                 <div class="card-footer text-end">
                     ${order.status === 'pending' ? `
-                        <button class="btn btn-sm btn-danger" onclick="cancelOrder('${order.id}')">Cancel Order</button>
+                        <button class="btn btn-sm btn-danger" onclick="cancelOrder('${order.id}')">${getTranslation('Cancel Order')}</button>
                     ` : ''}
-                    <button class="btn btn-sm btn-outline-primary" onclick="viewOrderDetailsModal('${order.id}')">View Details & Track</button>
+                    <button class="btn btn-sm btn-outline-primary" onclick="viewOrderDetailsModal('${order.id}')">${getTranslation('View Details & Track')}</button>
                 </div>
             </div>
         </div>
@@ -3199,13 +3539,13 @@ function createOrderCard(order) {
 
 // NEW FUNCTION: Generate the dynamic order tracker HTML based on status
 function createOrderTrackerHtml(status, isMini = false) {
-    // Define the sequence of steps
+    // Define the sequence of steps (Using translation keys)
     const steps = [
-        { key: 'pending', text: 'Order Placed', icon: 'fas fa-clipboard-list' },
-        { key: 'active', text: 'Seller Confirmed', icon: 'fas fa-check-circle' },
-        { key: 'pickedup', text: 'Customer Picked Up', icon: 'fas fa-truck-loading' },
-        { key: 'returned', text: 'Equipment Returned', icon: 'fas fa-undo-alt' },
-        { key: 'completed', text: 'Rental Completed', icon: 'fas fa-flag-checkered' }
+        { key: 'pending', textKey: 'Order Placed', icon: 'fas fa-clipboard-list' },
+        { key: 'active', textKey: 'Seller Confirmed', icon: 'fas fa-check-circle' },
+        { key: 'pickedup', textKey: 'Customer Picked Up', icon: 'fas fa-truck-loading' },
+        { key: 'returned', textKey: 'Equipment Returned', icon: 'fas fa-undo-alt' },
+        { key: 'completed', textKey: 'Rental Completed', icon: 'fas fa-flag-checkered' }
     ];
 
     // Map status to progress (percentage and active index)
@@ -3224,15 +3564,15 @@ function createOrderTrackerHtml(status, isMini = false) {
 
     if (isTerminal && status !== 'completed') {
         const message = status === 'cancelled' 
-            ? 'Order Cancelled' 
-            : 'Order Rejected by Seller';
+            ? getTranslation('Order Cancelled') 
+            : getTranslation('Order Rejected by Seller');
             
         const icon = status === 'cancelled' ? 'fas fa-ban' : 'fas fa-times-circle';
         
         return `
             <div class="alert alert-danger text-center mt-3 mb-0 p-3">
                 <i class="${icon} me-2"></i> <strong>${message}</strong>. 
-                ${status === 'cancelled' ? 'Cancellation requested.' : 'Contact seller for details.'}
+                ${status === 'cancelled' ? getTranslation('Cancellation requested.') : getTranslation('Contact seller for details.')}
             </div>
         `;
     }
@@ -3256,7 +3596,7 @@ function createOrderTrackerHtml(status, isMini = false) {
                 <div class="step-icon-container">
                     <i class="${step.icon}"></i>
                 </div>
-                <div class="step-text">${step.text}</div>
+                <div class="step-text">${getTranslation(step.textKey)}</div>
             </div>
         `;
     }).join('');
@@ -3292,7 +3632,7 @@ async function viewOrderDetailsModal(orderId) {
             if (!docSnapshot.exists) {
                 // If order is deleted, close modal
                 modalInstance.hide();
-                window.firebaseHelpers.showAlert('Order not found or deleted.', 'danger');
+                window.firebaseHelpers.showAlert(getTranslation('Order not found or deleted.'), 'danger');
                 unsubscribe();
                 loadOrdersPage();
                 return;
@@ -3301,46 +3641,46 @@ async function viewOrderDetailsModal(orderId) {
             const order = docSnapshot.data();
             
             const statusClass = `order-status-${order.status || 'pending'}`;
-            const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
+            const statusText = getTranslation((order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1));
 
             const detailsHtml = `
-                <h5 class="mb-3">Order # ${orderId.substring(0, 8)} Details</h5>
+                <h5 class="mb-3">${getTranslation('Order')} # ${orderId.substring(0, 8)} ${getTranslation('Details')}</h5>
                 <div class="alert alert-info d-flex justify-content-between">
-                    <div><strong>Current Status:</strong> <span class="status-badge ${statusClass}">${statusText}</span></div>
-                    <div><strong>Date Placed:</strong> ${window.firebaseHelpers.formatDateTime(order.createdAt)}</div>
+                    <div><strong>${getTranslation('Current Status')}:</strong> <span class="status-badge ${statusClass}">${statusText}</span></div>
+                    <div><strong>${getTranslation('Date Placed')}:</strong> ${window.firebaseHelpers.formatDateTime(order.createdAt)}</div>
                 </div>
                 
-                <h6 class="mt-4 text-primary">Customer & Pickup Information</h6>
+                <h6 class="mt-4 text-primary">${getTranslation('Customer & Pickup Information')}</h6>
                 <table class="table table-sm table-borderless">
-                    <tr><th>Customer Name:</th><td>${order.customerName || 'N/A'}</td></tr>
-                    <tr><th>Phone:</th><td>${order.customerPhone || 'N/A'}</td></tr>
-                    <tr><th>Email:</th><td>${order.customerEmail || 'N/A'}</td></tr>
-                    <tr><th>Pickup Date/Time:</th><td><strong>${order.pickupDate || 'N/A'} at ${order.pickupTime || 'N/A'}</strong></td></tr>
-                    <tr><th>Pickup Pincode:</th><td>${order.orderPincode || 'N/A'}</td></tr>
-                    <tr><th>Notes:</th><td>${order.notes || 'None'}</td></tr>
+                    <tr><th>${getTranslation('Customer Name')}:</th><td>${order.customerName || 'N/A'}</td></tr>
+                    <tr><th>${getTranslation('Phone')}:</th><td>${order.customerPhone || 'N/A'}</td></tr>
+                    <tr><th>${getTranslation('Email')}:</th><td>${order.customerEmail || 'N/A'}</td></tr>
+                    <tr><th>${getTranslation('Pickup Date/Time')}:</th><td><strong>${order.pickupDate || 'N/A'} ${getTranslation('at')} ${order.pickupTime || 'N/A'}</strong></td></tr>
+                    <tr><th>${getTranslation('Pickup Pincode')}:</th><td>${order.orderPincode || 'N/A'}</td></tr>
+                    <tr><th>${getTranslation('Notes')}:</th><td>${order.notes || getTranslation('None')}</td></tr>
                 </table>
 
-                <h6 class="mt-4 text-success">Equipment Details</h6>
+                <h6 class="mt-4 text-success">${getTranslation('Equipment Details')}</h6>
                 <ul class="list-group mb-4">
                     ${order.items.map(item => `
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             <div>
                                 <strong>${item.name}</strong> 
-                                <small class="text-muted d-block">${item.rentalValue} ${item.rentalType} | Seller: ${item.businessName}</small>
-                                <small class="text-muted d-block">Address: ${item.sellerAddress}</small>
+                                <small class="text-muted d-block">${item.rentalValue} ${item.rentalType} | ${getTranslation('Seller')}: ${item.businessName}</small>
+                                <small class="text-muted d-block">${getTranslation('Address')}: ${item.sellerAddress}</small>
                             </div>
                             <span class="badge bg-success">${window.firebaseHelpers.formatCurrency(item.price)}</span>
                         </li>
                     `).join('')}
                 </ul>
 
-                <h6 class="mt-4 text-warning">Payment Summary</h6>
+                <h6 class="mt-4 text-warning">${getTranslation('Payment Summary')}</h6>
                 <table class="table table-sm table-borderless">
-                    <tr><th>Total Amount:</th><td><strong>${window.firebaseHelpers.formatCurrency(order.totalAmount)}</strong></td></tr>
-                    <tr><th>Platform Fee:</th><td>${window.firebaseHelpers.formatCurrency(order.platformFee || 0)}</td></tr>
-                    <tr><th>Payment Method:</th><td>${order.paymentMethod || 'N/A'}</td></tr>
-                    <tr><th>Payment Status:</th><td><span class="badge bg-${order.paymentStatus === 'paid' ? 'success' : 'danger'}">${order.paymentStatus || 'N/A'}</span></td></tr>
-                    <tr><th>Transaction ID:</th><td><small>${order.transactionId || 'N/A'}</small></td></tr>
+                    <tr><th>${getTranslation('Total Amount')}:</th><td><strong>${window.firebaseHelpers.formatCurrency(order.totalAmount)}</strong></td></tr>
+                    <tr><th>${getTranslation('Platform Fee')}:</th><td>${window.firebaseHelpers.formatCurrency(order.platformFee || 0)}</td></tr>
+                    <tr><th>${getTranslation('Payment Method')}:</th><td>${order.paymentMethod || 'N/A'}</td></tr>
+                    <tr><th>${getTranslation('Payment Status')}:</th><td><span class="badge bg-${order.paymentStatus === 'paid' ? 'success' : 'danger'}">${order.paymentStatus || 'N/A'}</span></td></tr>
+                    <tr><th>${getTranslation('Transaction ID')}:</th><td><small>${order.transactionId || 'N/A'}</small></td></tr>
                 </table>
             `;
 
@@ -3355,12 +3695,12 @@ async function viewOrderDetailsModal(orderId) {
 
             // Update modal footer with dynamic button
             const modalFooter = modalElement.querySelector('.modal-footer');
-            modalFooter.innerHTML = `<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>`;
+            modalFooter.innerHTML = `<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${getTranslation('Close')}</button>`;
 
             // Only allow cancellation if order is pending
             if (order.status === 'pending') {
                 modalFooter.innerHTML += `
-                    <button class="btn btn-danger" onclick="cancelOrder('${order.id}')">Cancel Order</button>
+                    <button class="btn btn-danger" onclick="cancelOrder('${order.id}')">${getTranslation('Cancel Order')}</button>
                 `;
             }
             
@@ -3373,7 +3713,7 @@ async function viewOrderDetailsModal(orderId) {
         }, error => {
             console.error("Error listening to order document:", error);
             modalInstance.hide();
-            window.firebaseHelpers.showAlert('Error listening for order updates.', 'danger');
+            window.firebaseHelpers.showAlert(getTranslation('Error listening for order updates.'), 'danger');
         });
         
         // Stop listening when the modal is closed
@@ -3385,7 +3725,7 @@ async function viewOrderDetailsModal(orderId) {
 
     } catch (error) {
         console.error('Error viewing order details:', error);
-        window.firebaseHelpers.showAlert('Error loading order details.', 'danger');
+        window.firebaseHelpers.showAlert(getTranslation('Error loading order details.'), 'danger');
     }
 }
 
@@ -3397,15 +3737,15 @@ async function cancelOrder(orderId) {
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header bg-danger text-white">
-                        <h5 class="modal-title"><i class="fas fa-trash me-2"></i>Confirm Cancellation</h5>
+                        <h5 class="modal-title"><i class="fas fa-trash me-2"></i>${getTranslation('Confirm Cancellation')}</h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
-                        <p>Are you sure you want to cancel this order? Cancellation is subject to seller approval and refund processing. Only **Pending** orders can be cancelled.</p>
+                        <p>${getTranslation('Are you sure you want to cancel this order? Cancellation is subject to seller approval and refund processing. Only **Pending** orders can be cancelled.')}</p>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="button" class="btn btn-danger" id="confirm-cancellation-btn">Yes, Cancel Order</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${getTranslation('Close')}</button>
+                        <button type="button" class="btn btn-danger" id="confirm-cancellation-btn">${getTranslation('Yes, Cancel Order')}</button>
                     </div>
                 </div>
             </div>
@@ -3426,7 +3766,7 @@ async function cancelOrder(orderId) {
             // Fetch current status to ensure only PENDING orders can be cancelled
             const orderDoc = await orderRef.get();
             if (!orderDoc.exists || orderDoc.data().status !== 'pending') {
-                 window.firebaseHelpers.showAlert('Order cannot be cancelled. It is no longer pending.', 'danger');
+                 window.firebaseHelpers.showAlert(getTranslation('Order cannot be cancelled. It is no longer pending.'), 'danger');
                  return;
             }
 
@@ -3434,7 +3774,7 @@ async function cancelOrder(orderId) {
                 status: 'cancelled',
                 cancellationRequestedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
-            window.firebaseHelpers.showAlert('Cancellation requested. Status will be updated shortly.', 'success');
+            window.firebaseHelpers.showAlert(getTranslation('Cancellation requested. Status will be updated shortly.'), 'success');
             
             // Close the details modal if it's open
             const detailsModal = bootstrap.Modal.getInstance(document.getElementById('orderDetailsModal'));
@@ -3443,7 +3783,7 @@ async function cancelOrder(orderId) {
             loadOrdersPage();
         } catch (error) {
             console.error('Error cancelling order:', error);
-            window.firebaseHelpers.showAlert('Failed to cancel order. Please contact support.', 'danger');
+            window.firebaseHelpers.showAlert(getTranslation('Failed to cancel order. Please contact support.'), 'danger');
         } finally {
             // Remove the temporary modal element
             modalElement.remove();
