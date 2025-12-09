@@ -1676,22 +1676,21 @@ async function loadCategories() {
     }
 }
 
-// Get category icon based on name
 function getCategoryIcon(categoryName) {
     const icons = {
         'tractor': 'fas fa-tractor',
-        'harvester': 'fas fa-dragon',
+        'harvester': 'fas fa-industry',        // no direct combine icon, this fits heavy machinery
         'cultivator': 'fas fa-seedling',
-        'drone': 'fas fa-helicopter',
+        'drone': 'fas fa-drone',              // correct drone icon exists in FA6+
         'spray': 'fas fa-spray-can',
-        'crane': 'fas fa-crane',
-        'jcb': 'fas fa-truck-pickup',
+        'crane': 'fas fa-dolly-flatbed',      // best alternative for lifting/loader
+        'jcb': 'fas fa-truck-monster',        // visually closer to heavy-duty vehicle
         'grass-cutter': 'fas fa-cut',
-        'trolley': 'fas fa-truck-moving',
-        'water-tanker': 'fa-regular fa-truck',
+        'trolley': 'fas fa-wheelbarrow',      // FA6 wheelbarrow icon – suitable
+        'water-tanker': 'fas fa-truck',       // remove fa-regular, doesn't exist
         'default': 'fas fa-tools'
     };
-    
+
     return icons[categoryName.toLowerCase()] || icons.default;
 }
 
