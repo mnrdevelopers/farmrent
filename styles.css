@@ -7,6 +7,8 @@
     --chat-bg: #e5ddd5;
     --online-green: #25D366;
     --offline-grey: #999;
+    /* NEW: WhatsApp Blue for Read status */
+    --whatsapp-blue: #34B7F1;
 }
 
 /* Ensure HTML and Body allow scrolling */
@@ -295,7 +297,34 @@ body {
     margin-top: 4px;
     display: block;
     text-align: right;
+    /* NEW: Ensure space for checkmark */
+    padding-right: 18px; 
+    position: relative;
 }
+
+/* NEW: Message Status Icons */
+.message-status-icon {
+    position: absolute;
+    right: 0;
+    bottom: 0; /* Align with bottom of time span */
+    font-size: 0.7rem;
+    line-height: 1;
+    margin-left: 4px;
+}
+
+.status-sent {
+    color: #999; /* Single grey tick */
+}
+
+.status-delivered {
+    color: #999; /* Double grey tick */
+}
+
+.status-read {
+    color: var(--whatsapp-blue); /* Double blue tick */
+}
+/* END NEW */
+
 
 /* Typing Indicator */
 .typing-indicator {
