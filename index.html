@@ -14,7 +14,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-firestore-compat.js"></script>
-    <!-- ADDED: Firebase Remote Config SDK for fetching ImgBB key -->
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-remote-config-compat.js"></script>
 </head>
 <body>
@@ -214,10 +213,8 @@
         </div>
     </footer>
 
-    <!-- WhatsApp Button -->
-    <a href="https://wa.me/917416006394?text=Hi%2C%20I'm%20interested%20in%20renting%20farming%20equipment" class="whatsapp-btn" target="_blank">
-        <i class="fab fa-whatsapp"></i>
-    </a>
+    <!-- Chat Widget Container -->
+    <div id="chat-widget-container"></div>
 
     <!-- Pincode Prompt Modal (NEW) -->
     <div class="modal fade pincode-modal" id="pincodeModal" tabindex="-1">
