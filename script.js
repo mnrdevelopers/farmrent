@@ -581,6 +581,9 @@ async function savePincode(pincode) {
     } else if (path === 'cart.html') {
         // If on cart page, load the cart page logic which handles compatibility warnings
         loadCartPage();
+    } else if (path === 'checkout.html') {
+        // If on checkout page, re-run checkout logic
+        loadCheckoutPage();
     } else {
         loadFeaturedEquipment(); // Reload data on the homepage
     }
@@ -1929,7 +1932,15 @@ async function loadCheckoutPage() {
     
     // Automatic First Order Discount Logic: Apply max 50 coins automatically on first order
     if (window.currentUser && !window.currentUser.firstOrderPlaced && coinsToApply === 0) {
-        coinsToApply = Math.min(50, availableCoins); // Max 50 coins instant discount
+        // Calculate subtotal first to cap discount
+        let subtotalCalc = 0;
+        cart.forEach(item => {
+            subtotalCalc += item.price;
+        });
+        const maxFirstOrderDiscount = Math.floor(subtotalCalc * 0.5); // 50% max discount
+        
+        coinsToApply = Math.min(50, availableCoins, maxFirstOrderDiscount); // Cap at 50, available, and 50% subtotal
+        
         const coinsInput = document.getElementById('coins-to-apply');
         if (coinsInput) coinsInput.value = coinsToApply;
     }
@@ -2141,6 +2152,7 @@ async function checkCustomerNotifications() {
                  // Add chat notification to the list
                  notifications.push({
                     id: doc.id,
+                    type: 'new_chat_message',
                     message: `New message from ${chat.sellerBusinessName}: ${chat.lastMessage.substring(0, 20)}...`,
                     icon: 'fas fa-comment-dots',
                     badgeClass: 'bg-info',
@@ -2964,7 +2976,7 @@ function updateCartSummary(subtotal, fees, total, isDisabled) {
     if (checkoutEl) checkoutEl.disabled = isDisabled || total === 0;
 }
 
-// Display items and calculate total on the checkout page (MODIFIED)
+// Display items and calculate total on the checkout page (MODIFIED FOR COINS FIX)
 function displayCheckoutSummary(cart) {
     const listContainer = document.getElementById('checkout-item-list');
     if (!listContainer) return;
@@ -2972,44 +2984,6 @@ function displayCheckoutSummary(cart) {
     listContainer.innerHTML = '';
     
     let subtotal = 0;
-    let totalDiscount = 0; // NEW: Initialize discount
-
-    // NEW: Coin Logic Setup (50% of the reward for the first order discount is handled here)
-    let coinsToUse = 0;
-    
-    // Check if it's the customer's very first order AND they haven't manually set coinsToApply yet
-    // This is the automatic 50 coin first order discount.
-    if (window.currentUser && !window.currentUser.firstOrderPlaced && coinsToApply === 0) {
-        // If it is the first order, they will receive 100 coins, and can use 50% (50 coins) as discount.
-        // Cap the discount by the subtotal if the subtotal is less than 50
-        coinsToUse = Math.min(50, availableCoins); 
-        coinsToApply = coinsToUse; // Set coinsToApply so it carries through to the payment stage
-        
-        const coinsInput = document.getElementById('coins-to-apply');
-        if (coinsInput) coinsInput.value = coinsToApply; // Update input field
-        
-        const coinWarningText = document.getElementById('coin-warning-text');
-        if (coinWarningText) {
-             coinWarningText.textContent = `Applied ${coinsToApply} coins (First Order Discount).`;
-             coinWarningText.classList.remove('text-muted', 'text-danger');
-             coinWarningText.classList.add('text-success');
-        }
-        
-    } else if (coinsToApply > 0) {
-        // If coinsToApply > 0 (set by the user manually or automatically above), apply it.
-        const maxDiscount = Math.floor(subtotal * 0.5); // Max discount is 50% of the price
-        const maxCoinsAllowed = Math.min(availableCoins, maxDiscount); 
-        
-        coinsToUse = Math.min(coinsToApply, maxCoinsAllowed); // Apply the lower of requested or max allowed
-        coinsToApply = coinsToUse; // Re-set global state to the valid applied amount
-    } else {
-        coinsToApply = 0; // Ensure no coins are applied if checks fail
-    }
-    
-    totalDiscount = coinsToApply;
-
-    // End Coin Logic Setup
-
     
     // NEW: Collect all rental duration and pickup details for display/form pre-fill
     const totalRentalDetails = [];
@@ -3048,25 +3022,48 @@ function displayCheckoutSummary(cart) {
             </div>
         `;
     });
-
+    
+    // --- COIN & DISCOUNT CALCULATION (FIXED) ---
+    // 1. Calculate the maximum possible discount (50% of subtotal)
+    const maxDiscountAllowed = Math.floor(subtotal * 0.5);
+    
+    // 2. Determine how many coins can actually be applied (min of requested, available balance, and max discount cap)
+    const effectiveCoinsUsed = Math.min(coinsToApply, availableCoins, maxDiscountAllowed);
+    
+    // 3. The total discount amount is simply the number of effective coins used (1 coin = 1 rupee discount)
+    const totalDiscount = effectiveCoinsUsed;
+    
+    // 4. Update the global state to reflect the *actually* applied coins
+    coinsToApply = effectiveCoinsUsed;
+    
+    // 5. Calculate fees and final total
     const fees = subtotal * platformFeeRate;
     let total = subtotal - totalDiscount + fees;
     total = Math.max(0, total); // Ensure total is never negative
 
-    // Update razorpay context with new discount info
-    window.razorpayContext = { subtotal, fees, total, orderPincode, discount: totalDiscount, ...window.razorpayContext }; 
-
-
+    // 6. Update razorpay context with new discount info
+    window.razorpayContext = { 
+        subtotal, 
+        fees, 
+        total, 
+        orderPincode, 
+        discount: totalDiscount, 
+        coinsUsed: effectiveCoinsUsed, // Store the final amount of coins used for order placement
+        ...window.razorpayContext 
+    }; 
+    // --- END COIN & DISCOUNT CALCULATION (FIXED) ---
     
+    // 7. Update UI elements
     const feeLabelElement = document.getElementById('checkout-fees-label');
     if (feeLabelElement) {
         feeLabelElement.textContent = `Platform Fee (${(platformFeeRate * 100).toFixed(0)}%):`;
     }
 
-    // NEW: Update discount display
+    const coinInput = document.getElementById('coins-to-apply');
+    if (coinInput) coinInput.value = effectiveCoinsUsed;
+    
     const discountEl = document.getElementById('checkout-discount');
     if (discountEl) discountEl.textContent = window.firebaseHelpers.formatCurrency(totalDiscount);
-
 
     const subtotalEl = document.getElementById('checkout-subtotal');
     if (subtotalEl) subtotalEl.textContent = window.firebaseHelpers.formatCurrency(subtotal);
@@ -3074,11 +3071,19 @@ function displayCheckoutSummary(cart) {
     if (feesEl) feesEl.textContent = window.firebaseHelpers.formatCurrency(fees);
     const totalEl = document.getElementById('checkout-total');
     if (totalEl) totalEl.textContent = window.firebaseHelpers.formatCurrency(total);
+    
     const payAmount = document.getElementById('pay-button-amount');
     if (payAmount) payAmount.textContent = window.firebaseHelpers.formatCurrency(total);
+    
+    // Update pay button text if CoP is selected
+    const paymentMethod = document.getElementById('payment-method-select')?.value;
+    const payBtn = document.getElementById('pay-now-btn');
+    if (paymentMethod === 'test_cop' && payBtn) {
+         payBtn.innerHTML = `<i class="fas fa-truck-loading me-2"></i> Confirm Rental (No Upfront Payment)`;
+    }
 }
 
-// Process payment using Razorpay (Simulated Escrow/Route) (MODIFIED FOR TEST PAYMENT)
+// Process payment using Razorpay (Simulated Escrow/Route) (MODIFIED FOR TEST PAYMENT & COINS FIX)
 async function processPayment() {
     const form = document.getElementById('checkout-form');
     if (!form.checkValidity()) {
@@ -3099,7 +3104,8 @@ async function processPayment() {
     
     const isPickup = true; 
 
-    const { total, orderPickupDate, orderPickupTime } = window.razorpayContext; 
+    // FIX: Retrieve final discounted total, discount, and coins used directly from razorpayContext
+    const { total, orderPickupDate, orderPickupTime, discount, coinsUsed } = window.razorpayContext; 
     const totalInPaise = Math.round(total * 100);
 
     const customerData = {
@@ -3125,8 +3131,8 @@ async function processPayment() {
         payBtn.disabled = true;
 
         try {
-            // Simulate direct order placement with 'pending' payment status
-            await placeOrderInFirestore(orderId, customerData, 'TEST_COP_TXN', total, 'pending', 'Cash On Pickup (Test)');
+            // Pass the discounted total (total) to placeOrderInFirestore
+            await placeOrderInFirestore(orderId, customerData, 'TEST_COP_TXN', total, 'pending', 'Cash On Pickup (Test)', discount, coinsUsed);
             // The function placeOrderInFirestore will handle success alerts and redirects
         } catch (error) {
             console.error('Test Order Placement Failed:', error);
@@ -3152,7 +3158,8 @@ async function processPayment() {
             description: "Rental Equipment Booking",
             handler: async function (response) {
                 // On successful payment, place order with 'paid' status
-                await placeOrderInFirestore(orderId, customerData, response.razorpay_payment_id, total, 'paid', 'Razorpay');
+                // Pass the discounted total (total) to placeOrderInFirestore
+                await placeOrderInFirestore(orderId, customerData, response.razorpay_payment_id, total, 'paid', 'Razorpay', discount, coinsUsed);
                 
             },
             prefill: {
@@ -3176,8 +3183,8 @@ async function processPayment() {
     // *** MODIFIED LOGIC END ***
 }
 
-// Final step: Save order to Firestore after (simulated) successful payment (MODIFIED to reward referrer)
-async function placeOrderInFirestore(orderId, customerData, transactionId, totalAmount, paymentStatus, paymentMethod) {
+// Final step: Save order to Firestore after (simulated) successful payment (MODIFIED to reward referrer AND handle coins)
+async function placeOrderInFirestore(orderId, customerData, transactionId, discountedTotalAmount, paymentStatus, paymentMethod, totalDiscount, coinsUsed) {
     const cart = await getCartFromFirestore();
     
     if (cart.length === 0) {
@@ -3190,10 +3197,6 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, total
     const businessNames = [...new Set(cart.map(item => item.businessName))].join(', ');
     const orderPincode = window.razorpayContext.orderPincode; 
     
-    // NEW: Get discount details from context
-    const totalDiscount = window.razorpayContext.discount || 0;
-    const coinsUsed = coinsToApply; // Use the value set during display/apply
-
     try {
         const orderData = {
             userId: window.currentUser.uid,
@@ -3215,10 +3218,10 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, total
 
             items: cart, 
 
-            totalAmount: totalAmount,
+            totalAmount: discountedTotalAmount, // This is the amount actually paid (discounted)
             platformFee: window.razorpayContext.fees,
-            discount: totalDiscount, // NEW: Add discount amount
-            coinsUsed: coinsUsed, // NEW: Add coins used
+            discount: totalDiscount, // Correct total discount amount
+            coinsUsed: coinsUsed, // Correct coins used
             status: 'pending', // All orders start as pending for seller review
             paymentStatus: paymentStatus, // Use dynamic status ('paid' or 'pending')
             paymentMethod: paymentMethod, // Use dynamic method
@@ -3602,7 +3605,7 @@ function createOrderCard(order) {
                     </ul>
                     <div class="row border-top pt-2">
                         <div class="col-md-6">
-                            <strong>Total Amount:</strong> <span class="text-primary">${window.firebaseHelpers.formatCurrency(order.totalAmount)}</span>
+                            <strong>Total Amount:</strong> <span class="text-primary">${window.firebaseHelpers.formatCurrency(order.totalAmount || 0)}</span>
                             ${discountCoins}
                         </div>
                         <div class="col-md-6 text-md-end">
@@ -3779,7 +3782,7 @@ async function viewOrderDetailsModal(orderId) {
                     <tr><th>Subtotal:</th><td>${window.firebaseHelpers.formatCurrency(order.totalAmount + (order.discount || 0) - (order.platformFee || 0))}</td></tr>
                     ${discountHtml}
                     <tr><th>Platform Fee:</th><td>+${window.firebaseHelpers.formatCurrency(order.platformFee || 0)}</td></tr>
-                    <tr><th>Total Paid:</th><td><strong>${window.firebaseHelpers.formatCurrency(order.totalAmount)}</strong></td></tr>
+                    <tr><th>Total Paid:</th><td><strong>${window.firebaseHelpers.formatCurrency(order.totalAmount || 0)}</strong></td></tr>
                     <tr><th>Payment Method:</th><td>${order.paymentMethod || 'N/A'}</td></tr>
                     <tr><th>Payment Status:</th><td><span class="badge bg-${order.paymentStatus === 'paid' ? 'success' : 'danger'}">${order.paymentStatus || 'N/A'}</span></td></tr>
                     <tr><th>Transaction ID:</th><td><small>${order.transactionId || 'N/A'}</small></td></tr>
@@ -4444,55 +4447,50 @@ if (typeof Razorpay === 'undefined') {
     document.head.appendChild(script);
 }
 
-// NEW: Function to handle coin application/calculation
+// NEW: Function to handle coin application/calculation (FIXED LOGIC)
 window.applyCoinDiscount = function() {
     const coinInput = document.getElementById('coins-to-apply');
-    const balanceDisplay = document.getElementById('coin-balance-display');
     const warningText = document.getElementById('coin-warning-text');
     
-    if (!coinInput || !balanceDisplay) return;
+    if (!coinInput) return;
     
+    // 1. Get requested coins and subtotal from context (which should be set by loadCheckoutPage/displayCheckoutSummary)
     let requestedCoins = parseInt(coinInput.value) || 0;
     const subtotal = window.razorpayContext.subtotal || 0;
     
-    // Max coins available to use: 50% of subtotal, capped by available balance
-    const maxDiscount = Math.floor(subtotal * 0.5); // Max discount is 50% of the price
-    const maxCoinsAllowed = Math.min(availableCoins, maxDiscount); 
+    // 2. Calculate limits
+    const maxDiscountAllowed = Math.floor(subtotal * 0.5); // Max discount is 50% of the price
+    const maxCoinsAllowed = Math.min(availableCoins, maxDiscountAllowed); 
     
     let appliedCoins = 0;
     
-    if (requestedCoins > maxCoinsAllowed) {
-        appliedCoins = maxCoinsAllowed;
-        warningText.textContent = `Applied maximum possible: ${maxCoinsAllowed} coins. Max allowed is 50% of subtotal.`;
-        warningText.classList.remove('text-muted', 'text-success');
-        warningText.classList.add('text-danger');
-    } else if (requestedCoins < 0) {
+    if (requestedCoins < 0) {
         appliedCoins = 0;
         warningText.textContent = `Coins cannot be negative.`;
         warningText.classList.remove('text-muted', 'text-success');
         warningText.classList.add('text-danger');
+    } else if (requestedCoins > availableCoins) {
+        appliedCoins = availableCoins;
+        warningText.textContent = `Applied available maximum: ${availableCoins} coins.`;
+        warningText.classList.remove('text-muted', 'text-danger');
+        warningText.classList.add('text-warning');
+    } else if (requestedCoins > maxDiscountAllowed) {
+        appliedCoins = maxDiscountAllowed;
+        warningText.textContent = `Applied maximum possible: ${maxDiscountAllowed} coins. (Capped at 50% of subtotal: ${window.firebaseHelpers.formatCurrency(maxDiscountAllowed)})`;
+        warningText.classList.remove('text-muted', 'text-success');
+        warningText.classList.add('text-danger');
     } else {
         appliedCoins = requestedCoins;
-        warningText.textContent = `Applied ${appliedCoins} coins.`;
+        warningText.textContent = `Applied ${appliedCoins} coins successfully.`;
         warningText.classList.remove('text-muted', 'text-danger');
         warningText.classList.add('text-success');
     }
     
-    // Handle special case for first order: if the user cleared the auto-applied 50 coins, 
-    // we let them clear the input, but the coinsToApply state should be updated.
-    if (!window.currentUser.firstOrderPlaced && requestedCoins === 0) {
-        coinsToApply = 0;
-        warningText.textContent = `No coins applied.`;
-        warningText.classList.remove('text-danger', 'text-success');
-        warningText.classList.add('text-muted');
-    } else {
-        coinsToApply = appliedCoins; // Update global state
-    }
+    // 3. Update the global state and input field to the effective/applied amount
+    coinsToApply = appliedCoins; 
+    coinInput.value = appliedCoins; 
 
-    
-    coinInput.value = appliedCoins; // Update input field
-    
-    // Re-run checkout summary calculation to update totals
+    // 4. Re-run checkout summary calculation to update totals in UI and context
     const cart = window.razorpayContext.items || [];
     if (cart.length > 0) {
         displayCheckoutSummary(cart);
