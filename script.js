@@ -1953,6 +1953,14 @@ async function loadCheckoutPage() {
     const coinBalanceDisplay = document.getElementById('coin-balance-display');
     if (coinBalanceDisplay) coinBalanceDisplay.textContent = `${availableCoins || 0} Coins`;
     
+    // Initialize razorpayContext with cart data FIRST
+    window.razorpayContext = {
+        items: cart,
+        orderPickupDate: cart[0]?.pickupDate,
+        orderPickupTime: cart[0]?.pickupTime,
+        orderPincode: cart[0]?.pincode || 'N/A'
+    };
+    
     // Automatic First Order Discount Logic: Apply max 50 coins automatically on first order
     if (window.currentUser && !window.currentUser.firstOrderPlaced && coinsToApply === 0) {
         // Calculate subtotal first to cap discount
@@ -3001,8 +3009,10 @@ function updateCartSummary(subtotal, fees, total, isDisabled) {
     if (checkoutEl) checkoutEl.disabled = isDisabled || total === 0;
 }
 
-// Display items and calculate total on the checkout page (MODIFIED FOR COINS FIX)
+// Display items and calculate total on the checkout page (FIXED for zero total issue)
 function displayCheckoutSummary(cart) {
+    console.log("displayCheckoutSummary called with cart:", cart);
+    
     const listContainer = document.getElementById('checkout-item-list');
     if (!listContainer) return;
 
@@ -3010,29 +3020,34 @@ function displayCheckoutSummary(cart) {
     
     let subtotal = 0;
     
-    // NEW: Collect all rental duration and pickup details for display/form pre-fill
-    const totalRentalDetails = [];
-    const pickupDateInput = document.getElementById('rental-details'); // Correct ID is rental-details
+    // Calculate subtotal from cart
+    cart.forEach(item => {
+        subtotal += Number(item.price) || 0;
+    });
+    
+    console.log("Subtotal calculated:", subtotal);
+    
+    // Pre-fill the rental details field
+    const pickupDateInput = document.getElementById('rental-details');
     const firstItem = cart[0];
 
-    // Pre-fill the single "Rental Duration" field with details from the first item
     if (pickupDateInput && firstItem) {
         pickupDateInput.value = `${firstItem.rentalValue} ${firstItem.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'} | Pickup: ${firstItem.pickupDate} @ ${firstItem.pickupTime}`;
     }
     
-    // NEW: Set pickup date/time in razorpayContext for order placement
+    // Update razorpayContext with current data
     window.razorpayContext = {
         ...window.razorpayContext,
         orderPickupDate: firstItem?.pickupDate,
         orderPickupTime: firstItem?.pickupTime,
-        items: cart, // Also add cart items to context for order placement
+        items: cart,
+        subtotal: subtotal // Ensure subtotal is in context
     };
-    // END NEW
 
     const orderPincode = cart.length > 0 ? cart[0].pincode : 'N/A';
 
+    // Display cart items
     cart.forEach(item => {
-        subtotal += item.price;
         listContainer.innerHTML += `
             <div class="order-item-card d-flex justify-content-between align-items-center">
                 <div>
@@ -3048,35 +3063,66 @@ function displayCheckoutSummary(cart) {
         `;
     });
     
-    // --- COIN & DISCOUNT CALCULATION (FIXED) ---
+    // --- COIN & DISCOUNT CALCULATION ---
     // 1. Calculate the maximum possible discount (50% of subtotal)
     const maxDiscountAllowed = Math.floor(subtotal * 0.5);
     
-    // 2. Determine how many coins can actually be applied (min of requested, available balance, and max discount cap)
-    const effectiveCoinsUsed = Math.min(coinsToApply, availableCoins, maxDiscountAllowed);
+    // 2. Determine how many coins can actually be applied
+    let requestedCoins = coinsToApply;
+    const effectiveCoinsUsed = Math.min(requestedCoins, availableCoins, maxDiscountAllowed);
     
-    // 3. The total discount amount is simply the number of effective coins used (1 coin = 1 rupee discount)
+    // 3. The total discount amount (1 coin = 1 rupee discount)
     const totalDiscount = effectiveCoinsUsed;
     
-    // 4. Update the global state to reflect the *actually* applied coins
+    // 4. Update the global state
     coinsToApply = effectiveCoinsUsed;
     
     // 5. Calculate fees and final total
     const fees = subtotal * platformFeeRate;
     let total = subtotal - totalDiscount + fees;
-    total = Math.max(0, total); // Ensure total is never negative
-
-    // 6. Update razorpay context with new discount info
+    
+    console.log("Calculation:", {
+        subtotal,
+        availableCoins,
+        requestedCoins,
+        effectiveCoinsUsed,
+        totalDiscount,
+        fees,
+        initialTotal: total
+    });
+    
+    // IMPORTANT FIX: Ensure total is never less than 1
+    if (total < 1) {
+        // If total would be less than ₹1, reduce the coins used
+        const excessDiscount = Math.abs(total - 1);
+        coinsToApply = Math.max(0, effectiveCoinsUsed - Math.ceil(excessDiscount));
+        
+        // Recalculate with adjusted coins
+        const adjustedDiscount = coinsToApply;
+        total = subtotal - adjustedDiscount + fees;
+        
+        console.log("Adjusted calculation:", {
+            adjustedCoins: coinsToApply,
+            adjustedDiscount,
+            finalTotal: total
+        });
+    }
+    
+    // Ensure total is at least ₹1
+    total = Math.max(1, total);
+    
+    console.log("Final total:", total);
+    
+    // 6. Update razorpay context
     window.razorpayContext = { 
+        ...window.razorpayContext,
         subtotal, 
         fees, 
         total, 
         orderPincode, 
         discount: totalDiscount, 
-        coinsUsed: effectiveCoinsUsed, // Store the final amount of coins used for order placement
-        ...window.razorpayContext 
+        coinsUsed: coinsToApply
     }; 
-    // --- END COIN & DISCOUNT CALCULATION (FIXED) ---
     
     // 7. Update UI elements
     const feeLabelElement = document.getElementById('checkout-fees-label');
@@ -3085,10 +3131,10 @@ function displayCheckoutSummary(cart) {
     }
 
     const coinInput = document.getElementById('coins-to-apply');
-    if (coinInput) coinInput.value = effectiveCoinsUsed;
+    if (coinInput) coinInput.value = coinsToApply;
     
     const discountEl = document.getElementById('checkout-discount');
-    if (discountEl) discountEl.textContent = window.firebaseHelpers.formatCurrency(totalDiscount);
+    if (discountEl) discountEl.textContent = `-${window.firebaseHelpers.formatCurrency(totalDiscount)}`;
 
     const subtotalEl = document.getElementById('checkout-subtotal');
     if (subtotalEl) subtotalEl.textContent = window.firebaseHelpers.formatCurrency(subtotal);
@@ -3097,14 +3143,21 @@ function displayCheckoutSummary(cart) {
     const totalEl = document.getElementById('checkout-total');
     if (totalEl) totalEl.textContent = window.firebaseHelpers.formatCurrency(total);
     
+    // FIX: Update pay button amount - ensure it shows the correct amount
     const payAmount = document.getElementById('pay-button-amount');
-    if (payAmount) payAmount.textContent = window.firebaseHelpers.formatCurrency(total);
+    if (payAmount) {
+        payAmount.textContent = window.firebaseHelpers.formatCurrency(total);
+        console.log("Pay button amount set to:", total);
+    }
     
     // Update pay button text if CoP is selected
     const paymentMethod = document.getElementById('payment-method-select')?.value;
     const payBtn = document.getElementById('pay-now-btn');
     if (paymentMethod === 'test_cop' && payBtn) {
          payBtn.innerHTML = `<i class="fas fa-truck-loading me-2"></i> Confirm Rental (No Upfront Payment)`;
+    } else if (payBtn && payAmount) {
+        // Ensure Razorpay button shows correct amount
+        payBtn.innerHTML = `<i class="fas fa-money-check-alt me-2"></i>Pay ${payAmount.textContent} Now`;
     }
 }
 
@@ -4479,14 +4532,26 @@ window.applyCoinDiscount = function() {
     
     if (!coinInput) return;
     
-    // 1. Get requested coins and subtotal from context (which should be set by loadCheckoutPage/displayCheckoutSummary)
+    // Get requested coins
     let requestedCoins = parseInt(coinInput.value) || 0;
-    const subtotal = window.razorpayContext.subtotal || 0;
     
-    // 2. Calculate limits
-    const maxDiscountAllowed = Math.floor(subtotal * 0.5); // Max discount is 50% of the price
-    const maxCoinsAllowed = Math.min(availableCoins, maxDiscountAllowed); 
+    // Get cart from context or global state
+    const cart = window.razorpayContext?.items || [];
+    if (cart.length === 0) {
+        warningText.textContent = "Cart is empty. Please add items first.";
+        warningText.classList.remove('text-muted', 'text-success', 'text-warning');
+        warningText.classList.add('text-danger');
+        return;
+    }
     
+    // Calculate subtotal
+    let subtotal = 0;
+    cart.forEach(item => {
+        subtotal += Number(item.price) || 0;
+    });
+    
+    // Calculate limits
+    const maxDiscountAllowed = Math.floor(subtotal * 0.5);
     let appliedCoins = 0;
     
     if (requestedCoins < 0) {
@@ -4495,13 +4560,13 @@ window.applyCoinDiscount = function() {
         warningText.classList.remove('text-muted', 'text-success', 'text-warning');
         warningText.classList.add('text-danger');
     } else if (requestedCoins > availableCoins) {
-        appliedCoins = availableCoins;
-        warningText.textContent = `Applied available maximum: ${availableCoins} coins.`;
+        appliedCoins = Math.min(availableCoins, maxDiscountAllowed);
+        warningText.textContent = `Applied available maximum: ${appliedCoins} coins.`;
         warningText.classList.remove('text-muted', 'text-danger', 'text-success');
         warningText.classList.add('text-warning');
     } else if (requestedCoins > maxDiscountAllowed) {
         appliedCoins = maxDiscountAllowed;
-        warningText.textContent = `Applied maximum possible: ${maxDiscountAllowed} coins. (Capped at 50% of subtotal: ${window.firebaseHelpers.formatCurrency(maxDiscountAllowed)})`;
+        warningText.textContent = `Applied maximum possible: ${maxDiscountAllowed} coins. (Capped at 50% of subtotal)`;
         warningText.classList.remove('text-muted', 'text-success', 'text-warning');
         warningText.classList.add('text-danger');
     } else {
@@ -4511,15 +4576,12 @@ window.applyCoinDiscount = function() {
         warningText.classList.add('text-success');
     }
     
-    // 3. Update the global state and input field to the effective/applied amount
+    // Update global state
     coinsToApply = appliedCoins; 
     coinInput.value = appliedCoins; 
 
-    // 4. Re-run checkout summary calculation to update totals in UI and context
-    const cart = window.razorpayContext.items || [];
-    if (cart.length > 0) {
-        displayCheckoutSummary(cart);
-    }
+    // Re-run checkout summary calculation
+    displayCheckoutSummary(cart);
 }
 
 // NEW: Function to generate referral link
