@@ -19,7 +19,6 @@ try {
     // Initialize Firebase services
     const auth = firebase.auth();
     const db = firebase.firestore();
-    // Firebase Storage is removed and replaced by ImgBB upload helper
     
     // Initialize Remote Config and set minimum fetch interval
     if (firebase.remoteConfig) {
@@ -55,8 +54,8 @@ try {
     
     // Enable Firestore offline persistence (Wrapped in try/catch to handle Access to storage error)
    try {
-    // FIX: Removed window.isSecureContext check as it's environment dependent and often causes issues in iframes.
-    // We rely on the catch block to handle the 'Access to storage' error gracefully.
+        // Attempt to enable persistence. If it fails due to security/iframe restrictions, 
+        // the catch block will prevent the error from stopping initialization.
         db.enablePersistence()
             .catch((err) => {
                 if (err.code == 'failed-precondition') {
@@ -70,9 +69,11 @@ try {
                  else {
                     console.warn('Persistence setup error:', err.message);
                 }
+                // IMPORTANT: Do NOT re-throw or reject here. Let the promise resolve/fail silently so the rest of the app loads.
             });
     } catch (e) {
         console.warn('Persistence setup error (initialization):', e.message);
+        // Continue application flow even if this initial try/catch fails.
     }
     
     // Export Firebase services
