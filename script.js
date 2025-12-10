@@ -485,7 +485,7 @@ async function getCurrentLocationPincode() {
  * Checks for existing pincode and prompts user if not found (on homepage only).
  */
 async function checkAndPromptForPincode() {
-    // This relies on initializeAuthInternal having been awaited before this call in DOMContentLoaded
+    // This relies on initializeAuth() having been awaited before this call in DOMContentLoaded
     const finalPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
     window.customerPincode = finalPincode;
     
@@ -2976,7 +2976,7 @@ function displayCheckoutSummary(cart) {
     if (window.currentUser && !window.currentUser.firstOrderPlaced && coinsToApply === 0) {
         // If it is the first order, they will receive 100 coins, and can use 50% (50 coins) as discount.
         // Cap the discount by the subtotal if the subtotal is less than 50
-        coinsToUse = Math.min(50, subtotal); 
+        coinsToUse = Math.min(50, availableCoins); 
         coinsToApply = coinsToUse; // Set coinsToApply so it carries through to the payment stage
         
         const coinsInput = document.getElementById('coins-to-apply');
@@ -3170,7 +3170,7 @@ async function processPayment() {
     // *** MODIFIED LOGIC END ***
 }
 
-// Final step: Save order to Firestore after (simulated) successful payment (MODIFIED to accept payment/status)
+// Final step: Save order to Firestore after (simulated) successful payment (MODIFIED to reward referrer)
 async function placeOrderInFirestore(orderId, customerData, transactionId, totalAmount, paymentStatus, paymentMethod) {
     const cart = await getCartFromFirestore();
     
@@ -3228,52 +3228,41 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, total
         
         await updateCartInFirestore([]); 
         
-        // --- REFERRAL & COINS LOGIC START ---
+        // --- REFERRAL & COINS LOGIC START (MODIFIED) ---
         
-        // 1. Mark customer's first order & reward
         let customerUpdates = {};
+        let referrerRewardMessage = '';
+        
+        // 1. Check if this is the customer's very first order
         if (!window.currentUser.firstOrderPlaced) {
             customerUpdates.firstOrderPlaced = true;
-            customerUpdates.coins = firebase.firestore.FieldValue.increment(100); // REFERRED CUSTOMER gets 100 coins
             window.currentUser.firstOrderPlaced = true;
-            window.currentUser.coins = (window.currentUser.coins || 0) + 100;
+            
+            // 1a. Check if customer was referred by someone (referrer is the one to be rewarded)
+            const referrerId = window.currentUser.referredBy;
+            if (referrerId) {
+                // Reward the REFERRER (the person who referred the friend) with 100 coins
+                const referrerRef = window.FirebaseDB.collection('users').doc(referrerId);
+                await referrerRef.update({
+                    coins: firebase.firestore.FieldValue.increment(100),
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                referrerRewardMessage = `<br>Your referrer (UID: ${referrerId.substring(0, 8)}...) has received **100 Coins**!`;
+            }
         }
 
-        // 2. Decrement coins used
+        // 2. Decrement coins used by the referred customer (the one who placed the order)
         if (coinsUsed > 0) {
-             // Only decrement if the coins used weren't part of the instant 100 coin reward from above.
-             // Since the 50 coin instant discount is included in the 100 coin reward, we must adjust the decrement logic carefully.
-             
-             // Simplification: The customer is rewarded 100 coins, and the coinsUsed value is already included in the final discount calculation.
-             // We just need to ensure the total available coins reflects the final balance.
-             
-             // If this is the first order: Net coin change = +100 (reward) - coinsUsed (discount)
-             // If not first order: Net coin change = -coinsUsed (discount)
-             
-             const netCoinChange = (customerUpdates.coins ? 100 : 0) - coinsUsed;
-             
-             if (netCoinChange !== 0) {
-                 if (customerUpdates.coins) { // If customerUpdates.coins was set to +100, we overwrite it with the final net change
-                     customerUpdates.coins = firebase.firestore.FieldValue.increment(netCoinChange);
-                 } else { // If customerUpdates.coins was not set, just apply the decrement
-                     customerUpdates.coins = firebase.firestore.FieldValue.increment(-coinsUsed);
-                 }
-                 window.currentUser.coins = (window.currentUser.coins || 0) + netCoinChange;
-             }
+             // Only apply coin decrement if coins were used as a discount
+             customerUpdates.coins = firebase.firestore.FieldValue.increment(-coinsUsed);
+             window.currentUser.coins = (window.currentUser.coins || 0) - coinsUsed;
         }
         
-        // 3. Apply customer updates
+        // 3. Apply customer updates (if any, like setting firstOrderPlaced or decrementing coins)
         if (Object.keys(customerUpdates).length > 0) {
             await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(customerUpdates);
             availableCoins = window.currentUser.coins; // Update global state
         }
-        
-        // 4. Check for referrer reward (If you later implement a reward for the *referrer*)
-        /*
-        if (window.currentUser.referredBy) {
-            // Logic to reward referrer here
-        }
-        */
         
         coinsToApply = 0; // Reset applied coins state
         
@@ -3284,9 +3273,7 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, total
             ? `Order #${orderId.substring(0, 8)} placed successfully! Payment confirmed.`
             : `Test Order #${orderId.substring(0, 8)} placed successfully! Payment is **Pending**.`;
             
-        if (!window.currentUser.firstOrderPlaced) { // This check relies on the line before the function body where firstOrderPlaced is set to true
-             successMessage += `<br>You received **100 Coins** for your first order!`;
-        }
+        successMessage += referrerRewardMessage; // Add referrer reward message
 
         window.firebaseHelpers.showAlert(successMessage + ' You will be redirected to My Orders.', 'success');
         
@@ -3354,6 +3341,19 @@ async function loadProfilePage() {
     
     const profileUserNameEl = document.getElementById('profile-user-name');
     if (profileUserNameEl) profileUserNameEl.textContent = user.name || 'User';
+    
+    // NEW: Update Coin Display
+    const profileCoinBalanceEl = document.getElementById('profile-coin-balance');
+    if (profileCoinBalanceEl) profileCoinBalanceEl.textContent = `${availableCoins || 0} Coins`;
+    
+    // NEW: Update Referral Info
+    const referralCodeDisplayEl = document.getElementById('referral-code-display');
+    const referralLinkDisplayEl = document.getElementById('referral-link-display');
+    const referralCode = window.currentUser.referralCode || generateReferralCode();
+
+    if (referralCodeDisplayEl) referralCodeDisplayEl.value = referralCode;
+    if (referralLinkDisplayEl) referralLinkDisplayEl.value = window.getReferralLink(referralCode);
+    // END NEW
 
     // Check if user is a seller and has a pincode set
     const isSeller = user.role === 'seller';
@@ -3978,7 +3978,7 @@ async function submitReview() {
         
         // Close modal
         const modal = bootstrap.Modal.getInstance(document.getElementById('reviewModal'));
-        modal.hide();
+        if (modal) modal.hide();
         
         // Reload orders to update button state
         loadOrdersPage();
@@ -4476,7 +4476,7 @@ window.applyCoinDiscount = function() {
     // we let them clear the input, but the coinsToApply state should be updated.
     if (!window.currentUser.firstOrderPlaced && requestedCoins === 0) {
         coinsToApply = 0;
-        warningText.textContent = `No coins applied. You will still receive the 100 Coin reward after payment.`;
+        warningText.textContent = `No coins applied.`;
         warningText.classList.remove('text-danger', 'text-success');
         warningText.classList.add('text-muted');
     } else {
