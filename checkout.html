@@ -122,10 +122,29 @@
                         </div>
 
                         <hr>
+                        
+                        <!-- NEW COIN APPLICATION SECTION -->
+                        <div class="mb-3 border rounded p-3 bg-light">
+                             <div class="d-flex justify-content-between mb-2">
+                                <span><i class="fas fa-coins text-warning me-1"></i>Available Coins:</span>
+                                <strong id="coin-balance-display" class="text-success">0 Coins</strong>
+                            </div>
+                            <label for="coins-to-apply" class="form-label small fw-bold">Apply Coins for Discount (Max 50% of subtotal)</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="coins-to-apply" min="0" value="0" oninput="applyCoinDiscount()">
+                                <span class="input-group-text">COINS</span>
+                            </div>
+                            <small class="d-block mt-1" id="coin-warning-text">Enter coins to see your discount applied.</small>
+                        </div>
+                        <!-- END NEW COIN APPLICATION SECTION -->
 
                         <div class="d-flex justify-content-between mb-2">
                             <span>Subtotal:</span>
                             <strong id="checkout-subtotal">₹0</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2 text-success">
+                            <span>Coin Discount:</span>
+                            <strong id="checkout-discount">-₹0</strong>
                         </div>
                         <div class="d-flex justify-content-between mb-2 text-danger">
                             <!-- ADDED ID HERE -->
@@ -276,7 +295,8 @@
                     const method = event.target.value;
                     if (method === 'test_cop') {
                         if(payBtn) {
-                            payBtn.innerHTML = '<i class="fas fa-truck-loading me-2"></i> Confirm Rental (No Payment)';
+                            // Pay button text updated to show the discounted total
+                            payBtn.innerHTML = `<i class="fas fa-truck-loading me-2"></i> Confirm Rental (No Upfront Payment)`;
                             payBtn.classList.remove('btn-primary');
                             payBtn.classList.add('btn-warning');
                         }
