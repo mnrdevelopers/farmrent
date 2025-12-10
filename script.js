@@ -3143,7 +3143,7 @@ function displayCheckoutSummary(cart) {
     const totalEl = document.getElementById('checkout-total');
     if (totalEl) totalEl.textContent = window.firebaseHelpers.formatCurrency(total);
     
-    // FIX: Update pay button amount - ensure it shows the correct amount
+   // FIX: Update pay button amount - ensure it shows the correct amount
 const payAmount = document.getElementById('pay-button-amount');
 if (payAmount) {
     const formattedAmount = window.firebaseHelpers.formatCurrency(total);
@@ -3165,6 +3165,7 @@ if (payAmount) {
             payBtn.classList.add('btn-primary');
         }
     }
+}
 
 // Process payment using Razorpay (Simulated Escrow/Route) (MODIFIED FOR TEST PAYMENT & COINS FIX)
 async function processPayment() {
