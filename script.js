@@ -14,6 +14,8 @@ let lastClearTime = 0; // Global variable to store the last notification clear t
 let activeChatId = null;
 let chatUnsubscribe = null;
 let typingTimeout = null;
+// NEW: Global unsubscribe handle for the floating chat badge listener
+let chatBadgeUnsubscribe = null;
 
 
 // --- NEW HELPER: Get Notification Status Ref ---
@@ -793,6 +795,10 @@ async function initializeAuthInternal() {
                             loadFeaturedEquipment(); 
                         }
                         updateNavbarPincodeDisplay();
+                        
+                        // NEW: Start listening for chat badge updates on login
+                        listenForUnreadChatMessages();
+
                     }
                 } catch (error) {
                     // FIX: Catch block for error getting user data
@@ -823,6 +829,13 @@ async function initializeAuthInternal() {
                     loadFeaturedEquipment(); 
                 }
                 updateNavbarPincodeDisplay();
+                
+                // NEW: Stop listening for chat badge updates on logout
+                if (chatBadgeUnsubscribe) {
+                     chatBadgeUnsubscribe();
+                     chatBadgeUnsubscribe = null;
+                }
+                updateChatBadgeCount(0); // Clear badge display
             }
         });
     } catch (error) {
@@ -838,6 +851,12 @@ async function logout() {
         window.customerPincode = null; 
         // Clear local notification state
         lastClearTime = 0; 
+        
+        // NEW: Stop listening for chat badge updates on logout
+        if (chatBadgeUnsubscribe) {
+             chatBadgeUnsubscribe();
+             chatBadgeUnsubscribe = null;
+        }
         
         await window.firebaseHelpers.signOut();
         window.location.reload();
@@ -3772,6 +3791,58 @@ function getStarRatingHtml(rating) {
 
 // --- CUSTOMER CHAT SYSTEM ---
 
+/**
+ * NEW FUNCTION: Updates the visibility and count of the floating chat badge.
+ * @param {number} count 
+ */
+function updateChatBadgeCount(count) {
+    const badge = document.getElementById('floating-chat-badge');
+    if (badge) {
+        if (count > 0) {
+            badge.textContent = count > 9 ? '9+' : count;
+            badge.style.display = 'flex';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+}
+
+/**
+ * NEW FUNCTION: Sets up a real-time listener for ALL customer chats to track unread count.
+ * This listener runs whenever the user is logged in.
+ */
+function listenForUnreadChatMessages() {
+    if (!window.currentUser || window.currentUser.role !== 'customer' || !window.FirebaseDB) {
+        if (chatBadgeUnsubscribe) chatBadgeUnsubscribe();
+        return;
+    }
+    
+    // Stop any existing listener
+    if (chatBadgeUnsubscribe) chatBadgeUnsubscribe();
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const conversationsRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations');
+
+    const query = conversationsRef
+        .where('customerId', '==', window.currentUser.uid);
+
+    chatBadgeUnsubscribe = query.onSnapshot(snapshot => {
+        let totalUnread = 0;
+        snapshot.forEach(doc => {
+            const chat = doc.data();
+            totalUnread += chat.unreadCountCustomer || 0;
+        });
+        
+        // Update the floating badge
+        updateChatBadgeCount(totalUnread);
+        
+    }, error => {
+        console.error("Error listening for unread chat count:", error);
+        updateChatBadgeCount(0); // Clear badge on error
+    });
+}
+
+
 // 1. Render Chat Widget HTML (Updated Layout)
 function renderChatWidget() {
     const container = document.getElementById('chat-widget-container');
@@ -3780,6 +3851,8 @@ function renderChatWidget() {
     container.innerHTML = `
         <div class="chat-btn-floating" onclick="toggleChatWindow()">
             <i class="fas fa-comments"></i>
+            <!-- NEW: Unread message badge -->
+            <div id="floating-chat-badge" class="chat-badge" style="display:none;">0</div> 
         </div>
         <div class="chat-window hidden" id="customer-chat-window">
             <div class="chat-header">
@@ -3836,6 +3909,11 @@ function toggleChatWindow() {
         windowEl.classList.toggle('hidden');
         if (!windowEl.classList.contains('hidden') && window.currentUser && !activeChatId) {
             loadUserConversations();
+        }
+        
+        // Hide the floating badge when the full window is opened
+        if (!windowEl.classList.contains('hidden')) {
+             updateChatBadgeCount(0); // Optimistically hide, actual unread count is handled inside loadChatMessages
         }
     }
 }
