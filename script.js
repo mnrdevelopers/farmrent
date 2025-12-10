@@ -3165,7 +3165,6 @@ if (payAmount) {
             payBtn.classList.add('btn-primary');
         }
     }
-}
 
 // Process payment using Razorpay (Simulated Escrow/Route) (MODIFIED FOR TEST PAYMENT & COINS FIX)
 async function processPayment() {
