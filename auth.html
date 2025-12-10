@@ -353,6 +353,14 @@
                                                 <i class="fas fa-eye password-toggle" onclick="togglePasswordVisibility('signupConfirmPassword', this)"></i>
                                             </div>
                                         </div>
+
+                                        <!-- NEW: Referral Code Field -->
+                                        <div class="mb-3">
+                                            <label for="referralCode" class="form-label">Referral Code (Optional)</label>
+                                            <input type="text" class="form-control" id="referralCode" placeholder="Enter friend's referral code (8 characters)" maxlength="8">
+                                            <small class="form-text text-muted">Use a referral code to get bonus rewards later!</small>
+                                        </div>
+                                        <!-- END NEW -->
                                         
                                         <!-- Seller Specific Fields -->
                                         <div id="seller-fields" style="display: none;">
@@ -488,6 +496,9 @@
         const urlParams = new URLSearchParams(window.location.search);
         let role = urlParams.get('role') || 'customer';
         
+        // NEW: Get referral code from URL parameter
+        const urlReferralCode = urlParams.get('ref') || '';
+        
         // Role-specific data
         const roleData = {
             customer: {
@@ -581,6 +592,12 @@
             const adminFields = document.getElementById('admin-fields');
             const googleLoginBtn = document.getElementById('google-login-btn');
             const googleSignupBtn = document.getElementById('google-signup-btn');
+            
+            // NEW: Pre-fill referral code if available in URL
+            const referralCodeInput = document.getElementById('referralCode');
+            if (referralCodeInput && urlReferralCode) {
+                 referralCodeInput.value = urlReferralCode.toUpperCase();
+            }
 
             if (role === 'seller') {
                 sellerFields.style.display = 'block';
@@ -779,8 +796,13 @@
                     status: role === 'seller' ? 'pending' : 'active',
                     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                     newsletter: userData.newsletter,
-                    // Check if signed up via Google (used for Google sign-up flow)
                     signInMethod: 'password', 
+                    
+                    // NEW REFERRAL/COINS FIELDS
+                    coins: 0, 
+                    referralCode: window.generateReferralCode(), // Generate unique code for new user
+                    referredBy: userData.referredBy || null, // UID of the referrer
+                    firstOrderPlaced: false, // Track first order for coin reward
                 };
                 
                 // Add role-specific data
@@ -789,9 +811,9 @@
                     userDoc.gstNumber = userData.gstNumber || '';
                     userDoc.address = userData.address || '';
                     userDoc.pincode = userData.pincode || '';
-                    userDoc.city = userData.city || ''; // NEW
-                    userDoc.state = userData.state || ''; // NEW
-                    userDoc.village = userData.village || ''; // NEW
+                    userDoc.city = userData.city || ''; 
+                    userDoc.state = userData.state || ''; 
+                    userDoc.village = userData.village || ''; 
                 }
                 
                 // Save user data to Firestore
@@ -891,6 +913,10 @@
 
                 } else {
                     // New user - create user document
+                    // NEW: Lookup referrer based on URL code
+                    const code = document.getElementById('referralCode')?.value.trim().toUpperCase();
+                    const referrerId = code ? await window.lookupReferralCode(code) : null;
+                    
                     const userData = {
                         uid: user.uid,
                         email: user.email,
@@ -900,17 +926,23 @@
                         status: role === 'seller' ? 'pending' : 'active',
                         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                         newsletter: true,
-                        signInMethod: 'google', // Track sign-in method
+                        signInMethod: 'google', 
+                        
+                        // NEW REFERRAL/COINS FIELDS
+                        coins: 0,
+                        referralCode: window.generateReferralCode(),
+                        referredBy: referrerId,
+                        firstOrderPlaced: false,
                     };
                     
                     if (role === 'seller') {
-                        userData.businessName = ''; // Must be completed later
+                        userData.businessName = ''; 
                         userData.gstNumber = '';
-                        userData.address = ''; // Must be completed later
+                        userData.address = ''; 
                         userData.pincode = '';
-                        userData.city = ''; // NEW
-                        userData.state = ''; // NEW
-                        userData.village = ''; // NEW
+                        userData.city = ''; 
+                        userData.state = ''; 
+                        userData.village = ''; 
                     }
                     
                     await db.collection('users').doc(user.uid).set(userData);
@@ -1005,7 +1037,7 @@
         });
         
         // Handle signup form submission
-        document.getElementById('signupForm').addEventListener('submit', function(e) {
+        document.getElementById('signupForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             // Get form values
@@ -1017,6 +1049,23 @@
             const termsAgree = document.getElementById('termsAgree').checked;
             const newsletter = document.getElementById('newsletter').checked;
             
+            // NEW: Get referral code and lookup referrer
+            const referralCode = document.getElementById('referralCode')?.value.trim().toUpperCase() || '';
+            let referrerId = null;
+
+            if (referralCode) {
+                if (referralCode.length !== 8) {
+                     showAlert('Referral Code must be 8 characters long.', 'warning');
+                     return;
+                }
+                referrerId = await window.lookupReferralCode(referralCode);
+                if (!referrerId) {
+                    showAlert('Invalid Referral Code. Please check the code and try again.', 'warning');
+                    return;
+                }
+            }
+            // END NEW
+
             // Validation
             if (!name || !mobile || !email || !password || !confirmPassword) {
                 showAlert('Please fill in all required fields', 'warning');
@@ -1083,7 +1132,8 @@
                 mobile,
                 email,
                 password,
-                newsletter
+                newsletter,
+                referredBy: referrerId // NEW
             };
             
             // Add role-specific data
