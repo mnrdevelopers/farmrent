@@ -3068,11 +3068,6 @@ function displayCheckoutSummary(cart) {
     const maxDiscountAllowed = Math.floor(subtotal * 0.5);
     
     // 2. Determine how many coins can actually be applied
-    // FIX: Add default values for coinsToApply and availableCoins if not defined
-    const coinsToApply = window.coinsToApply || 0;
-    const availableCoins = window.availableCoins || 0;
-    const platformFeeRate = window.platformFeeRate || 0.1; // Default 10% if not defined
-    
     let requestedCoins = coinsToApply;
     const effectiveCoinsUsed = Math.min(requestedCoins, availableCoins, maxDiscountAllowed);
     
@@ -3080,7 +3075,7 @@ function displayCheckoutSummary(cart) {
     const totalDiscount = effectiveCoinsUsed;
     
     // 4. Update the global state
-    window.coinsToApply = effectiveCoinsUsed;
+    coinsToApply = effectiveCoinsUsed;
     
     // 5. Calculate fees and final total
     const fees = subtotal * platformFeeRate;
@@ -3100,14 +3095,14 @@ function displayCheckoutSummary(cart) {
     if (total < 1) {
         // If total would be less than ₹1, reduce the coins used
         const excessDiscount = Math.abs(total - 1);
-        window.coinsToApply = Math.max(0, effectiveCoinsUsed - Math.ceil(excessDiscount));
+        coinsToApply = Math.max(0, effectiveCoinsUsed - Math.ceil(excessDiscount));
         
         // Recalculate with adjusted coins
-        const adjustedDiscount = window.coinsToApply;
+        const adjustedDiscount = coinsToApply;
         total = subtotal - adjustedDiscount + fees;
         
         console.log("Adjusted calculation:", {
-            adjustedCoins: window.coinsToApply,
+            adjustedCoins: coinsToApply,
             adjustedDiscount,
             finalTotal: total
         });
@@ -3126,7 +3121,7 @@ function displayCheckoutSummary(cart) {
         total, 
         orderPincode, 
         discount: totalDiscount, 
-        coinsUsed: window.coinsToApply
+        coinsUsed: coinsToApply
     }; 
     
     // 7. Update UI elements
@@ -3136,7 +3131,7 @@ function displayCheckoutSummary(cart) {
     }
 
     const coinInput = document.getElementById('coins-to-apply');
-    if (coinInput) coinInput.value = window.coinsToApply;
+    if (coinInput) coinInput.value = coinsToApply;
     
     const discountEl = document.getElementById('checkout-discount');
     if (discountEl) discountEl.textContent = `-${window.firebaseHelpers.formatCurrency(totalDiscount)}`;
@@ -3149,49 +3144,27 @@ function displayCheckoutSummary(cart) {
     if (totalEl) totalEl.textContent = window.firebaseHelpers.formatCurrency(total);
     
     // FIX: Update pay button amount - ensure it shows the correct amount
-    const payAmount = document.getElementById('pay-button-amount');
-    if (payAmount) {
-        const formattedAmount = window.firebaseHelpers.formatCurrency(total);
-        payAmount.textContent = formattedAmount;
-        console.log("Pay button amount set to:", formattedAmount);
-    }
+const payAmount = document.getElementById('pay-button-amount');
+if (payAmount) {
+    const formattedAmount = window.firebaseHelpers.formatCurrency(total);
+    payAmount.textContent = formattedAmount;
+    console.log("Pay button amount set to:", formattedAmount);
     
-    // FIX: Directly update the pay button text based on payment method
+    // Directly update the pay button text
     const payBtn = document.getElementById('pay-now-btn');
     const paymentMethod = document.getElementById('payment-method-select')?.value;
     
     if (payBtn) {
-        updatePayButtonText(payBtn, total, paymentMethod);
+        if (paymentMethod === 'test_cop') {
+            payBtn.innerHTML = `<i class="fas fa-truck-loading me-2"></i> Confirm Rental (No Upfront Payment)`;
+            payBtn.classList.remove('btn-primary');
+            payBtn.classList.add('btn-warning');
+        } else {
+            payBtn.innerHTML = `<i class="fas fa-money-check-alt me-2"></i>Pay ${formattedAmount} Now`;
+            payBtn.classList.remove('btn-warning');
+            payBtn.classList.add('btn-primary');
+        }
     }
-}
-
-// FIX: Separate function to update payment button text
-function updatePayButtonText(payBtn, total, paymentMethod) {
-    const formattedAmount = window.firebaseHelpers.formatCurrency(total);
-    
-    if (paymentMethod === 'test_cop') {
-        payBtn.innerHTML = `<i class="fas fa-truck-loading me-2"></i> Confirm Rental (No Upfront Payment)`;
-        payBtn.classList.remove('btn-primary');
-        payBtn.classList.add('btn-warning');
-    } else {
-        payBtn.innerHTML = `<i class="fas fa-money-check-alt me-2"></i>Pay ${formattedAmount} Now`;
-        payBtn.classList.remove('btn-warning');
-        payBtn.classList.add('btn-primary');
-    }
-}
-
-// FIX: Add event listener for payment method change
-function setupPaymentMethodListener() {
-    const paymentMethodSelect = document.getElementById('payment-method-select');
-    if (paymentMethodSelect) {
-        paymentMethodSelect.addEventListener('change', function() {
-            const payBtn = document.getElementById('pay-now-btn');
-            if (payBtn && window.razorpayContext && window.razorpayContext.total) {
-                updatePayButtonText(payBtn, window.razorpayContext.total, this.value);
-            }
-        });
-    }
-}
 
 // Process payment using Razorpay (Simulated Escrow/Route) (MODIFIED FOR TEST PAYMENT & COINS FIX)
 async function processPayment() {
@@ -3242,7 +3215,6 @@ async function processPayment() {
 
         try {
             // Pass the discounted total (total) to placeOrderInFirestore
-            // FIX: Assuming placeOrderInFirestore is defined elsewhere
             await placeOrderInFirestore(orderId, customerData, 'TEST_COP_TXN', total, 'pending', 'Cash On Pickup (Test)', discount, coinsUsed);
             // The function placeOrderInFirestore will handle success alerts and redirects
         } catch (error) {
@@ -3293,11 +3265,6 @@ async function processPayment() {
     }
     // *** MODIFIED LOGIC END ***
 }
-
-// Initialize when document is ready
-document.addEventListener('DOMContentLoaded', function() {
-    setupPaymentMethodListener();
-});
 
 // Final step: Save order to Firestore after (simulated) successful payment (MODIFIED to reward referrer AND handle coins)
 async function placeOrderInFirestore(orderId, customerData, transactionId, discountedTotalAmount, paymentStatus, paymentMethod, totalDiscount, coinsUsed) {
@@ -4620,7 +4587,7 @@ window.applyCoinDiscount = function() {
 
     // Re-run checkout summary calculation
     displayCheckoutSummary(cart);
-}
+};
 
 // NEW: Function to generate referral link
 window.getReferralLink = function(code) {
@@ -4628,4 +4595,4 @@ window.getReferralLink = function(code) {
     const baseUrl = window.location.origin;
     // Base URL is index.html. We link to signup with the code.
     return `${baseUrl}/farmrent/auth.html?role=customer&ref=${code}`;
-}
+};
