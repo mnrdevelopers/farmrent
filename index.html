@@ -72,37 +72,38 @@
         </div>
     </nav>
 
-    <!-- Hero Section -->
-    <section class="hero-section">
-        <div class="container">
-            <div class="row align-items-center">
-                <div class="col-lg-6">
-                    <h1 class="display-4 fw-bold mb-4">Modern Farming Made Easy</h1>
-                    <p class="lead mb-4">India's leading farming equipment rental service. Get modern tools for your farm with easy self-pickup options.</p>
-                    
-                    <!-- UPDATED: Pincode display in the hero section -->
-                    <div id="homepage-pincode-display" class="mb-4">
-                        <p class="text-white mb-1"><i class="fas fa-map-marker-alt me-1 text-warning"></i> Showing equipment available for: <strong id="current-pincode-value">All Locations</strong></p>
-                        <button class="btn btn-sm btn-outline-light" onclick="showPincodeModal()">Change Location Filter</button>
-                    </div>
-                    <!-- END UPDATED -->
-
-                    <div class="d-flex flex-wrap gap-3">
-                        <a href="browse.html" class="btn btn-warning btn-lg">Browse Equipment</a>
-                        <a href="#how-it-works" class="btn btn-outline-light btn-lg">How It Works</a>
-                    </div>
+  <!-- Hero Section -->
+<section class="hero-section">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-6">
+                <h1 class="display-4 fw-bold mb-4">Modern Farming Made Easy</h1>
+                <p class="lead mb-4">India's leading farming equipment rental service. Get modern tools for your farm with easy self-pickup options.</p>
+                
+                <!-- UPDATED: Pincode display in the hero section -->
+                <div id="homepage-pincode-display" class="mb-4">
+                    <p class="text-white mb-1"><i class="fas fa-map-marker-alt me-1 text-warning"></i> Showing equipment available for: <strong id="current-pincode-value">All Locations</strong></p>
+                    <button class="btn btn-sm btn-outline-light" onclick="showPincodeModal()">Change Location Filter</button>
                 </div>
-                <div class="col-lg-6 text-center">
-                    <!-- SIMPLE 3D Tractor Image -->
-                    <div class="simple-tractor-container">
-                        <img src="images/herotractor.png" 
-                             alt="Premium Modern Tractor" 
-                             class="simple-3d-tractor-image">
-                    </div>
+                <!-- END UPDATED -->
+
+                <div class="d-flex flex-wrap gap-3">
+                    <a href="browse.html" class="btn btn-warning btn-lg">Browse Equipment</a>
+                    <a href="#how-it-works" class="btn btn-outline-light btn-lg">How It Works</a>
+                </div>
+            </div>
+            <div class="col-lg-6 text-center">
+                <!-- HERO IMAGE WITH PROPER STYLING -->
+                <div class="hero-image-container">
+                    <img src="heroimage.png" 
+                         alt="FarmRent - Modern Farming Equipment Rental" 
+                         class="img-fluid hero-main-image"
+                         style="max-height: 400px;">
                 </div>
             </div>
         </div>
-    </section>
+    </div>
+</section>
 
     <!-- Featured Equipment -->
     <section class="py-5">
@@ -356,54 +357,5 @@
     
     <!-- Custom JavaScript -->
     <script src="script.js"></script>
-    
-    <!-- Simple CSS for 3D Tractor Image -->
-    <style>
-        .simple-tractor-container {
-            position: relative;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        
-        .simple-3d-tractor-image {
-            width: 100%;
-            height: 100%;
-            max-width: 500px;
-            object-fit: cover;
-            object-position: center 30%;
-            border-radius: 15px;
-            box-shadow: 
-                0 20px 40px rgba(0, 0, 0, 0.3),
-                0 0 60px rgba(43, 92, 43, 0.2);
-            filter: 
-                brightness(1.1) 
-                contrast(1.1)
-                saturate(1.1);
-            transform: perspective(1000px) rotateY(-5deg) rotateX(3deg);
-            transition: transform 0.3s ease;
-        }
-        
-        .simple-3d-tractor-image:hover {
-            transform: perspective(1000px) rotateY(0deg) rotateX(0deg);
-        }
-        
-        @media (max-width: 992px) {
-            .simple-tractor-container {
-                margin-top: 30px;
-            }
-            
-            .simple-3d-tractor-image {
-                transform: perspective(800px) rotateY(-3deg) rotateX(2deg);
-            }
-        }
-        
-        @media (max-width: 576px) {
-            .simple-3d-tractor-image {
-                transform: perspective(600px) rotateY(0deg) rotateX(0deg);
-            }
-        }
-    </style>
 </body>
 </html>
