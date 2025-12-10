@@ -5,6 +5,42 @@ let selectedEquipment = {};
 let isAuthInitialized = false;
 let platformFeeRate = 0.05; 
 let customerPincode = null;
+// NEW: Coins state
+let availableCoins = 0;
+let coinsToApply = 0; // Coins the customer wishes to apply to the current order
+
+// NEW: Referral Utility Functions
+/**
+ * Generates a simple, unique 8-character referral code.
+ * @returns {string} The referral code.
+ */
+function generateReferralCode() {
+    return Math.random().toString(36).substring(2, 10).toUpperCase();
+}
+
+/**
+ * Looks up the UID of the referrer based on a referral code.
+ * @param {string} code - The 8-character referral code.
+ * @returns {Promise<string|null>} The UID of the referrer or null if not found.
+ */
+async function lookupReferralCode(code) {
+     if (!code || code.length !== 8 || !window.FirebaseDB) return null;
+     
+     try {
+         const snapshot = await window.FirebaseDB.collection('users')
+             .where('referralCode', '==', code)
+             .limit(1)
+             .get();
+             
+         if (!snapshot.empty) {
+             return snapshot.docs[0].id; // Return the UID of the referrer
+         }
+     } catch (e) {
+         console.error("Error looking up referral code:", e);
+     }
+     return null;
+}
+// END NEW: Referral Utility Functions
 
 // NEW: Collection name for user's notification settings (private collection)
 const CUSTOMER_NOTIFICATIONS_COLLECTION = 'customer_notifications';
@@ -681,15 +717,8 @@ async function changePincodeToMatchEquipment(equipmentPincode) {
     
     // Delay slightly to ensure savePincode async operations complete before re-triggering modal
     setTimeout(() => {
-        // This relies on the modal logic running again which should be triggered by the button that called this function
-        // For simplicity, we just rely on the user manually clicking the add to cart button again, or we can just navigate to cart/checkout if needed.
-        // If coming from 'Rent Now', it will proceed to checkout.
-        if (window.location.href.includes('checkout.html')) {
-            loadCheckoutPage();
-        } else {
-             // If coming from Add to Cart or item page, the item modal is likely closed. Let the user re-try.
-             window.firebaseHelpers.showAlert('Location updated. Please click "Add to Cart" or "Rent Now" again.', 'info');
-        }
+        // If coming from Add to Cart or item page, the item modal is likely closed. Let the user re-try.
+        window.firebaseHelpers.showAlert('Location updated. Please click "Add to Cart" or "Rent Now" again.', 'info');
     }, 500);
 }
 
@@ -767,12 +796,42 @@ async function initializeAuthInternal() {
         window.FirebaseAuth.onAuthStateChanged(async (user) => { 
             if (user) {
                 try {
-                    const doc = await window.FirebaseDB.collection('users').doc(user.uid).get();
+                    const docRef = window.FirebaseDB.collection('users').doc(user.uid);
+                    const doc = await docRef.get();
+
                     if (doc.exists) {
                         window.currentUser = { uid: user.uid, ...doc.data() };
                         
+                        // NEW FEATURE ROLLOUT/MERGE: Ensure referral fields exist
+                        const userData = window.currentUser;
+                        let needsUpdate = false;
+                        
+                        if (userData.coins === undefined) {
+                            userData.coins = 0;
+                            needsUpdate = true;
+                        }
+                        if (userData.referralCode === undefined) {
+                            userData.referralCode = generateReferralCode();
+                            needsUpdate = true;
+                        }
+                        if (userData.firstOrderPlaced === undefined) {
+                             userData.firstOrderPlaced = false;
+                            needsUpdate = true;
+                        }
+
+                        if (needsUpdate) {
+                            // Only merge fields that were missing
+                            await docRef.set({
+                                coins: userData.coins,
+                                referralCode: userData.referralCode,
+                                firstOrderPlaced: userData.firstOrderPlaced,
+                            }, { merge: true });
+                        }
+                        
+                        // Set global coin balance
+                        availableCoins = userData.coins;
+
                         // NEW PINCODE LOGIC: Set global pincode based on precedence
-                        // Note: Setting customerPincode here will correctly update firebase-config.js's getter
                         window.customerPincode = window.currentUser.pincode || localStorage.getItem('customerPincode') || null;
                         
                         // NEW: Load persisted notification clear time
@@ -799,11 +858,16 @@ async function initializeAuthInternal() {
                         // NEW: Start listening for chat badge updates on login
                         listenForUnreadChatMessages();
 
+                    } else {
+                        // FIX: Catch block for error getting user data
+                        console.error("Error getting user data: User document missing in Firestore.", user);
+                        // Force logout or handle gracefully if user document is missing
+                        await window.firebaseHelpers.signOut();
+                        window.location.reload(); 
                     }
                 } catch (error) {
-                    // FIX: Catch block for error getting user data
-                    console.error("Error getting user data:", error);
-                    // Force logout or handle gracefully if user document is missing
+                    // FIX: Catch block for general errors
+                    console.error("Error during authentication internal step:", error);
                     await window.firebaseHelpers.signOut();
                     window.location.reload(); 
                 } finally {
@@ -830,6 +894,10 @@ async function initializeAuthInternal() {
                 }
                 updateNavbarPincodeDisplay();
                 
+                // NEW: Clear coin balance and applied coins on logout
+                availableCoins = 0;
+                coinsToApply = 0; 
+                
                 // NEW: Stop listening for chat badge updates on logout
                 if (chatBadgeUnsubscribe) {
                      chatBadgeUnsubscribe();
@@ -851,6 +919,10 @@ async function logout() {
         window.customerPincode = null; 
         // Clear local notification state
         lastClearTime = 0; 
+        
+        // NEW: Clear coin balance and applied coins on logout
+        availableCoins = 0;
+        coinsToApply = 0; 
         
         // NEW: Stop listening for chat badge updates on logout
         if (chatBadgeUnsubscribe) {
@@ -1765,7 +1837,7 @@ async function startCheckout() {
     window.location.href = 'checkout.html';
 }
 
-// Load logic for Checkout page (UPDATED)
+// Load logic for Checkout page (UPDATED for coin application UI and logic)
 async function loadCheckoutPage() {
     await new Promise(resolve => {
         const checkAuth = setInterval(() => {
@@ -1845,6 +1917,18 @@ async function loadCheckoutPage() {
     const customerPhoneInput = document.getElementById('customer-phone');
     if (customerPhoneInput) customerPhoneInput.value = user.mobile || '';
 
+    // Initial coin display and discount calculation
+    const coinBalanceDisplay = document.getElementById('coin-balance-display');
+    if (coinBalanceDisplay) coinBalanceDisplay.textContent = `${window.availableCoins || 0} Coins`;
+    
+    // Automatic First Order Discount Logic: Apply max 50 coins automatically on first order
+    if (window.currentUser && !window.currentUser.firstOrderPlaced && coinsToApply === 0) {
+        coinsToApply = Math.min(50, availableCoins); // Max 50 coins instant discount
+        const coinsInput = document.getElementById('coins-to-apply');
+        if (coinsInput) coinsInput.value = coinsToApply;
+    }
+    
+    // Apply discount logic runs inside displayCheckoutSummary
     displayCheckoutSummary(cart);
 }
 
@@ -2882,6 +2966,44 @@ function displayCheckoutSummary(cart) {
     listContainer.innerHTML = '';
     
     let subtotal = 0;
+    let totalDiscount = 0; // NEW: Initialize discount
+
+    // NEW: Coin Logic Setup (50% of the reward for the first order discount is handled here)
+    let coinsToUse = 0;
+    
+    // Check if it's the customer's very first order AND they haven't manually set coinsToApply yet
+    // This is the automatic 50 coin first order discount.
+    if (window.currentUser && !window.currentUser.firstOrderPlaced && coinsToApply === 0) {
+        // If it is the first order, they will receive 100 coins, and can use 50% (50 coins) as discount.
+        // Cap the discount by the subtotal if the subtotal is less than 50
+        coinsToUse = Math.min(50, subtotal); 
+        coinsToApply = coinsToUse; // Set coinsToApply so it carries through to the payment stage
+        
+        const coinsInput = document.getElementById('coins-to-apply');
+        if (coinsInput) coinsInput.value = coinsToApply; // Update input field
+        
+        const coinWarningText = document.getElementById('coin-warning-text');
+        if (coinWarningText) {
+             coinWarningText.textContent = `Applied ${coinsToApply} coins (First Order Discount).`;
+             coinWarningText.classList.remove('text-muted', 'text-danger');
+             coinWarningText.classList.add('text-success');
+        }
+        
+    } else if (coinsToApply > 0) {
+        // If coinsToApply > 0 (set by the user manually or automatically above), apply it.
+        const maxDiscount = Math.floor(subtotal * 0.5); // Max discount is 50% of the price
+        const maxCoinsAllowed = Math.min(availableCoins, maxDiscount); 
+        
+        coinsToUse = Math.min(coinsToApply, maxCoinsAllowed); // Apply the lower of requested or max allowed
+        coinsToApply = coinsToUse; // Re-set global state to the valid applied amount
+    } else {
+        coinsToApply = 0; // Ensure no coins are applied if checks fail
+    }
+    
+    totalDiscount = coinsToApply;
+
+    // End Coin Logic Setup
+
     
     // NEW: Collect all rental duration and pickup details for display/form pre-fill
     const totalRentalDetails = [];
@@ -2898,6 +3020,7 @@ function displayCheckoutSummary(cart) {
         ...window.razorpayContext,
         orderPickupDate: firstItem?.pickupDate,
         orderPickupTime: firstItem?.pickupTime,
+        items: cart, // Also add cart items to context for order placement
     };
     // END NEW
 
@@ -2921,12 +3044,23 @@ function displayCheckoutSummary(cart) {
     });
 
     const fees = subtotal * platformFeeRate;
-    const total = subtotal + fees;
+    let total = subtotal - totalDiscount + fees;
+    total = Math.max(0, total); // Ensure total is never negative
+
+    // Update razorpay context with new discount info
+    window.razorpayContext = { subtotal, fees, total, orderPincode, discount: totalDiscount, ...window.razorpayContext }; 
+
+
     
     const feeLabelElement = document.getElementById('checkout-fees-label');
     if (feeLabelElement) {
         feeLabelElement.textContent = `Platform Fee (${(platformFeeRate * 100).toFixed(0)}%):`;
     }
+
+    // NEW: Update discount display
+    const discountEl = document.getElementById('checkout-discount');
+    if (discountEl) discountEl.textContent = window.firebaseHelpers.formatCurrency(totalDiscount);
+
 
     const subtotalEl = document.getElementById('checkout-subtotal');
     if (subtotalEl) subtotalEl.textContent = window.firebaseHelpers.formatCurrency(subtotal);
@@ -2936,8 +3070,6 @@ function displayCheckoutSummary(cart) {
     if (totalEl) totalEl.textContent = window.firebaseHelpers.formatCurrency(total);
     const payAmount = document.getElementById('pay-button-amount');
     if (payAmount) payAmount.textContent = window.firebaseHelpers.formatCurrency(total);
-
-    window.razorpayContext = { subtotal, fees, total, orderPincode, ...window.razorpayContext }; 
 }
 
 // Process payment using Razorpay (Simulated Escrow/Route) (MODIFIED FOR TEST PAYMENT)
@@ -3051,7 +3183,10 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, total
     const sellerIds = [...new Set(cart.map(item => item.sellerId))].join(', ');
     const businessNames = [...new Set(cart.map(item => item.businessName))].join(', ');
     const orderPincode = window.razorpayContext.orderPincode; 
-
+    
+    // NEW: Get discount details from context
+    const totalDiscount = window.razorpayContext.discount || 0;
+    const coinsUsed = coinsToApply; // Use the value set during display/apply
 
     try {
         const orderData = {
@@ -3076,6 +3211,8 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, total
 
             totalAmount: totalAmount,
             platformFee: window.razorpayContext.fees,
+            discount: totalDiscount, // NEW: Add discount amount
+            coinsUsed: coinsUsed, // NEW: Add coins used
             status: 'pending', // All orders start as pending for seller review
             paymentStatus: paymentStatus, // Use dynamic status ('paid' or 'pending')
             paymentMethod: paymentMethod, // Use dynamic method
@@ -3091,12 +3228,67 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, total
         
         await updateCartInFirestore([]); 
         
-        // Show context-specific alert
-        const successMessage = paymentStatus === 'paid' 
-            ? `Order #${orderId.substring(0, 8)} placed successfully! Payment confirmed. You will be redirected to My Orders.`
-            : `Test Order #${orderId.substring(0, 8)} placed successfully! Payment is **Pending**. You will be redirected to My Orders.`;
+        // --- REFERRAL & COINS LOGIC START ---
+        
+        // 1. Mark customer's first order & reward
+        let customerUpdates = {};
+        if (!window.currentUser.firstOrderPlaced) {
+            customerUpdates.firstOrderPlaced = true;
+            customerUpdates.coins = firebase.firestore.FieldValue.increment(100); // REFERRED CUSTOMER gets 100 coins
+            window.currentUser.firstOrderPlaced = true;
+            window.currentUser.coins = (window.currentUser.coins || 0) + 100;
+        }
 
-        window.firebaseHelpers.showAlert(successMessage, 'success');
+        // 2. Decrement coins used
+        if (coinsUsed > 0) {
+             // Only decrement if the coins used weren't part of the instant 100 coin reward from above.
+             // Since the 50 coin instant discount is included in the 100 coin reward, we must adjust the decrement logic carefully.
+             
+             // Simplification: The customer is rewarded 100 coins, and the coinsUsed value is already included in the final discount calculation.
+             // We just need to ensure the total available coins reflects the final balance.
+             
+             // If this is the first order: Net coin change = +100 (reward) - coinsUsed (discount)
+             // If not first order: Net coin change = -coinsUsed (discount)
+             
+             const netCoinChange = (customerUpdates.coins ? 100 : 0) - coinsUsed;
+             
+             if (netCoinChange !== 0) {
+                 if (customerUpdates.coins) { // If customerUpdates.coins was set to +100, we overwrite it with the final net change
+                     customerUpdates.coins = firebase.firestore.FieldValue.increment(netCoinChange);
+                 } else { // If customerUpdates.coins was not set, just apply the decrement
+                     customerUpdates.coins = firebase.firestore.FieldValue.increment(-coinsUsed);
+                 }
+                 window.currentUser.coins = (window.currentUser.coins || 0) + netCoinChange;
+             }
+        }
+        
+        // 3. Apply customer updates
+        if (Object.keys(customerUpdates).length > 0) {
+            await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(customerUpdates);
+            availableCoins = window.currentUser.coins; // Update global state
+        }
+        
+        // 4. Check for referrer reward (If you later implement a reward for the *referrer*)
+        /*
+        if (window.currentUser.referredBy) {
+            // Logic to reward referrer here
+        }
+        */
+        
+        coinsToApply = 0; // Reset applied coins state
+        
+        // --- REFERRAL & COINS LOGIC END ---
+
+        // Show context-specific alert
+        let successMessage = paymentStatus === 'paid' 
+            ? `Order #${orderId.substring(0, 8)} placed successfully! Payment confirmed.`
+            : `Test Order #${orderId.substring(0, 8)} placed successfully! Payment is **Pending**.`;
+            
+        if (!window.currentUser.firstOrderPlaced) { // This check relies on the line before the function body where firstOrderPlaced is set to true
+             successMessage += `<br>You received **100 Coins** for your first order!`;
+        }
+
+        window.firebaseHelpers.showAlert(successMessage + ' You will be redirected to My Orders.', 'success');
         
         // Manually trigger a notification check right after order placement to update the navbar badge instantly
         checkCustomerNotifications();
@@ -3111,7 +3303,7 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, total
     }
 }
 
-// Load Profile Page (profile.html)
+// Load Profile Page (profile.html) (MODIFIED)
 async function loadProfilePage() {
     const user = await window.firebaseHelpers.getCurrentUser();
     if (!user) {
@@ -3119,6 +3311,31 @@ async function loadProfilePage() {
         setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 2000);
         return;
     }
+
+    // NEW: Load/Check Referral/Coins Data
+    const userDocRef = window.FirebaseDB.collection('users').doc(user.uid);
+    const userDoc = await userDocRef.get();
+    
+    // Ensure data is up to date (for feature rollout/merge on a user document)
+    if (userDoc.exists) {
+        const userData = userDoc.data();
+        let needsUpdate = false;
+        
+        if (userData.coins === undefined) { userData.coins = 0; needsUpdate = true; }
+        if (userData.referralCode === undefined) { userData.referralCode = generateReferralCode(); needsUpdate = true; }
+        if (userData.firstOrderPlaced === undefined) { userData.firstOrderPlaced = false; needsUpdate = true; }
+        
+        if (needsUpdate) {
+            await userDocRef.set({
+                coins: userData.coins,
+                referralCode: userData.referralCode,
+                firstOrderPlaced: userData.firstOrderPlaced,
+            }, { merge: true });
+        }
+        window.currentUser = { ...user, ...userData }; // Update current user object
+        availableCoins = window.currentUser.coins; // Update global state
+    }
+    // END NEW
 
     const profileNameEl = document.getElementById('profile-name');
     if (profileNameEl) profileNameEl.value = user.name || '';
@@ -3316,6 +3533,8 @@ function createOrderCard(order) {
     
     const pickupDate = order.pickupDate || 'N/A';
     const pickupTime = order.pickupTime || 'N/A';
+    
+    const discountCoins = order.coinsUsed > 0 ? `<div class="text-danger small">Coins Used: ${order.coinsUsed} (${window.firebaseHelpers.formatCurrency(order.discount)})</div>` : '';
 
     // Logic for Review Button
     let reviewButton = '';
@@ -3378,6 +3597,7 @@ function createOrderCard(order) {
                     <div class="row border-top pt-2">
                         <div class="col-md-6">
                             <strong>Total Amount:</strong> <span class="text-primary">${window.firebaseHelpers.formatCurrency(order.totalAmount)}</span>
+                            ${discountCoins}
                         </div>
                         <div class="col-md-6 text-md-end">
                             <strong>Pickup Pincode:</strong> ${order.orderPincode || 'N/A'}
@@ -3509,6 +3729,13 @@ async function viewOrderDetailsModal(orderId) {
             
             const statusClass = `order-status-${order.status || 'pending'}`;
             const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
+            
+            const coinsUsed = order.coinsUsed || 0;
+            const discountApplied = order.discount || 0;
+            const discountHtml = coinsUsed > 0 
+                ? `<tr><th>Coin Discount:</th><td><strong class="text-danger">-${window.firebaseHelpers.formatCurrency(discountApplied)} (${coinsUsed} Coins)</strong></td></tr>`
+                : '';
+
 
             const detailsHtml = `
                 <h5 class="mb-3">Order # ${orderId.substring(0, 8)} Details</h5>
@@ -3543,8 +3770,10 @@ async function viewOrderDetailsModal(orderId) {
 
                 <h6 class="mt-4 text-warning">Payment Summary</h6>
                 <table class="table table-sm table-borderless">
-                    <tr><th>Total Amount:</th><td><strong>${window.firebaseHelpers.formatCurrency(order.totalAmount)}</strong></td></tr>
-                    <tr><th>Platform Fee:</th><td>${window.firebaseHelpers.formatCurrency(order.platformFee || 0)}</td></tr>
+                    <tr><th>Subtotal:</th><td>${window.firebaseHelpers.formatCurrency(order.totalAmount + (order.discount || 0) - (order.platformFee || 0))}</td></tr>
+                    ${discountHtml}
+                    <tr><th>Platform Fee:</th><td>+${window.firebaseHelpers.formatCurrency(order.platformFee || 0)}</td></tr>
+                    <tr><th>Total Paid:</th><td><strong>${window.firebaseHelpers.formatCurrency(order.totalAmount)}</strong></td></tr>
                     <tr><th>Payment Method:</th><td>${order.paymentMethod || 'N/A'}</td></tr>
                     <tr><th>Payment Status:</th><td><span class="badge bg-${order.paymentStatus === 'paid' ? 'success' : 'danger'}">${order.paymentStatus || 'N/A'}</span></td></tr>
                     <tr><th>Transaction ID:</th><td><small>${order.transactionId || 'N/A'}</small></td></tr>
@@ -4207,4 +4436,67 @@ if (typeof Razorpay === 'undefined') {
     const script = document.createElement('script');
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
     document.head.appendChild(script);
+}
+
+// NEW: Function to handle coin application/calculation
+window.applyCoinDiscount = function() {
+    const coinInput = document.getElementById('coins-to-apply');
+    const balanceDisplay = document.getElementById('coin-balance-display');
+    const warningText = document.getElementById('coin-warning-text');
+    
+    if (!coinInput || !balanceDisplay) return;
+    
+    let requestedCoins = parseInt(coinInput.value) || 0;
+    const subtotal = window.razorpayContext.subtotal || 0;
+    
+    // Max coins available to use: 50% of subtotal, capped by available balance
+    const maxDiscount = Math.floor(subtotal * 0.5); // Max discount is 50% of the price
+    const maxCoinsAllowed = Math.min(availableCoins, maxDiscount); 
+    
+    let appliedCoins = 0;
+    
+    if (requestedCoins > maxCoinsAllowed) {
+        appliedCoins = maxCoinsAllowed;
+        warningText.textContent = `Applied maximum possible: ${maxCoinsAllowed} coins. Max allowed is 50% of subtotal.`;
+        warningText.classList.remove('text-muted', 'text-success');
+        warningText.classList.add('text-danger');
+    } else if (requestedCoins < 0) {
+        appliedCoins = 0;
+        warningText.textContent = `Coins cannot be negative.`;
+        warningText.classList.remove('text-muted', 'text-success');
+        warningText.classList.add('text-danger');
+    } else {
+        appliedCoins = requestedCoins;
+        warningText.textContent = `Applied ${appliedCoins} coins.`;
+        warningText.classList.remove('text-muted', 'text-danger');
+        warningText.classList.add('text-success');
+    }
+    
+    // Handle special case for first order: if the user cleared the auto-applied 50 coins, 
+    // we let them clear the input, but the coinsToApply state should be updated.
+    if (!window.currentUser.firstOrderPlaced && requestedCoins === 0) {
+        coinsToApply = 0;
+        warningText.textContent = `No coins applied. You will still receive the 100 Coin reward after payment.`;
+        warningText.classList.remove('text-danger', 'text-success');
+        warningText.classList.add('text-muted');
+    } else {
+        coinsToApply = appliedCoins; // Update global state
+    }
+
+    
+    coinInput.value = appliedCoins; // Update input field
+    
+    // Re-run checkout summary calculation to update totals
+    const cart = window.razorpayContext.items || [];
+    if (cart.length > 0) {
+        displayCheckoutSummary(cart);
+    }
+}
+
+// NEW: Function to generate referral link
+window.getReferralLink = function(code) {
+    if (!code) return "Code not available.";
+    const baseUrl = window.location.origin;
+    // Base URL is index.html. We link to signup with the code.
+    return `${baseUrl}/auth.html?role=customer&ref=${code}`;
 }
