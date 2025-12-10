@@ -4587,7 +4587,7 @@ window.applyCoinDiscount = function() {
 
     // Re-run checkout summary calculation
     displayCheckoutSummary(cart);
-}
+};
 
 // NEW: Function to generate referral link
 window.getReferralLink = function(code) {
@@ -4595,4 +4595,4 @@ window.getReferralLink = function(code) {
     const baseUrl = window.location.origin;
     // Base URL is index.html. We link to signup with the code.
     return `${baseUrl}/farmrent/auth.html?role=customer&ref=${code}`;
-}
+};
