@@ -252,18 +252,18 @@ async function loadDashboardData() {
         const sellerRatingEl = document.getElementById('seller-rating');
         if (sellerRatingEl) sellerRatingEl.textContent = stats.rating.toFixed(1);
         
-        // Update notification badges
+        // Update notification badges (now includes chat messages)
         const newMessagesCountEl = document.getElementById('new-messages-count');
-        if (newMessagesCountEl) newMessagesCountEl.textContent = notificationData.unreadCount;
+        if (newMessagesCountEl) newMessagesCountEl.textContent = notificationData.unreadCount || '';
         
         const newMessagesCountMobileEl = document.getElementById('new-messages-count-mobile');
-        if (newMessagesCountMobileEl) newMessagesCountMobileEl.textContent = notificationData.unreadCount;
+        if (newMessagesCountMobileEl) newMessagesCountMobileEl.textContent = notificationData.unreadCount || '';
         
         const notificationCountEl = document.getElementById('notification-count');
-        if (notificationCountEl) notificationCountEl.textContent = notificationData.unreadCount;
+        if (notificationCountEl) notificationCountEl.textContent = notificationData.unreadCount || '';
         
         const quickAlertCountEl = document.getElementById('quick-alert-count');
-        if (quickAlertCountEl) quickAlertCountEl.textContent = notificationData.unreadCount;
+        if (quickAlertCountEl) quickAlertCountEl.textContent = notificationData.unreadCount || '';
 
         displayTopNotifications(notificationData.recentNotifications);
         
@@ -319,9 +319,10 @@ async function calculateSellerNotifications() {
     if (!window.currentUser) return { unreadCount: 0, recentNotifications: [] };
 
     let notifications = [];
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
     try {
-        // 1. Pending Orders
+        // 1. Pending Orders and Returns (Alerts)
         const ordersSnapshot = await getPublicCollectionRef('orders')
             .where('sellerIds', 'array-contains', window.currentUser.uid)
             .where('status', 'in', ['pending', 'returned'])
@@ -354,7 +355,7 @@ async function calculateSellerNotifications() {
             });
         });
 
-        // 2. New Reviews
+        // 2. New Reviews (Alerts)
         const yesterday = firebase.firestore.Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
         const reviewsSnapshot = await window.FirebaseDB.collection('reviews')
             .where('sellerId', '==', window.currentUser.uid)
@@ -364,6 +365,8 @@ async function calculateSellerNotifications() {
 
         reviewsSnapshot.forEach(doc => {
             const review = doc.data();
+            // Note: Since reviews don't have a specific read/dismiss mechanism, 
+            // they are treated as unread if they were created recently (last 24h).
             notifications.push({
                 id: doc.id,
                 type: 'new_review',
@@ -375,15 +378,46 @@ async function calculateSellerNotifications() {
             });
         });
 
+        // 3. Unread Chat Messages (Communication) <-- FIX ADDED HERE
+        const conversationsSnapshot = await window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations')
+            .where('sellerId', '==', window.currentUser.uid)
+            .get();
+            
+        let unreadChatCount = 0;
+        
+        conversationsSnapshot.forEach(doc => {
+            const chat = doc.data();
+            unreadChatCount += chat.unreadCountSeller || 0;
+            
+            // Optionally add the latest chat to the notifications list if it has unread messages
+            if (chat.unreadCountSeller > 0 && notifications.length < 10) {
+                 notifications.push({
+                    id: doc.id,
+                    type: 'new_chat_message',
+                    message: `New message from ${chat.customerName}: ${chat.lastMessage.substring(0, 20)}...`,
+                    relatedId: doc.id,
+                    date: chat.updatedAt,
+                    read: false, // Mark as unread since unreadCountSeller > 0
+                    action: () => { 
+                         showSection('notifications');
+                         // This automatically focuses on the chat list which is the primary UI for conversations
+                    }
+                 });
+            }
+        });
+
+
         notifications.sort((a, b) => (b.date?.toDate() || 0) - (a.date?.toDate() || 0));
         
         sellerNotifications = notifications;
         
-        const unreadOrderAlerts = notifications.filter(n => n.type.startsWith('order_') && !n.read).length;
-        const unreadReviewAlerts = notifications.filter(n => n.type === 'new_review').length;
-        const unreadCount = unreadOrderAlerts + unreadReviewAlerts;
+        // Count unread order and review alerts that were not manually dismissed
+        const unreadAlerts = notifications.filter(n => n.type.startsWith('order_') || n.type === 'new_review').filter(n => !n.read).length;
         
-        return { unreadCount, recentNotifications: notifications };
+        // Final unread count includes both Alerts and Chat Messages
+        const totalUnreadCount = unreadAlerts + unreadChatCount;
+        
+        return { unreadCount: totalUnreadCount, recentNotifications: notifications };
 
     } catch (error) {
         console.error('Error calculating seller notifications:', error);
@@ -407,16 +441,28 @@ function displayTopNotifications(notifications) {
     recentAlerts.forEach(notification => {
         const timeAgo = notification.date ? window.firebaseHelpers.formatTimeAgo(notification.date) : 'N/A';
         let icon = 'fas fa-info-circle';
-        if (notification.type === 'order_request') icon = 'fas fa-clipboard-list text-warning';
-        if (notification.type === 'order_returned') icon = 'fas fa-undo-alt text-primary';
-        if (notification.type === 'new_review') icon = 'fas fa-star text-success';
+        let iconClass = 'text-muted';
+
+        if (notification.type === 'order_request') {
+            icon = 'fas fa-clipboard-list';
+            iconClass = 'text-warning';
+        } else if (notification.type === 'order_returned') {
+            icon = 'fas fa-undo-alt';
+            iconClass = 'text-primary';
+        } else if (notification.type === 'new_review') {
+            icon = 'fas fa-star';
+            iconClass = 'text-success';
+        } else if (notification.type === 'new_chat_message') { // NEW CHAT ICON
+             icon = 'fas fa-comment-dots';
+             iconClass = 'text-info';
+        }
         
         list.innerHTML += `
             <li>
                 <a class="dropdown-item" href="#" 
                    onclick="handleNotificationClick('${notification.id}')"
                    title="${notification.message}">
-                    <i class="${icon} me-2"></i>
+                    <i class="${icon} me-2 ${iconClass}"></i>
                     ${notification.message.substring(0, 35)}${notification.message.length > 35 ? '...' : ''} 
                     <small class="float-end text-muted">${timeAgo}</small>
                 </a>
@@ -436,6 +482,9 @@ function handleNotificationClick(notificationId) {
              viewOrderDetails(notification.relatedId);
         } else if (notification.type === 'order_returned') {
              viewOrderDetails(notification.relatedId);
+        } else if (notification.type === 'new_chat_message') {
+             // For chat message, navigate to notifications/chat section
+             showSection('notifications');
         }
         notification.action();
     }
@@ -1763,9 +1812,13 @@ async function loadNotifications() {
                 typeIcon = 'fas fa-star';
                 badgeColor = 'bg-success';
                 actionText = 'View Review';
+            } else if (notification.type === 'new_chat_message') {
+                typeIcon = 'fas fa-comment-dots';
+                badgeColor = 'bg-info';
+                actionText = 'Open Chat';
             }
             
-            const unreadClass = (isOrder && !notification.read) ? 'notification-unread' : '';
+            const unreadClass = (isOrder && !notification.read) || notification.type === 'new_chat_message' ? 'notification-unread' : '';
     
             listContainer.innerHTML += `
                 <div class="list-group-item notification-item ${unreadClass} d-flex justify-content-between align-items-center p-3 mb-2 rounded shadow-sm"
