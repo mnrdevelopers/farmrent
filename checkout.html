@@ -124,19 +124,21 @@
                         <hr>
                         
                         <!-- NEW COIN APPLICATION SECTION -->
-                        <div class="mb-3 border rounded p-3 bg-light">
-                             <div class="d-flex justify-content-between mb-2">
-                                <span><i class="fas fa-coins text-warning me-1"></i>Available Coins:</span>
-                                <strong id="coin-balance-display" class="text-success">0 Coins</strong>
-                            </div>
-                            <label for="coins-to-apply" class="form-label small fw-bold">Apply Coins for Discount (Max 50% of subtotal)</label>
-                            <div class="input-group">
-                                <!-- ADDED oninput listener to correctly trigger recalculation -->
-                                <input type="number" class="form-control" id="coins-to-apply" min="0" value="0" oninput="applyCoinDiscount()">
-                                <span class="input-group-text">COINS</span>
-                            </div>
-                            <small class="d-block mt-1" id="coin-warning-text">Enter coins to see your discount applied.</small>
-                        </div>
+<div class="mb-3 border rounded p-3 bg-light">
+    <div class="d-flex justify-content-between mb-2">
+        <span><i class="fas fa-coins text-warning me-1"></i>Available Coins:</span>
+        <strong id="coin-balance-display" class="text-success">
+            <span class="spinner-border spinner-border-sm" id="coin-loading-spinner" style="display:none;"></span>
+            <span id="coin-balance-text">0 Coins</span>
+        </strong>
+    </div>
+    <label for="coins-to-apply" class="form-label small fw-bold">Apply Coins for Discount (Max 50% of subtotal)</label>
+    <div class="input-group">
+        <input type="number" class="form-control" id="coins-to-apply" min="0" value="0" oninput="applyCoinDiscount()">
+        <span class="input-group-text">COINS</span>
+    </div>
+    <small class="d-block mt-1" id="coin-warning-text">Enter coins to see your discount applied.</small>
+</div>
                         <!-- END NEW COIN APPLICATION SECTION -->
 
                         <div class="d-flex justify-content-between mb-2">
