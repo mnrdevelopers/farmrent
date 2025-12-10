@@ -577,7 +577,7 @@ async function savePincode(pincode) {
     const path = window.location.pathname.split('/').pop();
     if (path === 'browse.html') {
         updatePincodeDisplay();
-        loadAllEquipment(); 
+        loadAllEquipment();
     } else if (path === 'cart.html') {
         // If on cart page, load the cart page logic which handles compatibility warnings
         loadCartPage();
@@ -835,10 +835,12 @@ async function initializeAuthInternal() {
                                 referralCode: userData.referralCode,
                                 firstOrderPlaced: userData.firstOrderPlaced,
                             }, { merge: true });
+                            // After update, refresh local current user data
+                            window.currentUser = { uid: user.uid, ...doc.data(), ...userData }; // Merge old data with newly set defaults
                         }
                         
-                        // Set global coin balance
-                        availableCoins = userData.coins;
+                        // Set global coin balance (This is the crucial line for coin display)
+                        availableCoins = window.currentUser.coins;
 
                         // NEW PINCODE LOGIC: Set global pincode based on precedence
                         window.customerPincode = window.currentUser.pincode || localStorage.getItem('customerPincode') || null;
@@ -1872,6 +1874,19 @@ async function loadCheckoutPage() {
         }
         return;
     }
+    
+    // **FIX: Re-fetch user data to ensure coin balance is fresh, as `window.currentUser` might be stale**
+    try {
+        const doc = await window.FirebaseDB.collection('users').doc(user.uid).get();
+        if (doc.exists) {
+            window.currentUser = { uid: user.uid, ...doc.data() };
+            // Update global available coins state
+            availableCoins = window.currentUser.coins || 0;
+        }
+    } catch (e) {
+        console.error("Failed to refresh user coin data on checkout:", e);
+    }
+    // **END FIX**
 
     const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
     const checkoutSummaryElement = document.querySelector('.checkout-summary');
@@ -1928,6 +1943,7 @@ async function loadCheckoutPage() {
 
     // Initial coin display and discount calculation
     const coinBalanceDisplay = document.getElementById('coin-balance-display');
+    // FIX: Use the refreshed global state `availableCoins`
     if (coinBalanceDisplay) coinBalanceDisplay.textContent = `${window.availableCoins || 0} Coins`;
     
     // Automatic First Order Discount Logic: Apply max 50 coins automatically on first order
@@ -4467,22 +4483,22 @@ window.applyCoinDiscount = function() {
     if (requestedCoins < 0) {
         appliedCoins = 0;
         warningText.textContent = `Coins cannot be negative.`;
-        warningText.classList.remove('text-muted', 'text-success');
+        warningText.classList.remove('text-muted', 'text-success', 'text-warning');
         warningText.classList.add('text-danger');
     } else if (requestedCoins > availableCoins) {
         appliedCoins = availableCoins;
         warningText.textContent = `Applied available maximum: ${availableCoins} coins.`;
-        warningText.classList.remove('text-muted', 'text-danger');
+        warningText.classList.remove('text-muted', 'text-danger', 'text-success');
         warningText.classList.add('text-warning');
     } else if (requestedCoins > maxDiscountAllowed) {
         appliedCoins = maxDiscountAllowed;
         warningText.textContent = `Applied maximum possible: ${maxDiscountAllowed} coins. (Capped at 50% of subtotal: ${window.firebaseHelpers.formatCurrency(maxDiscountAllowed)})`;
-        warningText.classList.remove('text-muted', 'text-success');
+        warningText.classList.remove('text-muted', 'text-success', 'text-warning');
         warningText.classList.add('text-danger');
     } else {
         appliedCoins = requestedCoins;
         warningText.textContent = `Applied ${appliedCoins} coins successfully.`;
-        warningText.classList.remove('text-muted', 'text-danger');
+        warningText.classList.remove('text-muted', 'text-danger', 'text-warning');
         warningText.classList.add('text-success');
     }
     
