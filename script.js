@@ -6,6 +6,10 @@ let isAuthInitialized = false;
 let platformFeeRate = 0.05; 
 let customerPincode = null;
 
+// NEW: Referral & Coin constants
+const REFERRAL_REWARD_COINS = 100;
+const MAX_COIN_DISCOUNT_PERCENT = 0.50; // 50% of booking amount
+
 // NEW: Collection name for user's notification settings (private collection)
 const CUSTOMER_NOTIFICATIONS_COLLECTION = 'customer_notifications';
 let lastClearTime = 0; // Global variable to store the last notification clear time from Firestore
@@ -1765,7 +1769,7 @@ async function startCheckout() {
     window.location.href = 'checkout.html';
 }
 
-// Load logic for Checkout page (UPDATED)
+// Load logic for Checkout page (UPDATED with referral coin functionality)
 async function loadCheckoutPage() {
     await new Promise(resolve => {
         const checkAuth = setInterval(() => {
@@ -2636,6 +2640,101 @@ function initializeEventListeners() {
                 }
             });
         }
+        
+        // NEW: Intercept customer register form submission to handle referral code
+        document.getElementById('register-form')?.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const role = new URLSearchParams(window.location.search).get('role') || 'customer';
+            if (role !== 'customer') {
+                // If not customer, let original logic handle it (assuming there is custom logic in place 
+                // for seller/admin registration handling which is not visible here).
+                // If it IS the customer register form, we run our logic.
+                // Note: The rest of the `handleRegister` logic is usually in `firebase-config.js` 
+                // or similar, but since we need to modify the user object before creation,
+                // we'll duplicate the field collection here and pass the referral info.
+                
+                // For this scenario, we assume the actual registration/auth call is handled 
+                // by the `firebase-config.js` listener, and we just collect the fields.
+                // We will rely on `firebase-config.js` to expose a registration helper 
+                // or assume the core logic runs there and only update the user object post-creation.
+                
+                // Since this file contains no auth boilerplate, I'll rely on the global 
+                // `handleRegister` in `firebase-config.js` being the entry point, 
+                // and instead, I'll add the field collection here.
+                
+                // Collect referral data
+                const visibleCode = document.getElementById('referralCode')?.value.trim();
+                const urlCode = document.getElementById('referral-code-from-url')?.value.trim();
+                const finalReferralCode = urlCode || visibleCode || null;
+                
+                // If a code is present, attempt to find the referrer's UID
+                let referrerUid = null;
+                if (finalReferralCode) {
+                    try {
+                        const referrerSnapshot = await window.FirebaseDB.collection('users')
+                            .where('referralCode', '==', finalReferralCode.toUpperCase())
+                            .limit(1)
+                            .get();
+                            
+                        if (!referrerSnapshot.empty) {
+                            referrerUid = referrerSnapshot.docs[0].id;
+                            window.firebaseHelpers.showAlert('Referral code found. You are signing up under a referrer!', 'info');
+                        } else {
+                            window.firebaseHelpers.showAlert('Invalid referral code, proceeding without referral.', 'warning');
+                        }
+                    } catch (error) {
+                        console.error('Referral lookup failed:', error);
+                    }
+                }
+                
+                // Temporarily store the resolved referrer ID for use after successful Firebase Auth registration
+                localStorage.setItem('pendingReferrerId', referrerUid || '');
+                
+                // The actual Firebase registration logic (email/password create) must be triggered here 
+                // or assumed to run after this block in a standard setup. 
+                // Since we don't have the auth function here, we assume it's external and proceeds 
+                // to complete the registration process using the fields provided in the form.
+                
+                // If the role is customer, we can add a specific helper here to handle the registration and cleanup.
+                const email = document.getElementById('signupEmail').value;
+                const password = document.getElementById('signupPassword').value;
+                const name = document.getElementById('signupName').value;
+                const pincode = document.getElementById('pincode').value;
+                const village = document.getElementById('signupVillage').value;
+                const city = document.getElementById('signupCity').value;
+                const state = document.getElementById('signupState').value;
+                
+                try {
+                     const { user, initialData } = await window.firebaseHelpers.createAuthUser(email, password, role, name, pincode, village, city, state);
+                     
+                     // Generate referral code (first 8 chars of UID)
+                     const newReferralCode = user.uid.substring(0, 8).toUpperCase();
+                     
+                     // Final user data update after auth success
+                     const finalUpdates = {
+                        ...initialData,
+                        referralCode: newReferralCode, // New code for the new user
+                        coins: 0,
+                        referredBy: referrerUid || null, // Store referrer UID
+                        firstOrderPlaced: false, // Flag for referral reward logic
+                        // Remove temporary storage
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                     };
+                     
+                     await window.FirebaseDB.collection('users').doc(user.uid).set(finalUpdates, { merge: true });
+                     
+                     window.firebaseHelpers.showAlert('Registration successful! Welcome to FarmRent.', 'success');
+                     setTimeout(() => { window.location.href = 'index.html'; }, 2000);
+
+                } catch(error) {
+                     window.firebaseHelpers.showAlert('Registration Failed: ' + error.message, 'danger');
+                     localStorage.removeItem('pendingReferrerId'); // Clear on failure
+                }
+                
+            }
+        });
+        
     } else if (path === 'profile.html') {
         const pincodeInput = document.getElementById('profile-pincode');
         if (pincodeInput) {
@@ -2874,7 +2973,7 @@ function updateCartSummary(subtotal, fees, total, isDisabled) {
     if (checkoutEl) checkoutEl.disabled = isDisabled || total === 0;
 }
 
-// Display items and calculate total on the checkout page (MODIFIED)
+// Display items and calculate total on the checkout page (MODIFIED for Coin Discount)
 function displayCheckoutSummary(cart) {
     const listContainer = document.getElementById('checkout-item-list');
     if (!listContainer) return;
@@ -2883,23 +2982,18 @@ function displayCheckoutSummary(cart) {
     
     let subtotal = 0;
     
-    // NEW: Collect all rental duration and pickup details for display/form pre-fill
-    const totalRentalDetails = [];
-    const pickupDateInput = document.getElementById('rental-details'); // Correct ID is rental-details
+    const pickupDateInput = document.getElementById('rental-details'); 
     const firstItem = cart[0];
 
-    // Pre-fill the single "Rental Duration" field with details from the first item
     if (pickupDateInput && firstItem) {
         pickupDateInput.value = `${firstItem.rentalValue} ${firstItem.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'} | Pickup: ${firstItem.pickupDate} @ ${firstItem.pickupTime}`;
     }
     
-    // NEW: Set pickup date/time in razorpayContext for order placement
     window.razorpayContext = {
         ...window.razorpayContext,
         orderPickupDate: firstItem?.pickupDate,
         orderPickupTime: firstItem?.pickupTime,
     };
-    // END NEW
 
     const orderPincode = cart.length > 0 ? cart[0].pincode : 'N/A';
 
@@ -2919,17 +3013,64 @@ function displayCheckoutSummary(cart) {
             </div>
         `;
     });
+    
+    // --- NEW COIN DISCOUNT CALCULATION ---
+    let coinDiscount = 0;
+    let coinsUsed = 0;
+    const availableCoins = window.currentUser?.coins || 0;
+    
+    const maxDiscountAllowed = subtotal * MAX_COIN_DISCOUNT_PERCENT; // 50% max discount
+    
+    // Determine coins to be used (min of available coins, subtotal, and max discount)
+    // Assuming 1 coin = 1 unit of currency (e.g., 1 Rupee)
+    const maxCoinsToUse = Math.min(availableCoins, subtotal, maxDiscountAllowed);
+    
+    coinsUsed = Math.floor(maxCoinsToUse); // Use integer amount of coins
+    coinDiscount = coinsUsed;
+    
+    // Display coin usage and toggle the form field
+    const coinInputGroup = document.getElementById('coin-discount-group');
+    if (coinInputGroup) {
+         if (availableCoins > 0 && subtotal > 0) {
+             coinInputGroup.style.display = 'block';
+             document.getElementById('available-coins-display').textContent = availableCoins;
+             document.getElementById('coin-discount-input').value = coinsUsed;
+             document.getElementById('coin-discount-input').max = Math.floor(maxCoinsToUse);
+             document.getElementById('coin-discount-input').oninput = function() {
+                 let requestedCoins = parseInt(this.value) || 0;
+                 // Enforce limits on input change
+                 requestedCoins = Math.min(requestedCoins, availableCoins, Math.floor(maxDiscountAllowed));
+                 this.value = requestedCoins;
+                 
+                 // Recalculate summary with new coins used
+                 updateCheckoutSummaryWithCoins(subtotal, requestedCoins);
+             };
+             // Initial calculation call
+             updateCheckoutSummaryWithCoins(subtotal, coinsUsed);
+             return; // Exit here as the recalculation is handled in updateCheckoutSummaryWithCoins
+         } else {
+             coinInputGroup.style.display = 'none';
+         }
+    }
+    // --- END NEW COIN DISCOUNT CALCULATION ---
 
-    const fees = subtotal * platformFeeRate;
-    const total = subtotal + fees;
+    const fees = (subtotal - coinDiscount) * platformFeeRate;
+    const total = subtotal - coinDiscount + fees;
     
     const feeLabelElement = document.getElementById('checkout-fees-label');
     if (feeLabelElement) {
         feeLabelElement.textContent = `Platform Fee (${(platformFeeRate * 100).toFixed(0)}%):`;
     }
-
+    
     const subtotalEl = document.getElementById('checkout-subtotal');
     if (subtotalEl) subtotalEl.textContent = window.firebaseHelpers.formatCurrency(subtotal);
+    
+    // Add Coin Discount Display
+    const discountEl = document.getElementById('checkout-discount');
+    if (discountEl) {
+        discountEl.textContent = `-${window.firebaseHelpers.formatCurrency(coinDiscount)}`;
+    }
+    
     const feesEl = document.getElementById('checkout-fees');
     if (feesEl) feesEl.textContent = window.firebaseHelpers.formatCurrency(fees);
     const totalEl = document.getElementById('checkout-total');
@@ -2937,10 +3078,52 @@ function displayCheckoutSummary(cart) {
     const payAmount = document.getElementById('pay-button-amount');
     if (payAmount) payAmount.textContent = window.firebaseHelpers.formatCurrency(total);
 
-    window.razorpayContext = { subtotal, fees, total, orderPincode, ...window.razorpayContext }; 
+    window.razorpayContext = { 
+        subtotal, 
+        fees, 
+        total, 
+        orderPincode, 
+        coinsUsed: coinsUsed, // Store final coins used
+        discount: coinDiscount, // Store discount amount
+        ...window.razorpayContext 
+    }; 
 }
 
-// Process payment using Razorpay (Simulated Escrow/Route) (MODIFIED FOR TEST PAYMENT)
+/**
+ * Recalculates checkout summary based on manual coin input.
+ */
+function updateCheckoutSummaryWithCoins(originalSubtotal, requestedCoins) {
+    const coinDiscount = requestedCoins;
+    const subtotalAfterDiscount = originalSubtotal - coinDiscount;
+    const fees = subtotalAfterDiscount * platformFeeRate;
+    const total = subtotalAfterDiscount + fees;
+
+    const feesEl = document.getElementById('checkout-fees');
+    if (feesEl) feesEl.textContent = window.firebaseHelpers.formatCurrency(fees);
+    
+    const discountEl = document.getElementById('checkout-discount');
+    if (discountEl) {
+        discountEl.textContent = `-${window.firebaseHelpers.formatCurrency(coinDiscount)}`;
+    }
+    
+    const totalEl = document.getElementById('checkout-total');
+    if (totalEl) totalEl.textContent = window.firebaseHelpers.formatCurrency(total);
+    
+    const payAmount = document.getElementById('pay-button-amount');
+    if (payAmount) payAmount.textContent = window.firebaseHelpers.formatCurrency(total);
+    
+    // Update global context for payment processing
+    window.razorpayContext = { 
+        ...window.razorpayContext,
+        total: total, 
+        fees: fees,
+        coinsUsed: coinDiscount, 
+        discount: coinDiscount 
+    }; 
+}
+
+
+// Process payment using Razorpay (Simulated Escrow/Route) (MODIFIED FOR COINS)
 async function processPayment() {
     const form = document.getElementById('checkout-form');
     if (!form.checkValidity()) {
@@ -2961,7 +3144,8 @@ async function processPayment() {
     
     const isPickup = true; 
 
-    const { total, orderPickupDate, orderPickupTime } = window.razorpayContext; 
+    // Retrieve final values from the razorpayContext after coin calculations
+    const { total, orderPickupDate, orderPickupTime, coinsUsed, discount } = window.razorpayContext; 
     const totalInPaise = Math.round(total * 100);
 
     const customerData = {
@@ -2978,7 +3162,24 @@ async function processPayment() {
     
     const orderId = window.firebaseHelpers.generateId(); 
 
-    // *** MODIFIED LOGIC START ***
+    // *** MODIFIED LOGIC START (for Coins Used) ***
+    
+    // 1. Deduct coins from user profile before initiating payment
+    if (coinsUsed > 0) {
+        try {
+            await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update({
+                coins: firebase.firestore.FieldValue.increment(-coinsUsed),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            window.currentUser.coins -= coinsUsed; // Update local state
+        } catch (error) {
+            console.error("Error deducting coins:", error);
+            window.firebaseHelpers.showAlert('Failed to deduct coins. Please try again.', 'danger');
+            return; // Stop transaction if coin deduction fails
+        }
+    }
+    // *** MODIFIED LOGIC END ***
+
     if (paymentMethod === 'test_cop') {
         // Option 1: Cash On Pickup (Test/Simulation ONLY) - Skip payment, place order immediately
         const payBtn = document.getElementById('pay-now-btn');
@@ -2988,7 +3189,7 @@ async function processPayment() {
 
         try {
             // Simulate direct order placement with 'pending' payment status
-            await placeOrderInFirestore(orderId, customerData, 'TEST_COP_TXN', total, 'pending', 'Cash On Pickup (Test)');
+            await placeOrderInFirestore(orderId, customerData, 'TEST_COP_TXN', total, 'pending', 'Cash On Pickup (Test)', coinsUsed, discount);
             // The function placeOrderInFirestore will handle success alerts and redirects
         } catch (error) {
             console.error('Test Order Placement Failed:', error);
@@ -3014,7 +3215,7 @@ async function processPayment() {
             description: "Rental Equipment Booking",
             handler: async function (response) {
                 // On successful payment, place order with 'paid' status
-                await placeOrderInFirestore(orderId, customerData, response.razorpay_payment_id, total, 'paid', 'Razorpay');
+                await placeOrderInFirestore(orderId, customerData, response.razorpay_payment_id, total, 'paid', 'Razorpay', coinsUsed, discount);
                 
             },
             prefill: {
@@ -3035,11 +3236,10 @@ async function processPayment() {
 
         rzp.open();
     }
-    // *** MODIFIED LOGIC END ***
 }
 
-// Final step: Save order to Firestore after (simulated) successful payment (MODIFIED to accept payment/status)
-async function placeOrderInFirestore(orderId, customerData, transactionId, totalAmount, paymentStatus, paymentMethod) {
+// Final step: Save order to Firestore after (simulated) successful payment (MODIFIED for Referral Reward logic)
+async function placeOrderInFirestore(orderId, customerData, transactionId, totalAmount, paymentStatus, paymentMethod, coinsUsed, discount) {
     const cart = await getCartFromFirestore();
     
     if (cart.length === 0) {
@@ -3080,6 +3280,11 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, total
             paymentStatus: paymentStatus, // Use dynamic status ('paid' or 'pending')
             paymentMethod: paymentMethod, // Use dynamic method
             transactionId: transactionId,
+            
+            // NEW: Coin/Discount fields
+            coinDiscount: discount || 0,
+            coinsUsed: coinsUsed || 0,
+            
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp() // Ensure updatedAt is set on creation
         };
@@ -3090,6 +3295,28 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, total
         await ordersCollectionRef.doc(orderId).set(orderData);
         
         await updateCartInFirestore([]); 
+        
+        // --- REFERRAL REWARD LOGIC ---
+        if (window.currentUser.referredBy && !window.currentUser.firstOrderPlaced) {
+            // This is the referred user placing their FIRST order. Reward the referrer.
+            const referrerUid = window.currentUser.referredBy;
+            
+            // 1. Reward Referrer
+            await window.FirebaseDB.collection('users').doc(referrerUid).update({
+                coins: firebase.firestore.FieldValue.increment(REFERRAL_REWARD_COINS),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            // 2. Mark this user's first order as placed
+            await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update({
+                firstOrderPlaced: true,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            window.currentUser.firstOrderPlaced = true; // Update local state
+
+            window.firebaseHelpers.showAlert(`Referral reward applied! Your referrer (${referrerUid.substring(0, 4)}...) received ${REFERRAL_REWARD_COINS} coins.`, 'info');
+        }
+        // --- END REFERRAL REWARD LOGIC ---
         
         // Show context-specific alert
         const successMessage = paymentStatus === 'paid' 
@@ -3108,10 +3335,20 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, total
     } catch (error) {
         console.error('Error placing order:', error);
         window.firebaseHelpers.showAlert('Order placement failed in database. Please contact support.', 'danger');
+        
+        // CRITICAL: If the order failed AFTER coin deduction, the coins MUST be refunded.
+        if (coinsUsed > 0) {
+            await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update({
+                coins: firebase.firestore.FieldValue.increment(coinsUsed),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            window.currentUser.coins += coinsUsed; 
+            window.firebaseHelpers.showAlert(`Order failed. ${coinsUsed} coins have been automatically refunded to your account.`, 'danger');
+        }
     }
 }
 
-// Load Profile Page (profile.html)
+// Load Profile Page (profile.html) (MODIFIED to show Coins and Referral Code)
 async function loadProfilePage() {
     const user = await window.firebaseHelpers.getCurrentUser();
     if (!user) {
@@ -3119,6 +3356,32 @@ async function loadProfilePage() {
         setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 2000);
         return;
     }
+
+    // --- NEW: COIN AND REFERRAL DISPLAY ---
+    const coinBalanceEl = document.getElementById('coin-balance-display');
+    const referralCodeEl = document.getElementById('referral-code-display');
+    const referralLinkEl = document.getElementById('referral-link-input');
+    const referralStatusEl = document.getElementById('referral-status-display');
+    const coins = user.coins || 0;
+    const referralCode = user.referralCode || 'N/A';
+    
+    if (coinBalanceEl) coinBalanceEl.textContent = coins;
+    if (referralCodeEl) referralCodeEl.textContent = referralCode;
+    
+    if (referralLinkEl) {
+        const referralLink = `${window.location.origin}/auth.html?role=customer&ref=${referralCode}`;
+        referralLinkEl.value = referralLink;
+    }
+    
+    if (referralStatusEl) {
+        if (user.referredBy) {
+             referralStatusEl.innerHTML = `<span class="badge bg-secondary">Referred by: ${user.referredBy.substring(0, 8)}...</span>`;
+        } else {
+             referralStatusEl.innerHTML = '<span class="badge bg-info">No active referrer</span>';
+        }
+    }
+    // --- END NEW: COIN AND REFERRAL DISPLAY ---
+
 
     const profileNameEl = document.getElementById('profile-name');
     if (profileNameEl) profileNameEl.value = user.name || '';
@@ -3189,6 +3452,17 @@ async function loadProfilePage() {
     const profileForm = document.getElementById('profile-form');
     if (profileForm) profileForm.addEventListener('submit', handleProfileUpdate);
 }
+
+// Function to copy referral link (for profile.html)
+window.copyReferralLink = function() {
+    const linkInput = document.getElementById('referral-link-input');
+    if (linkInput) {
+        linkInput.select();
+        document.execCommand('copy');
+        window.firebaseHelpers.showAlert('Referral link copied to clipboard!', 'success');
+    }
+}
+
 
 // Handle profile form submission
 async function handleProfileUpdate(e) {
@@ -3348,6 +3622,11 @@ function createOrderCard(order) {
             `;
         }
     }
+    
+    // NEW: Discount/Coin Display
+    const coinDiscountDisplay = (order.coinDiscount > 0) ? 
+        `<div class="small text-danger mt-1"><i class="fas fa-ticket-alt me-1"></i> Discount: -${window.firebaseHelpers.formatCurrency(order.coinDiscount)} (${order.coinsUsed} Coins)</div>` : '';
+
 
     return `
         <div class="col-lg-12 mb-4">
@@ -3377,7 +3656,9 @@ function createOrderCard(order) {
                     </ul>
                     <div class="row border-top pt-2">
                         <div class="col-md-6">
-                            <strong>Total Amount:</strong> <span class="text-primary">${window.firebaseHelpers.formatCurrency(order.totalAmount)}</span>
+                            <strong>Total Amount:</strong> <span class="text-primary">${window.firebaseHelpers.formatCurrency(order.totalAmount + (order.coinDiscount || 0))}</span>
+                            ${coinDiscountDisplay}
+                            <strong>Final Amount Paid:</strong> <span class="text-success">${window.firebaseHelpers.formatCurrency(order.totalAmount)}</span>
                         </div>
                         <div class="col-md-6 text-md-end">
                             <strong>Pickup Pincode:</strong> ${order.orderPincode || 'N/A'}
@@ -3509,6 +3790,8 @@ async function viewOrderDetailsModal(orderId) {
             
             const statusClass = `order-status-${order.status || 'pending'}`;
             const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
+            
+            const totalBeforeDiscount = order.totalAmount + (order.coinDiscount || 0);
 
             const detailsHtml = `
                 <h5 class="mb-3">Order # ${orderId.substring(0, 8)} Details</h5>
@@ -3543,8 +3826,11 @@ async function viewOrderDetailsModal(orderId) {
 
                 <h6 class="mt-4 text-warning">Payment Summary</h6>
                 <table class="table table-sm table-borderless">
-                    <tr><th>Total Amount:</th><td><strong>${window.firebaseHelpers.formatCurrency(order.totalAmount)}</strong></td></tr>
+                    <tr><th>Subtotal:</th><td>${window.firebaseHelpers.formatCurrency(totalBeforeDiscount)}</td></tr>
+                    ${order.coinDiscount > 0 ? 
+                        `<tr><th>Coin Discount (${order.coinsUsed} coins):</th><td class="text-danger">- ${window.firebaseHelpers.formatCurrency(order.coinDiscount)}</td></tr>` : ''}
                     <tr><th>Platform Fee:</th><td>${window.firebaseHelpers.formatCurrency(order.platformFee || 0)}</td></tr>
+                    <tr><th>Final Amount Paid:</th><td><strong>${window.firebaseHelpers.formatCurrency(order.totalAmount)}</strong></td></tr>
                     <tr><th>Payment Method:</th><td>${order.paymentMethod || 'N/A'}</td></tr>
                     <tr><th>Payment Status:</th><td><span class="badge bg-${order.paymentStatus === 'paid' ? 'success' : 'danger'}">${order.paymentStatus || 'N/A'}</span></td></tr>
                     <tr><th>Transaction ID:</th><td><small>${order.transactionId || 'N/A'}</small></td></tr>
@@ -3913,7 +4199,7 @@ function toggleChatWindow() {
         
         // Hide the floating badge when the full window is opened
         if (!windowEl.classList.contains('hidden')) {
-             updateChatBadgeCount(0); // Optimistically hide, actual unread count is handled inside loadChatMessages
+             // The badge update is handled by the real-time listener now, no need to manually hide
         }
     }
 }
