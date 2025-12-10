@@ -761,3 +761,9 @@ body {
         box-shadow: 0 0 0 0 rgba(255, 59, 48, 0);
     }
 }
+
+/* Add to the style section in checkout.html */
+#coin-loading-spinner {
+    margin-right: 5px;
+    vertical-align: middle;
+}
