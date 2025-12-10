@@ -176,6 +176,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (path === 'checkout.html') {
         loadCheckoutPage();
         updateNavbarPincodeDisplay();
+        // Setup the onchange listener for the payment method select box
+        const paymentSelect = document.getElementById('payment-method-select');
+        if (paymentSelect) {
+            paymentSelect.onchange = function() {
+                const total = window.razorpayContext?.total || 0;
+                window.updatePaymentButtonUI(total); // Call the updated UI logic directly
+            };
+        }
     } else if (path === 'profile.html') {
         loadProfilePage();
         updateNavbarPincodeDisplay();
@@ -3143,22 +3151,8 @@ function displayCheckoutSummary(cart) {
     const totalEl = document.getElementById('checkout-total');
     if (totalEl) totalEl.textContent = window.firebaseHelpers.formatCurrency(total);
     
-    // FIX: Update pay button amount - ensure it shows the correct amount
-    const payAmount = document.getElementById('pay-button-amount');
-    if (payAmount) {
-        payAmount.textContent = window.firebaseHelpers.formatCurrency(total);
-        console.log("Pay button amount set to:", total);
-    }
-    
-    // Update pay button text if CoP is selected
-    const paymentMethod = document.getElementById('payment-method-select')?.value;
-    const payBtn = document.getElementById('pay-now-btn');
-    if (paymentMethod === 'test_cop' && payBtn) {
-         payBtn.innerHTML = `<i class="fas fa-truck-loading me-2"></i> Confirm Rental (No Upfront Payment)`;
-    } else if (payBtn && payAmount) {
-        // Ensure Razorpay button shows correct amount
-        payBtn.innerHTML = `<i class="fas fa-money-check-alt me-2"></i>Pay ${payAmount.textContent} Now`;
-    }
+    // FIX: Use the new dedicated function to update the payment button UI correctly
+    window.updatePaymentButtonUI(total);
 }
 
 // Process payment using Razorpay (Simulated Escrow/Route) (MODIFIED FOR TEST PAYMENT & COINS FIX)
@@ -4525,6 +4519,58 @@ if (typeof Razorpay === 'undefined') {
     document.head.appendChild(script);
 }
 
+// *******************************************************************
+// ************ START: PAYMENT BUTTON UI FIX ***************************
+// *******************************************************************
+
+/**
+ * NEW GLOBAL FUNCTION: Updates the Pay Now button text and styling based on the selected
+ * payment method and the final calculated total.
+ * * This resolves the conflict where direct manipulation of innerHTML inside 
+ * displayCheckoutSummary conflicted with the HTML structure and local scripts.
+ * * @param {number} totalAmount - The final discounted total amount to be paid.
+ */
+window.updatePaymentButtonUI = function(totalAmount) {
+    const paymentSelect = document.getElementById('payment-method-select');
+    const payBtn = document.getElementById('pay-now-btn');
+    const paymentWarning = document.getElementById('payment-warning');
+    
+    if (!paymentSelect || !payBtn) return;
+
+    const method = paymentSelect.value;
+    const formattedAmount = window.firebaseHelpers.formatCurrency(totalAmount);
+
+    if (method === 'test_cop') {
+        // Option 1: Cash On Pickup (Test/Simulation ONLY)
+        payBtn.innerHTML = `<i class="fas fa-truck-loading me-2"></i> Confirm Rental (No Upfront Payment)`;
+        payBtn.classList.remove('btn-primary');
+        payBtn.classList.add('btn-warning');
+        
+        if(paymentWarning) {
+            paymentWarning.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i> **TEST MODE:** This option simulates order placement with **No Upfront Payment**. Order status will be **Pending** for seller review.';
+            paymentWarning.classList.remove('alert-info');
+            paymentWarning.classList.add('alert-danger');
+        }
+    } else { // razorpay
+        // Option 2: Razorpay (Recommended)
+        // Ensure the original HTML structure is restored with the CORRECT amount
+        payBtn.innerHTML = `<i class="fas fa-money-check-alt me-2"></i>Pay <span id="pay-button-amount">${formattedAmount}</span> Now`;
+
+        payBtn.classList.remove('btn-warning');
+        payBtn.classList.add('btn-primary');
+        
+        if(paymentWarning) {
+            paymentWarning.innerHTML = '<i class="fas fa-lock me-1"></i> Secure payments via Razorpay. Full payment confirms the rental booking.';
+            paymentWarning.classList.remove('alert-danger');
+            paymentWarning.classList.add('alert-info');
+        }
+    }
+    
+    // Disable button if total is 0 or less (though Math.max(1, total) should prevent this)
+    payBtn.disabled = totalAmount < 1; 
+}
+
+
 // NEW: Function to handle coin application/calculation (FIXED LOGIC)
 window.applyCoinDiscount = function() {
     const coinInput = document.getElementById('coins-to-apply');
@@ -4583,6 +4629,9 @@ window.applyCoinDiscount = function() {
     // Re-run checkout summary calculation
     displayCheckoutSummary(cart);
 }
+// *******************************************************************
+// ************ END: PAYMENT BUTTON UI FIX *****************************
+// *******************************************************************
 
 // NEW: Function to generate referral link
 window.getReferralLink = function(code) {
