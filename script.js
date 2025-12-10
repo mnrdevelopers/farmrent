@@ -1879,9 +1879,10 @@ async function loadCheckoutPage() {
     try {
         const doc = await window.FirebaseDB.collection('users').doc(user.uid).get();
         if (doc.exists) {
-            window.currentUser = { uid: user.uid, ...doc.data() };
-            // Update global available coins state
-            availableCoins = window.currentUser.coins || 0;
+            const userData = doc.data(); // Capture fresh data
+            window.currentUser = { uid: user.uid, ...userData };
+            // Update global available coins state from fresh data
+            availableCoins = userData.coins || 0;
         }
     } catch (e) {
         console.error("Failed to refresh user coin data on checkout:", e);
