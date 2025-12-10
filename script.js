@@ -1160,7 +1160,7 @@ function createEquipmentCard(equipment, id, isBrowsePage = false) {
     
     const actionButtonHtml = isBrowsePage 
         ? `<button class="btn btn-primary w-100" onclick="showEquipmentDetailsModal('${id}')">View Details</button>`
-        : `<a href="browse.html#item=${id}" class="btn btn-primary w-100">View Details</a>`; // MODIFIED: Link directly to browse.html with hash
+        : `<a href="item.html?id=${id}" class="btn btn-primary w-100">View Details</a>`;
 
     // NEW: Generate Star Rating HTML
     const ratingHtml = getStarRatingHtml(equipment.rating || 0);
@@ -2678,7 +2678,7 @@ async function loadPopularEquipmentFooter() {
         let html = '';
         snapshot.forEach(doc => {
             const equipment = doc.data();
-            html += `<li><a href="browse.html#item=${doc.id}" class="text-decoration-none text-light">${equipment.name}</a></li>`; // MODIFIED: Link changed from item.html to browse.html#item
+            html += `<li><a href="item.html?id=${doc.id}" class="text-decoration-none text-light">${equipment.name}</a></li>`;
         });
         container.innerHTML = html;
         
@@ -3053,8 +3053,7 @@ function displayCheckoutSummary(cart) {
     const maxDiscountAllowed = Math.floor(subtotal * 0.5);
     
     // 2. Determine how many coins can actually be applied (min of requested, available balance, and max discount cap)
-    let requestedCoins = coinsToApply; // Use the global coinsToApply state (set by input or auto-logic)
-    const effectiveCoinsUsed = Math.min(requestedCoins, availableCoins, maxDiscountAllowed);
+    const effectiveCoinsUsed = Math.min(coinsToApply, availableCoins, maxDiscountAllowed);
     
     // 3. The total discount amount is simply the number of effective coins used (1 coin = 1 rupee discount)
     const totalDiscount = effectiveCoinsUsed;
