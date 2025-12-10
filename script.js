@@ -4504,5 +4504,5 @@ window.getReferralLink = function(code) {
     if (!code) return "Code not available.";
     const baseUrl = window.location.origin;
     // Base URL is index.html. We link to signup with the code.
-    return `${baseUrl}/auth.html?role=customer&ref=${code}`;
+    return `${baseUrl}/farmrent/auth.html?role=customer&ref=${code}`;
 }
