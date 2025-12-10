@@ -3144,20 +3144,26 @@ function displayCheckoutSummary(cart) {
     if (totalEl) totalEl.textContent = window.firebaseHelpers.formatCurrency(total);
     
     // FIX: Update pay button amount - ensure it shows the correct amount
-    const payAmount = document.getElementById('pay-button-amount');
-    if (payAmount) {
-        payAmount.textContent = window.firebaseHelpers.formatCurrency(total);
-        console.log("Pay button amount set to:", total);
-    }
+const payAmount = document.getElementById('pay-button-amount');
+if (payAmount) {
+    const formattedAmount = window.firebaseHelpers.formatCurrency(total);
+    payAmount.textContent = formattedAmount;
+    console.log("Pay button amount set to:", formattedAmount);
     
-    // Update pay button text if CoP is selected
-    const paymentMethod = document.getElementById('payment-method-select')?.value;
+    // Directly update the pay button text
     const payBtn = document.getElementById('pay-now-btn');
-    if (paymentMethod === 'test_cop' && payBtn) {
-         payBtn.innerHTML = `<i class="fas fa-truck-loading me-2"></i> Confirm Rental (No Upfront Payment)`;
-    } else if (payBtn && payAmount) {
-        // Ensure Razorpay button shows correct amount
-        payBtn.innerHTML = `<i class="fas fa-money-check-alt me-2"></i>Pay ${payAmount.textContent} Now`;
+    const paymentMethod = document.getElementById('payment-method-select')?.value;
+    
+    if (payBtn) {
+        if (paymentMethod === 'test_cop') {
+            payBtn.innerHTML = `<i class="fas fa-truck-loading me-2"></i> Confirm Rental (No Upfront Payment)`;
+            payBtn.classList.remove('btn-primary');
+            payBtn.classList.add('btn-warning');
+        } else {
+            payBtn.innerHTML = `<i class="fas fa-money-check-alt me-2"></i>Pay ${formattedAmount} Now`;
+            payBtn.classList.remove('btn-warning');
+            payBtn.classList.add('btn-primary');
+        }
     }
 }
 
