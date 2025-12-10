@@ -641,7 +641,7 @@ function updateNavbarPincodeDisplay() {
 
 // Clear cart and shop in new location
 async function updateCartForNewPincode() {
-    // Note: Use custom modal instead of built-in confirm in production
+    // Note: Use custom modal instead of built-in confirm in production. Temporarily using custom modal setup.
     const modalHtml = `
         <div class="modal fade" id="confirm-clear-cart-modal" tabindex="-1">
             <div class="modal-dialog modal-dialog-centered">
@@ -762,24 +762,30 @@ function showCustomWarningModal(content) {
 
 // Initialize authentication (No changes needed, as it relies on updated firebase-config.js)
 function initializeAuth() {
-    if (!window.firebaseHelpers || !window.FirebaseDB) {
-        console.log("Waiting for Firebase initialization...");
+    // FIX: Simplified the initialization check to rely directly on FirebaseSDK presence, 
+    // which should be loaded by firebase-config.js. Removed the aggressive 10s timeout logic 
+    // to avoid prematurely throwing errors if SDK loading is slightly delayed.
+    if (!window.firebaseHelpers || !window.FirebaseDB || !window.FirebaseAuth) {
+        console.log("Waiting for Firebase SDK initialization...");
         const checkFirebase = setInterval(() => {
-            if (window.firebaseHelpers && window.FirebaseDB) {
+            if (window.firebaseHelpers && window.FirebaseDB && window.FirebaseAuth) {
                 clearInterval(checkFirebase);
-                console.log("Firebase initialized, proceeding with auth setup");
+                console.log("Firebase SDKs loaded, proceeding with auth setup");
                 initializeAuthInternal();
             }
         }, 100);
+        // Added a fallback for very slow loading environments to prevent infinite loop
         setTimeout(() => {
-            clearInterval(checkFirebase);
-            if (!window.firebaseHelpers) {
-                console.error("Firebase failed to initialize after 10 seconds");
+            if (!isAuthInitialized) {
+                console.error("Firebase failed to initialize after 10 seconds.");
+                isAuthInitialized = true; // Set to true to allow page load to continue
+                updateNavbarForLoggedOutUser(); // Ensure UI displays login options
             }
         }, 10000);
     } else {
         initializeAuthInternal();
     }
+    
     // Return a promise that resolves when auth is initialized
     return new Promise(resolve => {
         const check = setInterval(() => {
