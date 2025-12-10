@@ -5,42 +5,6 @@ let selectedEquipment = {};
 let isAuthInitialized = false;
 let platformFeeRate = 0.05; 
 let customerPincode = null;
-// NEW: Coins state
-let availableCoins = 0;
-let coinsToApply = 0; // Coins the customer wishes to apply to the current order
-
-// NEW: Referral Utility Functions
-/**
- * Generates a simple, unique 8-character referral code.
- * @returns {string} The referral code.
- */
-function generateReferralCode() {
-    return Math.random().toString(36).substring(2, 10).toUpperCase();
-}
-
-/**
- * Looks up the UID of the referrer based on a referral code.
- * @param {string} code - The 8-character referral code.
- * @returns {Promise<string|null>} The UID of the referrer or null if not found.
- */
-async function lookupReferralCode(code) {
-     if (!code || code.length !== 8 || !window.FirebaseDB) return null;
-     
-     try {
-         const snapshot = await window.FirebaseDB.collection('users')
-             .where('referralCode', '==', code)
-             .limit(1)
-             .get();
-             
-         if (!snapshot.empty) {
-             return snapshot.docs[0].id; // Return the UID of the referrer
-         }
-     } catch (e) {
-         console.error("Error looking up referral code:", e);
-     }
-     return null;
-}
-// END NEW: Referral Utility Functions
 
 // NEW: Collection name for user's notification settings (private collection)
 const CUSTOMER_NOTIFICATIONS_COLLECTION = 'customer_notifications';
@@ -50,8 +14,6 @@ let lastClearTime = 0; // Global variable to store the last notification clear t
 let activeChatId = null;
 let chatUnsubscribe = null;
 let typingTimeout = null;
-// NEW: Global unsubscribe handle for the floating chat badge listener
-let chatBadgeUnsubscribe = null;
 
 
 // --- NEW HELPER: Get Notification Status Ref ---
@@ -485,7 +447,7 @@ async function getCurrentLocationPincode() {
  * Checks for existing pincode and prompts user if not found (on homepage only).
  */
 async function checkAndPromptForPincode() {
-    // This relies on initializeAuth() having been awaited before this call in DOMContentLoaded
+    // This relies on initializeAuthInternal having been awaited before this call in DOMContentLoaded
     const finalPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
     window.customerPincode = finalPincode;
     
@@ -577,13 +539,10 @@ async function savePincode(pincode) {
     const path = window.location.pathname.split('/').pop();
     if (path === 'browse.html') {
         updatePincodeDisplay();
-        loadAllEquipment();
+        loadAllEquipment(); 
     } else if (path === 'cart.html') {
         // If on cart page, load the cart page logic which handles compatibility warnings
         loadCartPage();
-    } else if (path === 'checkout.html') {
-        // If on checkout page, re-run checkout logic
-        loadCheckoutPage();
     } else {
         loadFeaturedEquipment(); // Reload data on the homepage
     }
@@ -644,7 +603,7 @@ function updateNavbarPincodeDisplay() {
 
 // Clear cart and shop in new location
 async function updateCartForNewPincode() {
-    // Note: Use custom modal instead of built-in confirm in production. Temporarily using custom modal setup.
+    // Note: Use custom modal instead of built-in confirm in production
     const modalHtml = `
         <div class="modal fade" id="confirm-clear-cart-modal" tabindex="-1">
             <div class="modal-dialog modal-dialog-centered">
@@ -720,8 +679,15 @@ async function changePincodeToMatchEquipment(equipmentPincode) {
     
     // Delay slightly to ensure savePincode async operations complete before re-triggering modal
     setTimeout(() => {
-        // If coming from Add to Cart or item page, the item modal is likely closed. Let the user re-try.
-        window.firebaseHelpers.showAlert('Location updated. Please click "Add to Cart" or "Rent Now" again.', 'info');
+        // This relies on the modal logic running again which should be triggered by the button that called this function
+        // For simplicity, we just rely on the user manually clicking the add to cart button again, or we can just navigate to cart/checkout if needed.
+        // If coming from 'Rent Now', it will proceed to checkout.
+        if (window.location.href.includes('checkout.html')) {
+            loadCheckoutPage();
+        } else {
+             // If coming from Add to Cart or item page, the item modal is likely closed. Let the user re-try.
+             window.firebaseHelpers.showAlert('Location updated. Please click "Add to Cart" or "Rent Now" again.', 'info');
+        }
     }, 500);
 }
 
@@ -765,30 +731,24 @@ function showCustomWarningModal(content) {
 
 // Initialize authentication (No changes needed, as it relies on updated firebase-config.js)
 function initializeAuth() {
-    // FIX: Simplified the initialization check to rely directly on FirebaseSDK presence, 
-    // which should be loaded by firebase-config.js. Removed the aggressive 10s timeout logic 
-    // to avoid prematurely throwing errors if SDK loading is slightly delayed.
-    if (!window.firebaseHelpers || !window.FirebaseDB || !window.FirebaseAuth) {
-        console.log("Waiting for Firebase SDK initialization...");
+    if (!window.firebaseHelpers || !window.FirebaseDB) {
+        console.log("Waiting for Firebase initialization...");
         const checkFirebase = setInterval(() => {
-            if (window.firebaseHelpers && window.FirebaseDB && window.FirebaseAuth) {
+            if (window.firebaseHelpers && window.FirebaseDB) {
                 clearInterval(checkFirebase);
-                console.log("Firebase SDKs loaded, proceeding with auth setup");
+                console.log("Firebase initialized, proceeding with auth setup");
                 initializeAuthInternal();
             }
         }, 100);
-        // Added a fallback for very slow loading environments to prevent infinite loop
         setTimeout(() => {
-            if (!isAuthInitialized) {
-                console.error("Firebase failed to initialize after 10 seconds.");
-                isAuthInitialized = true; // Set to true to allow page load to continue
-                updateNavbarForLoggedOutUser(); // Ensure UI displays login options
+            clearInterval(checkFirebase);
+            if (!window.firebaseHelpers) {
+                console.error("Firebase failed to initialize after 10 seconds");
             }
         }, 10000);
     } else {
         initializeAuthInternal();
     }
-    
     // Return a promise that resolves when auth is initialized
     return new Promise(resolve => {
         const check = setInterval(() => {
@@ -805,44 +765,12 @@ async function initializeAuthInternal() {
         window.FirebaseAuth.onAuthStateChanged(async (user) => { 
             if (user) {
                 try {
-                    const docRef = window.FirebaseDB.collection('users').doc(user.uid);
-                    const doc = await docRef.get();
-
+                    const doc = await window.FirebaseDB.collection('users').doc(user.uid).get();
                     if (doc.exists) {
                         window.currentUser = { uid: user.uid, ...doc.data() };
                         
-                        // NEW FEATURE ROLLOUT/MERGE: Ensure referral fields exist
-                        const userData = window.currentUser;
-                        let needsUpdate = false;
-                        
-                        if (userData.coins === undefined) {
-                            userData.coins = 0;
-                            needsUpdate = true;
-                        }
-                        if (userData.referralCode === undefined) {
-                            userData.referralCode = generateReferralCode();
-                            needsUpdate = true;
-                        }
-                        if (userData.firstOrderPlaced === undefined) {
-                             userData.firstOrderPlaced = false;
-                            needsUpdate = true;
-                        }
-
-                        if (needsUpdate) {
-                            // Only merge fields that were missing
-                            await docRef.set({
-                                coins: userData.coins,
-                                referralCode: userData.referralCode,
-                                firstOrderPlaced: userData.firstOrderPlaced,
-                            }, { merge: true });
-                            // After update, refresh local current user data
-                            window.currentUser = { uid: user.uid, ...doc.data(), ...userData }; // Merge old data with newly set defaults
-                        }
-                        
-                        // Set global coin balance (This is the crucial line for coin display)
-                        availableCoins = window.currentUser.coins;
-
                         // NEW PINCODE LOGIC: Set global pincode based on precedence
+                        // Note: Setting customerPincode here will correctly update firebase-config.js's getter
                         window.customerPincode = window.currentUser.pincode || localStorage.getItem('customerPincode') || null;
                         
                         // NEW: Load persisted notification clear time
@@ -865,20 +793,11 @@ async function initializeAuthInternal() {
                             loadFeaturedEquipment(); 
                         }
                         updateNavbarPincodeDisplay();
-                        
-                        // NEW: Start listening for chat badge updates on login
-                        listenForUnreadChatMessages();
-
-                    } else {
-                        // FIX: Catch block for error getting user data
-                        console.error("Error getting user data: User document missing in Firestore.", user);
-                        // Force logout or handle gracefully if user document is missing
-                        await window.firebaseHelpers.signOut();
-                        window.location.reload(); 
                     }
                 } catch (error) {
-                    // FIX: Catch block for general errors
-                    console.error("Error during authentication internal step:", error);
+                    // FIX: Catch block for error getting user data
+                    console.error("Error getting user data:", error);
+                    // Force logout or handle gracefully if user document is missing
                     await window.firebaseHelpers.signOut();
                     window.location.reload(); 
                 } finally {
@@ -904,17 +823,6 @@ async function initializeAuthInternal() {
                     loadFeaturedEquipment(); 
                 }
                 updateNavbarPincodeDisplay();
-                
-                // NEW: Clear coin balance and applied coins on logout
-                availableCoins = 0;
-                coinsToApply = 0; 
-                
-                // NEW: Stop listening for chat badge updates on logout
-                if (chatBadgeUnsubscribe) {
-                     chatBadgeUnsubscribe();
-                     chatBadgeUnsubscribe = null;
-                }
-                updateChatBadgeCount(0); // Clear badge display
             }
         });
     } catch (error) {
@@ -930,16 +838,6 @@ async function logout() {
         window.customerPincode = null; 
         // Clear local notification state
         lastClearTime = 0; 
-        
-        // NEW: Clear coin balance and applied coins on logout
-        availableCoins = 0;
-        coinsToApply = 0; 
-        
-        // NEW: Stop listening for chat badge updates on logout
-        if (chatBadgeUnsubscribe) {
-             chatBadgeUnsubscribe();
-             chatBadgeUnsubscribe = null;
-        }
         
         await window.firebaseHelpers.signOut();
         window.location.reload();
@@ -1848,7 +1746,7 @@ async function startCheckout() {
     window.location.href = 'checkout.html';
 }
 
-// Load logic for Checkout page (UPDATED for coin application UI and logic)
+// Load logic for Checkout page (UPDATED)
 async function loadCheckoutPage() {
     await new Promise(resolve => {
         const checkAuth = setInterval(() => {
@@ -1874,27 +1772,6 @@ async function loadCheckoutPage() {
         }
         return;
     }
-    
-    // **FIX: Properly fetch and update user data including coins**
-    try {
-        const userDoc = await window.FirebaseDB.collection('users').doc(user.uid).get();
-        if (userDoc.exists) {
-            const userData = userDoc.data();
-            // Update global currentUser object
-            window.currentUser = { 
-                uid: user.uid, 
-                email: user.email, // Preserve auth email
-                ...userData 
-            };
-            // Update global available coins state
-            availableCoins = userData.coins || 0;
-        }
-    } catch (e) {
-        console.error("Failed to refresh user data on checkout:", e);
-        // Fallback to existing user data if fetch fails
-        availableCoins = window.currentUser?.coins || 0;
-    }
-    // **END FIX**
 
     const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
     const checkoutSummaryElement = document.querySelector('.checkout-summary');
@@ -1941,36 +1818,14 @@ async function loadCheckoutPage() {
         return;
     }
     
-    // Update customer form fields
+    window.currentUser = user; 
     const customerNameInput = document.getElementById('customer-name');
-    if (customerNameInput) customerNameInput.value = window.currentUser?.name || '';
+    if (customerNameInput) customerNameInput.value = user.name || '';
     const customerEmailInput = document.getElementById('customer-email');
-    if (customerEmailInput) customerEmailInput.value = window.currentUser?.email || '';
+    if (customerEmailInput) customerEmailInput.value = user.email || '';
     const customerPhoneInput = document.getElementById('customer-phone');
-    if (customerPhoneInput) customerPhoneInput.value = window.currentUser?.mobile || '';
+    if (customerPhoneInput) customerPhoneInput.value = user.mobile || '';
 
-    // **FIX: Update coin display with the freshly fetched value**
-    const coinBalanceDisplay = document.getElementById('coin-balance-display');
-    if (coinBalanceDisplay) coinBalanceDisplay.textContent = `${availableCoins || 0} Coins`;
-    
-    // Automatic First Order Discount Logic: Apply max 50 coins automatically on first order
-    if (window.currentUser && !window.currentUser.firstOrderPlaced && coinsToApply === 0) {
-        // Calculate subtotal first to cap discount
-        let subtotalCalc = 0;
-        cart.forEach(item => {
-            subtotalCalc += item.price;
-        });
-        const maxFirstOrderDiscount = Math.floor(subtotalCalc * 0.5); // 50% max discount
-        
-        // Make sure we don't apply more coins than the user has
-        const userAvailableCoins = availableCoins || 0;
-        coinsToApply = Math.min(50, userAvailableCoins, maxFirstOrderDiscount); // Cap at 50, available, and 50% subtotal
-        
-        const coinsInput = document.getElementById('coins-to-apply');
-        if (coinsInput) coinsInput.value = coinsToApply;
-    }
-    
-    // Apply discount logic runs inside displayCheckoutSummary
     displayCheckoutSummary(cart);
 }
 
@@ -2096,17 +1951,15 @@ async function checkCustomerNotifications() {
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
 
-        // Fetch all recent orders for the customer, sorting by UPDATED AT time 
-        // to catch recent status changes.
+        // Fetch all recent orders for the customer
         const ordersSnapshot = await ordersCollectionRef
             .where('userId', '==', window.currentUser.uid)
-            .orderBy('updatedAt', 'desc') // **FIX 1: Use updatedAt for real-time relevance**
+            .orderBy('createdAt', 'desc')
             .limit(10) // Limit to 10 most recent orders
             .get();
 
         const notifications = [];
-        let orderUnreadCount = 0; 
-        let chatUnreadCount = 0; // **FIX 2: Initialize chat count**
+        let unreadCount = 0;
         
         // Get the minimum timestamp to be considered 'unread' (which is the last clear time)
         const unreadThreshold = lastClearTime;
@@ -2141,15 +1994,19 @@ async function checkCustomerNotifications() {
                 return;
             }
             
-            // Determine unread status: Any new critical status updated *after* the last clear time
-            // **FIX 1: Use updatedAt for comparison**
-            const orderTimestamp = order.updatedAt?.toMillis() || order.createdAt?.toMillis() || 0; 
+            // Determine unread status: Any new critical status created *after* the last clear time
+            // Note: We use the *updatedAt* field or *createdAt* if available, but for status changes, 
+            // relying on order creation time isn't accurate. Since we don't have a specific `statusChangedAt` field, 
+            // we will rely on the order's `createdAt` for now, assuming only new orders trigger the alert.
+            // **IMPROVEMENT**: In a real-world scenario, you would track status change events/timestamps in a sub-collection.
+            // For now, we compare the order creation time to the last clear time.
+            const orderTimestamp = order.createdAt?.toMillis() || 0;
             
-            // Only count if it's a critical status and updated after last clear time
+            // We consider an order an "alert" if it has a critical status AND was created AFTER the last clear time
             const isAlert = orderTimestamp > unreadThreshold;
             
             if (isAlert) {
-                 orderUnreadCount++;
+                 unreadCount++;
             }
             
             notifications.push({
@@ -2157,43 +2014,11 @@ async function checkCustomerNotifications() {
                 message,
                 icon,
                 badgeClass,
-                date: order.updatedAt || order.createdAt, // Use updatedAt for sorting relevance
+                date: order.createdAt,
                 status: order.status,
                 isUnread: isAlert
             });
         });
-
-        // **FIX 2: Add Chat Notifications**
-        const conversationsSnapshot = await window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations')
-            .where('customerId', '==', window.currentUser.uid)
-            .get();
-            
-        conversationsSnapshot.forEach(doc => {
-            const chat = doc.data();
-            chatUnreadCount += chat.unreadCountCustomer || 0;
-            
-            // Also add chat message to dropdown notifications list (if space permits)
-            if (chat.unreadCountCustomer > 0) { // Check chat count directly, not notification list length
-                 // Add chat notification to the list
-                 notifications.push({
-                    id: doc.id,
-                    type: 'new_chat_message',
-                    message: `New message from ${chat.sellerBusinessName}: ${chat.lastMessage.substring(0, 20)}...`,
-                    icon: 'fas fa-comment-dots',
-                    badgeClass: 'bg-info',
-                    date: chat.updatedAt,
-                    status: 'chat_unread',
-                    isUnread: true 
-                 });
-            }
-        });
-        
-        // Sort all notifications (orders + chat) by date
-        notifications.sort((a, b) => (b.date?.toMillis() || 0) - (a.date?.toMillis() || 0));
-
-        // Final unread count includes both Order Alerts and Chat Messages
-        const totalUnreadCount = orderUnreadCount + chatUnreadCount;
-        // End of FIX 2
 
         // Update UI
         const countElement = document.getElementById('customer-notification-count');
@@ -2204,7 +2029,7 @@ async function checkCustomerNotifications() {
 
         if (countElement) {
              // Only show count if greater than 0 and the user is logged in
-             countElement.textContent = window.currentUser && totalUnreadCount > 0 ? totalUnreadCount : '';
+             countElement.textContent = window.currentUser && unreadCount > 0 ? unreadCount : '';
         }
         if (listElement) listElement.innerHTML = '<li><h6 class="dropdown-header">Alerts & Updates</h6></li>';
 
@@ -2213,37 +2038,10 @@ async function checkCustomerNotifications() {
         } else {
             criticalNotifications.forEach(notif => {
                 const timeAgo = notif.date ? window.firebaseHelpers.formatTimeAgo(notif.date) : 'N/A';
-                // Chat messages or truly unread orders are bolded
-                const unreadClass = notif.isUnread ? 'fw-bold' : 'text-muted'; 
-                
-                // Determine the correct URL for the notification
-                let linkUrl = 'orders.html';
-                if (notif.status === 'chat_unread') {
-                    // Chat notifications open the chat widget.
-                    // The chat ID is orderId_sellerId_customerId. We need orderId and sellerId.
-                    const parts = notif.id.split('_');
-                    const orderId = parts[0];
-                    const sellerId = parts[1];
-                    const sellerName = notif.message.split(':')[0].replace('New message from ', '').trim();
-                    const chatAction = `openOrderChat('${orderId}', '${sellerId}', '${sellerName}')`;
-                    
-                    if (listElement) listElement.innerHTML += `
-                        <li>
-                            <a class="dropdown-item d-flex justify-content-between align-items-center ${unreadClass}" href="#" onclick="${chatAction}" title="${notif.message}">
-                                <div>
-                                    <span class="badge ${notif.badgeClass} me-2"><i class="${notif.icon}"></i></span>
-                                    ${notif.message.substring(0, 30)}...
-                                </div>
-                                <small class="text-muted ms-2">${timeAgo}</small>
-                            </a>
-                        </li>
-                    `;
-                    return; // Skip the default link structure below
-                }
-                
+                const unreadClass = notif.isUnread ? 'fw-bold' : 'text-muted'; // Highlight unread
                 if (listElement) listElement.innerHTML += `
                     <li>
-                        <a class="dropdown-item d-flex justify-content-between align-items-center ${unreadClass}" href="${linkUrl}" title="${notif.message}">
+                        <a class="dropdown-item d-flex justify-content-between align-items-center ${unreadClass}" href="orders.html" title="${notif.message}">
                             <div>
                                 <span class="badge ${notif.badgeClass} me-2"><i class="${notif.icon}"></i></span>
                                 ${notif.message.substring(0, 30)}...
@@ -3001,7 +2799,7 @@ function updateCartSummary(subtotal, fees, total, isDisabled) {
     if (checkoutEl) checkoutEl.disabled = isDisabled || total === 0;
 }
 
-// Display items and calculate total on the checkout page (MODIFIED FOR COINS FIX)
+// Display items and calculate total on the checkout page (MODIFIED)
 function displayCheckoutSummary(cart) {
     const listContainer = document.getElementById('checkout-item-list');
     if (!listContainer) return;
@@ -3025,7 +2823,6 @@ function displayCheckoutSummary(cart) {
         ...window.razorpayContext,
         orderPickupDate: firstItem?.pickupDate,
         orderPickupTime: firstItem?.pickupTime,
-        items: cart, // Also add cart items to context for order placement
     };
     // END NEW
 
@@ -3047,48 +2844,14 @@ function displayCheckoutSummary(cart) {
             </div>
         `;
     });
-    
-    // --- COIN & DISCOUNT CALCULATION (FIXED) ---
-    // 1. Calculate the maximum possible discount (50% of subtotal)
-    const maxDiscountAllowed = Math.floor(subtotal * 0.5);
-    
-    // 2. Determine how many coins can actually be applied (min of requested, available balance, and max discount cap)
-    const effectiveCoinsUsed = Math.min(coinsToApply, availableCoins, maxDiscountAllowed);
-    
-    // 3. The total discount amount is simply the number of effective coins used (1 coin = 1 rupee discount)
-    const totalDiscount = effectiveCoinsUsed;
-    
-    // 4. Update the global state to reflect the *actually* applied coins
-    coinsToApply = effectiveCoinsUsed;
-    
-    // 5. Calculate fees and final total
-    const fees = subtotal * platformFeeRate;
-    let total = subtotal - totalDiscount + fees;
-    total = Math.max(0, total); // Ensure total is never negative
 
-    // 6. Update razorpay context with new discount info
-    window.razorpayContext = { 
-        subtotal, 
-        fees, 
-        total, 
-        orderPincode, 
-        discount: totalDiscount, 
-        coinsUsed: effectiveCoinsUsed, // Store the final amount of coins used for order placement
-        ...window.razorpayContext 
-    }; 
-    // --- END COIN & DISCOUNT CALCULATION (FIXED) ---
+    const fees = subtotal * platformFeeRate;
+    const total = subtotal + fees;
     
-    // 7. Update UI elements
     const feeLabelElement = document.getElementById('checkout-fees-label');
     if (feeLabelElement) {
         feeLabelElement.textContent = `Platform Fee (${(platformFeeRate * 100).toFixed(0)}%):`;
     }
-
-    const coinInput = document.getElementById('coins-to-apply');
-    if (coinInput) coinInput.value = effectiveCoinsUsed;
-    
-    const discountEl = document.getElementById('checkout-discount');
-    if (discountEl) discountEl.textContent = window.firebaseHelpers.formatCurrency(totalDiscount);
 
     const subtotalEl = document.getElementById('checkout-subtotal');
     if (subtotalEl) subtotalEl.textContent = window.firebaseHelpers.formatCurrency(subtotal);
@@ -3096,19 +2859,13 @@ function displayCheckoutSummary(cart) {
     if (feesEl) feesEl.textContent = window.firebaseHelpers.formatCurrency(fees);
     const totalEl = document.getElementById('checkout-total');
     if (totalEl) totalEl.textContent = window.firebaseHelpers.formatCurrency(total);
-    
     const payAmount = document.getElementById('pay-button-amount');
     if (payAmount) payAmount.textContent = window.firebaseHelpers.formatCurrency(total);
-    
-    // Update pay button text if CoP is selected
-    const paymentMethod = document.getElementById('payment-method-select')?.value;
-    const payBtn = document.getElementById('pay-now-btn');
-    if (paymentMethod === 'test_cop' && payBtn) {
-         payBtn.innerHTML = `<i class="fas fa-truck-loading me-2"></i> Confirm Rental (No Upfront Payment)`;
-    }
+
+    window.razorpayContext = { subtotal, fees, total, orderPincode, ...window.razorpayContext }; 
 }
 
-// Process payment using Razorpay (Simulated Escrow/Route) (MODIFIED FOR TEST PAYMENT & COINS FIX)
+// Process payment using Razorpay (Simulated Escrow/Route) (MODIFIED FOR TEST PAYMENT)
 async function processPayment() {
     const form = document.getElementById('checkout-form');
     if (!form.checkValidity()) {
@@ -3129,8 +2886,7 @@ async function processPayment() {
     
     const isPickup = true; 
 
-    // FIX: Retrieve final discounted total, discount, and coins used directly from razorpayContext
-    const { total, orderPickupDate, orderPickupTime, discount, coinsUsed } = window.razorpayContext; 
+    const { total, orderPickupDate, orderPickupTime } = window.razorpayContext; 
     const totalInPaise = Math.round(total * 100);
 
     const customerData = {
@@ -3156,8 +2912,8 @@ async function processPayment() {
         payBtn.disabled = true;
 
         try {
-            // Pass the discounted total (total) to placeOrderInFirestore
-            await placeOrderInFirestore(orderId, customerData, 'TEST_COP_TXN', total, 'pending', 'Cash On Pickup (Test)', discount, coinsUsed);
+            // Simulate direct order placement with 'pending' payment status
+            await placeOrderInFirestore(orderId, customerData, 'TEST_COP_TXN', total, 'pending', 'Cash On Pickup (Test)');
             // The function placeOrderInFirestore will handle success alerts and redirects
         } catch (error) {
             console.error('Test Order Placement Failed:', error);
@@ -3183,8 +2939,7 @@ async function processPayment() {
             description: "Rental Equipment Booking",
             handler: async function (response) {
                 // On successful payment, place order with 'paid' status
-                // Pass the discounted total (total) to placeOrderInFirestore
-                await placeOrderInFirestore(orderId, customerData, response.razorpay_payment_id, total, 'paid', 'Razorpay', discount, coinsUsed);
+                await placeOrderInFirestore(orderId, customerData, response.razorpay_payment_id, total, 'paid', 'Razorpay');
                 
             },
             prefill: {
@@ -3208,8 +2963,8 @@ async function processPayment() {
     // *** MODIFIED LOGIC END ***
 }
 
-// Final step: Save order to Firestore after (simulated) successful payment (MODIFIED to reward referrer AND handle coins)
-async function placeOrderInFirestore(orderId, customerData, transactionId, discountedTotalAmount, paymentStatus, paymentMethod, totalDiscount, coinsUsed) {
+// Final step: Save order to Firestore after (simulated) successful payment (MODIFIED to accept payment/status)
+async function placeOrderInFirestore(orderId, customerData, transactionId, totalAmount, paymentStatus, paymentMethod) {
     const cart = await getCartFromFirestore();
     
     if (cart.length === 0) {
@@ -3221,7 +2976,8 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, disco
     const sellerIds = [...new Set(cart.map(item => item.sellerId))].join(', ');
     const businessNames = [...new Set(cart.map(item => item.businessName))].join(', ');
     const orderPincode = window.razorpayContext.orderPincode; 
-    
+
+
     try {
         const orderData = {
             userId: window.currentUser.uid,
@@ -3243,16 +2999,13 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, disco
 
             items: cart, 
 
-            totalAmount: discountedTotalAmount, // This is the amount actually paid (discounted)
+            totalAmount: totalAmount,
             platformFee: window.razorpayContext.fees,
-            discount: totalDiscount, // Correct total discount amount
-            coinsUsed: coinsUsed, // Correct coins used
             status: 'pending', // All orders start as pending for seller review
             paymentStatus: paymentStatus, // Use dynamic status ('paid' or 'pending')
             paymentMethod: paymentMethod, // Use dynamic method
             transactionId: transactionId,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp() // Ensure updatedAt is set on creation
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -3262,54 +3015,12 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, disco
         
         await updateCartInFirestore([]); 
         
-        // --- REFERRAL & COINS LOGIC START (MODIFIED) ---
-        
-        let customerUpdates = {};
-        let referrerRewardMessage = '';
-        
-        // 1. Check if this is the customer's very first order
-        if (!window.currentUser.firstOrderPlaced) {
-            customerUpdates.firstOrderPlaced = true;
-            window.currentUser.firstOrderPlaced = true;
-            
-            // 1a. Check if customer was referred by someone (referrer is the one to be rewarded)
-            const referrerId = window.currentUser.referredBy;
-            if (referrerId) {
-                // Reward the REFERRER (the person who referred the friend) with 100 coins
-                const referrerRef = window.FirebaseDB.collection('users').doc(referrerId);
-                await referrerRef.update({
-                    coins: firebase.firestore.FieldValue.increment(100),
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                referrerRewardMessage = `<br>Your referrer (UID: ${referrerId.substring(0, 8)}...) has received **100 Coins**!`;
-            }
-        }
-
-        // 2. Decrement coins used by the referred customer (the one who placed the order)
-        if (coinsUsed > 0) {
-             // Only apply coin decrement if coins were used as a discount
-             customerUpdates.coins = firebase.firestore.FieldValue.increment(-coinsUsed);
-             window.currentUser.coins = (window.currentUser.coins || 0) - coinsUsed;
-        }
-        
-        // 3. Apply customer updates (if any, like setting firstOrderPlaced or decrementing coins)
-        if (Object.keys(customerUpdates).length > 0) {
-            await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(customerUpdates);
-            availableCoins = window.currentUser.coins; // Update global state
-        }
-        
-        coinsToApply = 0; // Reset applied coins state
-        
-        // --- REFERRAL & COINS LOGIC END ---
-
         // Show context-specific alert
-        let successMessage = paymentStatus === 'paid' 
-            ? `Order #${orderId.substring(0, 8)} placed successfully! Payment confirmed.`
-            : `Test Order #${orderId.substring(0, 8)} placed successfully! Payment is **Pending**.`;
-            
-        successMessage += referrerRewardMessage; // Add referrer reward message
+        const successMessage = paymentStatus === 'paid' 
+            ? `Order #${orderId.substring(0, 8)} placed successfully! Payment confirmed. You will be redirected to My Orders.`
+            : `Test Order #${orderId.substring(0, 8)} placed successfully! Payment is **Pending**. You will be redirected to My Orders.`;
 
-        window.firebaseHelpers.showAlert(successMessage + ' You will be redirected to My Orders.', 'success');
+        window.firebaseHelpers.showAlert(successMessage, 'success');
         
         // Manually trigger a notification check right after order placement to update the navbar badge instantly
         checkCustomerNotifications();
@@ -3324,7 +3035,7 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, disco
     }
 }
 
-// Load Profile Page (profile.html) (MODIFIED)
+// Load Profile Page (profile.html)
 async function loadProfilePage() {
     const user = await window.firebaseHelpers.getCurrentUser();
     if (!user) {
@@ -3332,31 +3043,6 @@ async function loadProfilePage() {
         setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 2000);
         return;
     }
-
-    // NEW: Load/Check Referral/Coins Data
-    const userDocRef = window.FirebaseDB.collection('users').doc(user.uid);
-    const userDoc = await userDocRef.get();
-    
-    // Ensure data is up to date (for feature rollout/merge on a user document)
-    if (userDoc.exists) {
-        const userData = userDoc.data();
-        let needsUpdate = false;
-        
-        if (userData.coins === undefined) { userData.coins = 0; needsUpdate = true; }
-        if (userData.referralCode === undefined) { userData.referralCode = generateReferralCode(); needsUpdate = true; }
-        if (userData.firstOrderPlaced === undefined) { userData.firstOrderPlaced = false; needsUpdate = true; }
-        
-        if (needsUpdate) {
-            await userDocRef.set({
-                coins: userData.coins,
-                referralCode: userData.referralCode,
-                firstOrderPlaced: userData.firstOrderPlaced,
-            }, { merge: true });
-        }
-        window.currentUser = { ...user, ...userData }; // Update current user object
-        availableCoins = window.currentUser.coins; // Update global state
-    }
-    // END NEW
 
     const profileNameEl = document.getElementById('profile-name');
     if (profileNameEl) profileNameEl.value = user.name || '';
@@ -3375,19 +3061,6 @@ async function loadProfilePage() {
     
     const profileUserNameEl = document.getElementById('profile-user-name');
     if (profileUserNameEl) profileUserNameEl.textContent = user.name || 'User';
-    
-    // NEW: Update Coin Display
-    const profileCoinBalanceEl = document.getElementById('profile-coin-balance');
-    if (profileCoinBalanceEl) profileCoinBalanceEl.textContent = `${availableCoins || 0} Coins`;
-    
-    // NEW: Update Referral Info
-    const referralCodeDisplayEl = document.getElementById('referral-code-display');
-    const referralLinkDisplayEl = document.getElementById('referral-link-display');
-    const referralCode = window.currentUser.referralCode || generateReferralCode();
-
-    if (referralCodeDisplayEl) referralCodeDisplayEl.value = referralCode;
-    if (referralLinkDisplayEl) referralLinkDisplayEl.value = window.getReferralLink(referralCode);
-    // END NEW
 
     // Check if user is a seller and has a pincode set
     const isSeller = user.role === 'seller';
@@ -3567,8 +3240,6 @@ function createOrderCard(order) {
     
     const pickupDate = order.pickupDate || 'N/A';
     const pickupTime = order.pickupTime || 'N/A';
-    
-    const discountCoins = order.coinsUsed > 0 ? `<div class="text-danger small">Coins Used: ${order.coinsUsed} (${window.firebaseHelpers.formatCurrency(order.discount)})</div>` : '';
 
     // Logic for Review Button
     let reviewButton = '';
@@ -3630,8 +3301,7 @@ function createOrderCard(order) {
                     </ul>
                     <div class="row border-top pt-2">
                         <div class="col-md-6">
-                            <strong>Total Amount:</strong> <span class="text-primary">${window.firebaseHelpers.formatCurrency(order.totalAmount || 0)}</span>
-                            ${discountCoins}
+                            <strong>Total Amount:</strong> <span class="text-primary">${window.firebaseHelpers.formatCurrency(order.totalAmount)}</span>
                         </div>
                         <div class="col-md-6 text-md-end">
                             <strong>Pickup Pincode:</strong> ${order.orderPincode || 'N/A'}
@@ -3763,13 +3433,6 @@ async function viewOrderDetailsModal(orderId) {
             
             const statusClass = `order-status-${order.status || 'pending'}`;
             const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
-            
-            const coinsUsed = order.coinsUsed || 0;
-            const discountApplied = order.discount || 0;
-            const discountHtml = coinsUsed > 0 
-                ? `<tr><th>Coin Discount:</th><td><strong class="text-danger">-${window.firebaseHelpers.formatCurrency(discountApplied)} (${coinsUsed} Coins)</strong></td></tr>`
-                : '';
-
 
             const detailsHtml = `
                 <h5 class="mb-3">Order # ${orderId.substring(0, 8)} Details</h5>
@@ -3804,10 +3467,8 @@ async function viewOrderDetailsModal(orderId) {
 
                 <h6 class="mt-4 text-warning">Payment Summary</h6>
                 <table class="table table-sm table-borderless">
-                    <tr><th>Subtotal:</th><td>${window.firebaseHelpers.formatCurrency(order.totalAmount + (order.discount || 0) - (order.platformFee || 0))}</td></tr>
-                    ${discountHtml}
-                    <tr><th>Platform Fee:</th><td>+${window.firebaseHelpers.formatCurrency(order.platformFee || 0)}</td></tr>
-                    <tr><th>Total Paid:</th><td><strong>${window.firebaseHelpers.formatCurrency(order.totalAmount || 0)}</strong></td></tr>
+                    <tr><th>Total Amount:</th><td><strong>${window.firebaseHelpers.formatCurrency(order.totalAmount)}</strong></td></tr>
+                    <tr><th>Platform Fee:</th><td>${window.firebaseHelpers.formatCurrency(order.platformFee || 0)}</td></tr>
                     <tr><th>Payment Method:</th><td>${order.paymentMethod || 'N/A'}</td></tr>
                     <tr><th>Payment Status:</th><td><span class="badge bg-${order.paymentStatus === 'paid' ? 'success' : 'danger'}">${order.paymentStatus || 'N/A'}</span></td></tr>
                     <tr><th>Transaction ID:</th><td><small>${order.transactionId || 'N/A'}</small></td></tr>
@@ -3902,8 +3563,7 @@ async function cancelOrder(orderId) {
 
             await orderRef.update({
                 status: 'cancelled',
-                cancellationRequestedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp() // Update timestamp to trigger seller notification
+                cancellationRequestedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             window.firebaseHelpers.showAlert('Cancellation requested. Status will be updated shortly.', 'success');
             
@@ -3979,8 +3639,7 @@ async function submitReview() {
             .collection('public').doc('data').collection('orders').doc(orderId);
         
         await orderRef.update({
-            isReviewed: true,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp() // Update timestamp
+            isReviewed: true
         });
 
         // 3. Update Equipment Ratings (Iterate through items in the order)
@@ -4012,7 +3671,7 @@ async function submitReview() {
         
         // Close modal
         const modal = bootstrap.Modal.getInstance(document.getElementById('reviewModal'));
-        if (modal) modal.hide();
+        modal.hide();
         
         // Reload orders to update button state
         loadOrdersPage();
@@ -4054,58 +3713,6 @@ function getStarRatingHtml(rating) {
 
 // --- CUSTOMER CHAT SYSTEM ---
 
-/**
- * NEW FUNCTION: Updates the visibility and count of the floating chat badge.
- * @param {number} count 
- */
-function updateChatBadgeCount(count) {
-    const badge = document.getElementById('floating-chat-badge');
-    if (badge) {
-        if (count > 0) {
-            badge.textContent = count > 9 ? '9+' : count;
-            badge.style.display = 'flex';
-        } else {
-            badge.style.display = 'none';
-        }
-    }
-}
-
-/**
- * NEW FUNCTION: Sets up a real-time listener for ALL customer chats to track unread count.
- * This listener runs whenever the user is logged in.
- */
-function listenForUnreadChatMessages() {
-    if (!window.currentUser || window.currentUser.role !== 'customer' || !window.FirebaseDB) {
-        if (chatBadgeUnsubscribe) chatBadgeUnsubscribe();
-        return;
-    }
-    
-    // Stop any existing listener
-    if (chatBadgeUnsubscribe) chatBadgeUnsubscribe();
-
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-    const conversationsRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations');
-
-    const query = conversationsRef
-        .where('customerId', '==', window.currentUser.uid);
-
-    chatBadgeUnsubscribe = query.onSnapshot(snapshot => {
-        let totalUnread = 0;
-        snapshot.forEach(doc => {
-            const chat = doc.data();
-            totalUnread += chat.unreadCountCustomer || 0;
-        });
-        
-        // Update the floating badge
-        updateChatBadgeCount(totalUnread);
-        
-    }, error => {
-        console.error("Error listening for unread chat count:", error);
-        updateChatBadgeCount(0); // Clear badge on error
-    });
-}
-
-
 // 1. Render Chat Widget HTML (Updated Layout)
 function renderChatWidget() {
     const container = document.getElementById('chat-widget-container');
@@ -4114,8 +3721,6 @@ function renderChatWidget() {
     container.innerHTML = `
         <div class="chat-btn-floating" onclick="toggleChatWindow()">
             <i class="fas fa-comments"></i>
-            <!-- NEW: Unread message badge -->
-            <div id="floating-chat-badge" class="chat-badge" style="display:none;">0</div> 
         </div>
         <div class="chat-window hidden" id="customer-chat-window">
             <div class="chat-header">
@@ -4172,11 +3777,6 @@ function toggleChatWindow() {
         windowEl.classList.toggle('hidden');
         if (!windowEl.classList.contains('hidden') && window.currentUser && !activeChatId) {
             loadUserConversations();
-        }
-        
-        // Hide the floating badge when the full window is opened
-        if (!windowEl.classList.contains('hidden')) {
-             updateChatBadgeCount(0); // Optimistically hide, actual unread count is handled inside loadChatMessages
         }
     }
 }
@@ -4329,8 +3929,6 @@ async function loadChatMessages(chatId, titleName, sellerId) {
         
         // Mark read
         chatDocRef.update({ unreadCountCustomer: 0 });
-        // After reading messages, manually trigger notification check to clear badge
-        checkCustomerNotifications();
     });
 
     // Listen for Typing
@@ -4470,62 +4068,4 @@ if (typeof Razorpay === 'undefined') {
     const script = document.createElement('script');
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
     document.head.appendChild(script);
-}
-
-// NEW: Function to handle coin application/calculation (FIXED LOGIC)
-window.applyCoinDiscount = function() {
-    const coinInput = document.getElementById('coins-to-apply');
-    const warningText = document.getElementById('coin-warning-text');
-    
-    if (!coinInput) return;
-    
-    // 1. Get requested coins and subtotal from context (which should be set by loadCheckoutPage/displayCheckoutSummary)
-    let requestedCoins = parseInt(coinInput.value) || 0;
-    const subtotal = window.razorpayContext.subtotal || 0;
-    
-    // 2. Calculate limits
-    const maxDiscountAllowed = Math.floor(subtotal * 0.5); // Max discount is 50% of the price
-    const maxCoinsAllowed = Math.min(availableCoins, maxDiscountAllowed); 
-    
-    let appliedCoins = 0;
-    
-    if (requestedCoins < 0) {
-        appliedCoins = 0;
-        warningText.textContent = `Coins cannot be negative.`;
-        warningText.classList.remove('text-muted', 'text-success', 'text-warning');
-        warningText.classList.add('text-danger');
-    } else if (requestedCoins > availableCoins) {
-        appliedCoins = availableCoins;
-        warningText.textContent = `Applied available maximum: ${availableCoins} coins.`;
-        warningText.classList.remove('text-muted', 'text-danger', 'text-success');
-        warningText.classList.add('text-warning');
-    } else if (requestedCoins > maxDiscountAllowed) {
-        appliedCoins = maxDiscountAllowed;
-        warningText.textContent = `Applied maximum possible: ${maxDiscountAllowed} coins. (Capped at 50% of subtotal: ${window.firebaseHelpers.formatCurrency(maxDiscountAllowed)})`;
-        warningText.classList.remove('text-muted', 'text-success', 'text-warning');
-        warningText.classList.add('text-danger');
-    } else {
-        appliedCoins = requestedCoins;
-        warningText.textContent = `Applied ${appliedCoins} coins successfully.`;
-        warningText.classList.remove('text-muted', 'text-danger', 'text-warning');
-        warningText.classList.add('text-success');
-    }
-    
-    // 3. Update the global state and input field to the effective/applied amount
-    coinsToApply = appliedCoins; 
-    coinInput.value = appliedCoins; 
-
-    // 4. Re-run checkout summary calculation to update totals in UI and context
-    const cart = window.razorpayContext.items || [];
-    if (cart.length > 0) {
-        displayCheckoutSummary(cart);
-    }
-}
-
-// NEW: Function to generate referral link
-window.getReferralLink = function(code) {
-    if (!code) return "Code not available.";
-    const baseUrl = window.location.origin;
-    // Base URL is index.html. We link to signup with the code.
-    return `${baseUrl}/farmrent/auth.html?role=customer&ref=${code}`;
 }
