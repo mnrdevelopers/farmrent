@@ -295,12 +295,12 @@
                                     <form id="loginForm">
                                         <div class="mb-3">
                                             <label for="loginEmail" class="form-label">Email Address</label>
-                                            <input type="email" class="form-control" id="loginEmail" placeholder="Enter your email" required>
+                                            <input type="email" class="form-control" id="loginEmail" name="loginEmail" placeholder="Enter your email" required>
                                         </div>
                                         <div class="mb-3">
                                             <label for="loginPassword" class="form-label">Password</label>
                                             <div class="password-input-container">
-                                                <input type="password" class="form-control" id="loginPassword" placeholder="Enter your password" required>
+                                                <input type="password" class="form-control" id="loginPassword" name="loginPassword" placeholder="Enter your password" required>
                                                 <i class="fas fa-eye password-toggle" onclick="togglePasswordVisibility('loginPassword', this)"></i>
                                             </div>
                                             <div class="form-text">
@@ -328,28 +328,28 @@
                                         <div class="row">
                                             <div class="col-md-6 mb-3">
                                                 <label for="signupName" class="form-label">Full Name *</label>
-                                                <input type="text" class="form-control" id="signupName" placeholder="Enter your full name" required>
+                                                <input type="text" class="form-control" id="signupName" name="signupName" placeholder="Enter your full name" required>
                                             </div>
                                             <div class="col-md-6 mb-3">
                                                 <label for="signupMobile" class="form-label">Mobile Number *</label>
-                                                <input type="tel" class="form-control" id="signupMobile" placeholder="Enter 10-digit mobile" pattern="[0-9]{10}" required>
+                                                <input type="tel" class="form-control" id="signupMobile" name="signupMobile" placeholder="Enter 10-digit mobile" pattern="[0-9]{10}" required>
                                             </div>
                                         </div>
                                         <div class="mb-3">
                                             <label for="signupEmail" class="form-label">Email Address *</label>
-                                            <input type="email" class="form-control" id="signupEmail" placeholder="Enter your email" required>
+                                            <input type="email" class="form-control" id="signupEmail" name="signupEmail" placeholder="Enter your email" required>
                                         </div>
                                         <div class="mb-3">
                                             <label for="signupPassword" class="form-label">Password *</label>
                                             <div class="password-input-container">
-                                                <input type="password" class="form-control" id="signupPassword" placeholder="Min. 6 characters" minlength="6" required>
+                                                <input type="password" class="form-control" id="signupPassword" name="signupPassword" placeholder="Min. 6 characters" minlength="6" required>
                                                 <i class="fas fa-eye password-toggle" onclick="togglePasswordVisibility('signupPassword', this)"></i>
                                             </div>
                                         </div>
                                         <div class="mb-3">
                                             <label for="signupConfirmPassword" class="form-label">Confirm Password *</label>
                                             <div class="password-input-container">
-                                                <input type="password" class="form-control" id="signupConfirmPassword" placeholder="Confirm your password" minlength="6" required>
+                                                <input type="password" class="form-control" id="signupConfirmPassword" name="signupConfirmPassword" placeholder="Confirm your password" minlength="6" required>
                                                 <i class="fas fa-eye password-toggle" onclick="togglePasswordVisibility('signupConfirmPassword', this)"></i>
                                             </div>
                                         </div>
@@ -357,7 +357,7 @@
                                         <!-- NEW: Referral Code Field -->
                                         <div class="mb-3">
                                             <label for="referralCode" class="form-label">Referral Code (Optional)</label>
-                                            <input type="text" class="form-control" id="referralCode" placeholder="Enter friend's referral code (8 characters)" maxlength="8">
+                                            <input type="text" class="form-control" id="referralCode" name="referralCode" placeholder="Enter friend's referral code (8 characters)" maxlength="8">
                                             <!-- UPDATED TEXT HERE -->
                                             <small class="form-text text-muted">Use a referral code so your friend (the referrer) gets **100 Coins** when you place your first order!</small>
                                             <!-- END UPDATED TEXT -->
@@ -370,19 +370,19 @@
                                             <h5 class="mb-3">Seller Information & Location</h5>
                                             <div class="mb-3">
                                                 <label for="businessName" class="form-label">Business/Shop Name *</label>
-                                                <input type="text" class="form-control" id="businessName" placeholder="Enter your business name">
+                                                <input type="text" class="form-control" id="businessName" name="businessName" placeholder="Enter your business name">
                                             </div>
 
-                                            <!-- UPDATED: Added Location fields -->
+                                            <!-- UPDATED: Added name attribute to pincode field -->
                                             <div class="row">
                                                 <div class="col-md-6 mb-3">
                                                     <label for="pincode" class="form-label">Pincode *</label>
-                                                    <input type="text" class="form-control" id="pincode" placeholder="e.g., 503001" pattern="[0-9]{6}" maxlength="6" required>
+                                                    <input type="text" class="form-control" id="pincode" name="pincode" placeholder="e.g., 503001" pattern="[0-9]{6}" maxlength="6" required>
                                                     <small id="location-lookup-status" class="form-text text-muted"></small>
                                                 </div>
                                                 <div class="col-md-6 mb-3">
                                                     <label for="signupVillage" class="form-label">Village/Post Office *</label>
-                                                    <select class="form-select" id="signupVillage" required disabled>
+                                                    <select class="form-select" id="signupVillage" name="signupVillage" required disabled>
                                                         <option value="">Enter Pincode Above</option>
                                                     </select>
                                                 </div>
@@ -391,22 +391,22 @@
                                             <div class="row">
                                                 <div class="col-md-6 mb-3">
                                                     <label for="signupCity" class="form-label">City/District *</label>
-                                                    <input type="text" class="form-control" id="signupCity" readonly required>
+                                                    <input type="text" class="form-control" id="signupCity" name="signupCity" readonly required>
                                                 </div>
                                                 <div class="col-md-6 mb-3">
                                                     <label for="signupState" class="form-label">State *</label>
-                                                    <input type="text" class="form-control" id="signupState" readonly required>
+                                                    <input type="text" class="form-control" id="signupState" name="signupState" readonly required>
                                                 </div>
                                             </div>
                                             <!-- END UPDATED -->
 
                                             <div class="mb-3">
                                                 <label for="gstNumber" class="form-label">GST Number (Optional)</label>
-                                                <input type="text" class="form-control" id="gstNumber" placeholder="Enter GST number if available">
+                                                <input type="text" class="form-control" id="gstNumber" name="gstNumber" placeholder="Enter GST number if available">
                                             </div>
                                             <div class="mb-3">
                                                 <label for="address" class="form-label">Business Address (Street/House Number)</label>
-                                                <textarea class="form-control" id="address" rows="2" placeholder="Primary pickup address (must include House/Street details)"></textarea>
+                                                <textarea class="form-control" id="address" name="address" rows="2" placeholder="Primary pickup address (must include House/Street details)"></textarea>
                                             </div>
                                         </div>
                                         
@@ -416,18 +416,18 @@
                                             <h5 class="mb-3">Admin Verification</h5>
                                             <div class="mb-3">
                                                 <label for="adminCode" class="form-label">Admin Access Code *</label>
-                                                <input type="password" class="form-control" id="adminCode" placeholder="Enter admin access code">
+                                                <input type="password" class="form-control" id="adminCode" name="adminCode" placeholder="Enter admin access code">
                                             </div>
                                         </div>
                                         
                                         <div class="mb-3 form-check">
-                                            <input type="checkbox" class="form-check-input" id="termsAgree" required>
+                                            <input type="checkbox" class="form-check-input" id="termsAgree" name="termsAgree" required>
                                             <label class="form-check-label" for="termsAgree">
                                                 I agree to the <a href="#" class="text-decoration-none" style="color: var(--farm-green);">Terms & Conditions</a>
                                             </label>
                                         </div>
                                         <div class="mb-3 form-check">
-                                            <input type="checkbox" class="form-check-input" id="newsletter" checked>
+                                            <input type="checkbox" class="form-check-input" id="newsletter" name="newsletter" checked>
                                             <label class="form-check-label" for="newsletter">
                                                 Receive updates and offers via email
                                             </label>
@@ -1060,10 +1060,15 @@
                      showAlert('Referral Code must be 8 characters long.', 'warning');
                      return;
                 }
-                referrerId = await window.lookupReferralCode(referralCode);
-                if (!referrerId) {
-                    showAlert('Invalid Referral Code. Please check the code and try again.', 'warning');
-                    return;
+                // FIX: Check if window.lookupReferralCode exists (defined in script.js)
+                if (window.lookupReferralCode) {
+                    referrerId = await window.lookupReferralCode(referralCode);
+                    if (!referrerId) {
+                        showAlert('Invalid Referral Code. Please check the code and try again.', 'warning');
+                        return;
+                    }
+                } else {
+                    console.warn('lookupReferralCode not available in auth.html. Skipping referral check.');
                 }
             }
             // END NEW
@@ -1183,6 +1188,7 @@
             initializeRole();
         });
     </script>
+    <!-- FIX: Moved script.js here to ensure populateLocationFields is defined when needed -->
     <script src="script.js"></script> 
 </body>
 </html>
