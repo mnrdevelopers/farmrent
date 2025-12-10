@@ -1875,17 +1875,24 @@ async function loadCheckoutPage() {
         return;
     }
     
-    // **FIX: Re-fetch user data to ensure coin balance is fresh, as `window.currentUser` might be stale**
+    // **FIX: Properly fetch and update user data including coins**
     try {
-        const doc = await window.FirebaseDB.collection('users').doc(user.uid).get();
-        if (doc.exists) {
-            const userData = doc.data(); // Capture fresh data
-            window.currentUser = { uid: user.uid, ...userData };
-            // Update global available coins state from fresh data
+        const userDoc = await window.FirebaseDB.collection('users').doc(user.uid).get();
+        if (userDoc.exists) {
+            const userData = userDoc.data();
+            // Update global currentUser object
+            window.currentUser = { 
+                uid: user.uid, 
+                email: user.email, // Preserve auth email
+                ...userData 
+            };
+            // Update global available coins state
             availableCoins = userData.coins || 0;
         }
     } catch (e) {
-        console.error("Failed to refresh user coin data on checkout:", e);
+        console.error("Failed to refresh user data on checkout:", e);
+        // Fallback to existing user data if fetch fails
+        availableCoins = window.currentUser?.coins || 0;
     }
     // **END FIX**
 
@@ -1934,18 +1941,17 @@ async function loadCheckoutPage() {
         return;
     }
     
-    window.currentUser = user; 
+    // Update customer form fields
     const customerNameInput = document.getElementById('customer-name');
-    if (customerNameInput) customerNameInput.value = user.name || '';
+    if (customerNameInput) customerNameInput.value = window.currentUser?.name || '';
     const customerEmailInput = document.getElementById('customer-email');
-    if (customerEmailInput) customerEmailInput.value = user.email || '';
+    if (customerEmailInput) customerEmailInput.value = window.currentUser?.email || '';
     const customerPhoneInput = document.getElementById('customer-phone');
-    if (customerPhoneInput) customerPhoneInput.value = user.mobile || '';
+    if (customerPhoneInput) customerPhoneInput.value = window.currentUser?.mobile || '';
 
-    // Initial coin display and discount calculation
+    // **FIX: Update coin display with the freshly fetched value**
     const coinBalanceDisplay = document.getElementById('coin-balance-display');
-    // FIX: Use the refreshed global state `availableCoins`
-    if (coinBalanceDisplay) coinBalanceDisplay.textContent = `${window.availableCoins || 0} Coins`;
+    if (coinBalanceDisplay) coinBalanceDisplay.textContent = `${availableCoins || 0} Coins`;
     
     // Automatic First Order Discount Logic: Apply max 50 coins automatically on first order
     if (window.currentUser && !window.currentUser.firstOrderPlaced && coinsToApply === 0) {
@@ -1956,7 +1962,9 @@ async function loadCheckoutPage() {
         });
         const maxFirstOrderDiscount = Math.floor(subtotalCalc * 0.5); // 50% max discount
         
-        coinsToApply = Math.min(50, availableCoins, maxFirstOrderDiscount); // Cap at 50, available, and 50% subtotal
+        // Make sure we don't apply more coins than the user has
+        const userAvailableCoins = availableCoins || 0;
+        coinsToApply = Math.min(50, userAvailableCoins, maxFirstOrderDiscount); // Cap at 50, available, and 50% subtotal
         
         const coinsInput = document.getElementById('coins-to-apply');
         if (coinsInput) coinsInput.value = coinsToApply;
