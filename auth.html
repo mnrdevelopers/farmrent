@@ -474,23 +474,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     
     <!-- Firebase Configuration -->
-    <script>
-        // Firebase Configuration
-       const firebaseConfig = {
-  apiKey: "AIzaSyBp1yyC1IF_rmOWwFdZRcbcsCHNbJ3Sdro",
-  authDomain: "mnr-devops-2e97d.firebaseapp.com",
-  projectId: "mnr-devops-2e97d",
-  storageBucket: "mnr-devops-2e97d.firebasestorage.app",
-  messagingSenderId: "464172080556",
-  appId: "1:464172080556:web:e5133cdbe52811eb7aee09",
-  measurementId: "G-L8S57RBM5X"
-};
-
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-    </script>
+    <script src="firebase-config.js"></script>
     
     <!-- Authentication JavaScript -->
     <script>
@@ -711,11 +695,12 @@
         async function handleEmailLogin(email, password) {
             try {
                 showLoading();
-                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                // FIX: Use window.FirebaseAuth and window.FirebaseDB globally initialized in firebase-config.js
+                const userCredential = await window.FirebaseAuth.signInWithEmailAndPassword(email, password);
                 const user = userCredential.user;
                 
                 // Get user data from Firestore
-                const userDoc = await db.collection('users').doc(user.uid).get();
+                const userDoc = await window.FirebaseDB.collection('users').doc(user.uid).get();
                 
                 if (!userDoc.exists) {
                     throw new Error('User data not found');
@@ -725,13 +710,13 @@
                 
                 // Check if user has the correct role
                 if (userData.role !== role) {
-                    await auth.signOut();
+                    await window.FirebaseAuth.signOut();
                     throw new Error(`This account is registered as ${userData.role}, not ${role}`);
                 }
                 
                 // Check if seller is approved
                 if (role === 'seller' && userData.status !== 'approved') {
-                    await auth.signOut();
+                    await window.FirebaseAuth.signOut();
                     throw new Error('Your seller account is pending approval. Please contact admin.');
                 }
                 
@@ -781,7 +766,7 @@
                 showLoading();
                 
                 // Create user in Firebase Auth
-                const userCredential = await auth.createUserWithEmailAndPassword(
+                const userCredential = await window.FirebaseAuth.createUserWithEmailAndPassword(
                     userData.email, 
                     userData.password
                 );
@@ -819,7 +804,7 @@
                 }
                 
                 // Save user data to Firestore
-                await db.collection('users').doc(user.uid).set(userDoc);
+                await window.FirebaseDB.collection('users').doc(user.uid).set(userDoc);
                 
                 // Send email verification
                 await user.sendEmailVerification();
@@ -879,22 +864,22 @@
                 provider.addScope('email');
                 provider.addScope('profile');
                 
-                const result = await auth.signInWithPopup(provider);
+                const result = await window.FirebaseAuth.signInWithPopup(provider);
                 const user = result.user;
                 
                 // Check if user exists in Firestore
-                const userDoc = await db.collection('users').doc(user.uid).get();
+                const userDoc = await window.FirebaseDB.collection('users').doc(user.uid).get();
                 
                 if (userDoc.exists) {
                     // Existing user - check role
                     const userData = userDoc.data();
                     if (userData.role !== role) {
-                        await auth.signOut();
+                        await window.FirebaseAuth.signOut();
                         throw new Error(`This account is registered as ${userData.role}, not ${role}`);
                     }
                     
                     if (role === 'seller' && userData.status !== 'approved') {
-                        await auth.signOut();
+                        await window.FirebaseAuth.signOut();
                         throw new Error('Your seller account is pending approval.');
                     }
                     
@@ -947,11 +932,11 @@
                         userData.village = ''; 
                     }
                     
-                    await db.collection('users').doc(user.uid).set(userData);
+                    await window.FirebaseDB.collection('users').doc(user.uid).set(userData);
                 }
                 
                 // Store in localStorage
-                const finalUserDoc = await db.collection('users').doc(user.uid).get();
+                const finalUserDoc = await window.FirebaseDB.collection('users').doc(user.uid).get();
                 localStorage.setItem('currentUser', JSON.stringify({
                     uid: user.uid,
                     email: user.email,
@@ -982,7 +967,7 @@
             
             try {
                 showLoading();
-                await auth.sendPasswordResetEmail(email);
+                await window.FirebaseAuth.sendPasswordResetEmail(email);
                 showAlert('Password reset email sent! Check your inbox.', 'success');
                 
                 // Hide modal
@@ -1158,10 +1143,11 @@
         });
         
         // Check if user is already logged in
-        auth.onAuthStateChanged(async (user) => {
+        window.FirebaseAuth.onAuthStateChanged(async (user) => {
             if (user) {
                 try {
-                    const userDoc = await db.collection('users').doc(user.uid).get();
+                    // FIX: Use global FirebaseDB instance
+                    const userDoc = await window.FirebaseDB.collection('users').doc(user.uid).get();
                     if (userDoc.exists) {
                         const userData = userDoc.data();
                         if (userData.role === role) {
@@ -1187,6 +1173,14 @@
         document.addEventListener('DOMContentLoaded', () => {
             initializeRole();
         });
+        
+        // Export needed functions for global access (e.g., resetPassword modal click)
+        window.togglePasswordVisibility = togglePasswordVisibility;
+        window.showResetPassword = showResetPassword;
+        window.resetPassword = resetPassword;
+        window.signInWithGoogle = signInWithGoogle;
+        window.switchTab = switchTab;
+
     </script>
     <!-- FIX: Moved script.js here to ensure populateLocationFields is defined when needed -->
     <script src="script.js"></script> 
