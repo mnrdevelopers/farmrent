@@ -1951,15 +1951,17 @@ async function checkCustomerNotifications() {
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
 
-        // Fetch all recent orders for the customer
+        // Fetch all recent orders for the customer, sorting by UPDATED AT time 
+        // to catch recent status changes.
         const ordersSnapshot = await ordersCollectionRef
             .where('userId', '==', window.currentUser.uid)
-            .orderBy('createdAt', 'desc')
+            .orderBy('updatedAt', 'desc') // **FIX 1: Use updatedAt for real-time relevance**
             .limit(10) // Limit to 10 most recent orders
             .get();
 
         const notifications = [];
-        let unreadCount = 0;
+        let orderUnreadCount = 0; 
+        let chatUnreadCount = 0; // **FIX 2: Initialize chat count**
         
         // Get the minimum timestamp to be considered 'unread' (which is the last clear time)
         const unreadThreshold = lastClearTime;
@@ -1994,19 +1996,15 @@ async function checkCustomerNotifications() {
                 return;
             }
             
-            // Determine unread status: Any new critical status created *after* the last clear time
-            // Note: We use the *updatedAt* field or *createdAt* if available, but for status changes, 
-            // relying on order creation time isn't accurate. Since we don't have a specific `statusChangedAt` field, 
-            // we will rely on the order's `createdAt` for now, assuming only new orders trigger the alert.
-            // **IMPROVEMENT**: In a real-world scenario, you would track status change events/timestamps in a sub-collection.
-            // For now, we compare the order creation time to the last clear time.
-            const orderTimestamp = order.createdAt?.toMillis() || 0;
+            // Determine unread status: Any new critical status updated *after* the last clear time
+            // **FIX 1: Use updatedAt for comparison**
+            const orderTimestamp = order.updatedAt?.toMillis() || order.createdAt?.toMillis() || 0; 
             
-            // We consider an order an "alert" if it has a critical status AND was created AFTER the last clear time
+            // Only count if it's a critical status and updated after last clear time
             const isAlert = orderTimestamp > unreadThreshold;
             
             if (isAlert) {
-                 unreadCount++;
+                 orderUnreadCount++;
             }
             
             notifications.push({
@@ -2014,11 +2012,42 @@ async function checkCustomerNotifications() {
                 message,
                 icon,
                 badgeClass,
-                date: order.createdAt,
+                date: order.updatedAt || order.createdAt, // Use updatedAt for sorting relevance
                 status: order.status,
                 isUnread: isAlert
             });
         });
+
+        // **FIX 2: Add Chat Notifications**
+        const conversationsSnapshot = await window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations')
+            .where('customerId', '==', window.currentUser.uid)
+            .get();
+            
+        conversationsSnapshot.forEach(doc => {
+            const chat = doc.data();
+            chatUnreadCount += chat.unreadCountCustomer || 0;
+            
+            // Also add chat message to dropdown notifications list (if space permits)
+            if (chat.unreadCountCustomer > 0) { // Check chat count directly, not notification list length
+                 // Add chat notification to the list
+                 notifications.push({
+                    id: doc.id,
+                    message: `New message from ${chat.sellerBusinessName}: ${chat.lastMessage.substring(0, 20)}...`,
+                    icon: 'fas fa-comment-dots',
+                    badgeClass: 'bg-info',
+                    date: chat.updatedAt,
+                    status: 'chat_unread',
+                    isUnread: true 
+                 });
+            }
+        });
+        
+        // Sort all notifications (orders + chat) by date
+        notifications.sort((a, b) => (b.date?.toMillis() || 0) - (a.date?.toMillis() || 0));
+
+        // Final unread count includes both Order Alerts and Chat Messages
+        const totalUnreadCount = orderUnreadCount + chatUnreadCount;
+        // End of FIX 2
 
         // Update UI
         const countElement = document.getElementById('customer-notification-count');
@@ -2029,7 +2058,7 @@ async function checkCustomerNotifications() {
 
         if (countElement) {
              // Only show count if greater than 0 and the user is logged in
-             countElement.textContent = window.currentUser && unreadCount > 0 ? unreadCount : '';
+             countElement.textContent = window.currentUser && totalUnreadCount > 0 ? totalUnreadCount : '';
         }
         if (listElement) listElement.innerHTML = '<li><h6 class="dropdown-header">Alerts & Updates</h6></li>';
 
@@ -2038,10 +2067,37 @@ async function checkCustomerNotifications() {
         } else {
             criticalNotifications.forEach(notif => {
                 const timeAgo = notif.date ? window.firebaseHelpers.formatTimeAgo(notif.date) : 'N/A';
-                const unreadClass = notif.isUnread ? 'fw-bold' : 'text-muted'; // Highlight unread
+                // Chat messages or truly unread orders are bolded
+                const unreadClass = notif.isUnread ? 'fw-bold' : 'text-muted'; 
+                
+                // Determine the correct URL for the notification
+                let linkUrl = 'orders.html';
+                if (notif.status === 'chat_unread') {
+                    // Chat notifications open the chat widget.
+                    // The chat ID is orderId_sellerId_customerId. We need orderId and sellerId.
+                    const parts = notif.id.split('_');
+                    const orderId = parts[0];
+                    const sellerId = parts[1];
+                    const sellerName = notif.message.split(':')[0].replace('New message from ', '').trim();
+                    const chatAction = `openOrderChat('${orderId}', '${sellerId}', '${sellerName}')`;
+                    
+                    if (listElement) listElement.innerHTML += `
+                        <li>
+                            <a class="dropdown-item d-flex justify-content-between align-items-center ${unreadClass}" href="#" onclick="${chatAction}" title="${notif.message}">
+                                <div>
+                                    <span class="badge ${notif.badgeClass} me-2"><i class="${notif.icon}"></i></span>
+                                    ${notif.message.substring(0, 30)}...
+                                </div>
+                                <small class="text-muted ms-2">${timeAgo}</small>
+                            </a>
+                        </li>
+                    `;
+                    return; // Skip the default link structure below
+                }
+                
                 if (listElement) listElement.innerHTML += `
                     <li>
-                        <a class="dropdown-item d-flex justify-content-between align-items-center ${unreadClass}" href="orders.html" title="${notif.message}">
+                        <a class="dropdown-item d-flex justify-content-between align-items-center ${unreadClass}" href="${linkUrl}" title="${notif.message}">
                             <div>
                                 <span class="badge ${notif.badgeClass} me-2"><i class="${notif.icon}"></i></span>
                                 ${notif.message.substring(0, 30)}...
@@ -3005,7 +3061,8 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, total
             paymentStatus: paymentStatus, // Use dynamic status ('paid' or 'pending')
             paymentMethod: paymentMethod, // Use dynamic method
             transactionId: transactionId,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp() // Ensure updatedAt is set on creation
         };
 
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -3563,7 +3620,8 @@ async function cancelOrder(orderId) {
 
             await orderRef.update({
                 status: 'cancelled',
-                cancellationRequestedAt: firebase.firestore.FieldValue.serverTimestamp()
+                cancellationRequestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp() // Update timestamp to trigger seller notification
             });
             window.firebaseHelpers.showAlert('Cancellation requested. Status will be updated shortly.', 'success');
             
@@ -3639,7 +3697,8 @@ async function submitReview() {
             .collection('public').doc('data').collection('orders').doc(orderId);
         
         await orderRef.update({
-            isReviewed: true
+            isReviewed: true,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp() // Update timestamp
         });
 
         // 3. Update Equipment Ratings (Iterate through items in the order)
@@ -3929,6 +3988,8 @@ async function loadChatMessages(chatId, titleName, sellerId) {
         
         // Mark read
         chatDocRef.update({ unreadCountCustomer: 0 });
+        // After reading messages, manually trigger notification check to clear badge
+        checkCustomerNotifications();
     });
 
     // Listen for Typing
