@@ -59,17 +59,26 @@
             <h1 class="section-title">Your Profile</h1>
             <div class="row">
                 <div class="col-lg-4 mb-4">
-                    <div class="card p-4 text-center shadow-sm">
+                    <div class="card p-4 text-center shadow-sm h-100">
                         <i class="fas fa-user-circle fa-5x text-primary mb-3"></i>
                         <h4 id="profile-user-name">Loading...</h4>
                         <p class="text-muted small">Member Since: <span id="join-date">N/A</span></p>
+                        
+                        <!-- NEW: Coin Balance Summary -->
+                        <div class="mt-3 p-3 bg-light rounded text-center border">
+                            <i class="fas fa-coins fa-2x text-warning mb-2"></i>
+                            <h5 class="mb-0 text-dark">Coin Balance</h5>
+                            <strong class="h3 text-success" id="profile-coin-balance">0 Coins</strong>
+                        </div>
+                        <!-- END NEW -->
+
                         <button class="btn btn-outline-danger mt-3" onclick="logout()">
                             <i class="fas fa-sign-out-alt me-2"></i>Logout
                         </button>
                     </div>
                 </div>
                 <div class="col-lg-8">
-                    <div class="card p-4 shadow-sm">
+                    <div class="card p-4 shadow-sm mb-4">
                         <h4 class="mb-4 text-primary">Update Details</h4>
                         <form id="profile-form">
                             <div class="row">
@@ -126,6 +135,30 @@
                             </button>
                         </form>
                     </div>
+
+                    <!-- NEW: Referral Program Section -->
+                    <div class="card p-4 shadow-sm">
+                        <h4 class="mb-4 text-warning"><i class="fas fa-share-alt me-2"></i>Referral Program</h4>
+                        <div class="alert alert-success">
+                            <i class="fas fa-gift me-2"></i>
+                            Refer a friend! When they sign up using your code and place their first order, they will receive **100 Coins** instantly for their next order or a discount on their current one (up to 50 coins if it's their first order), and you will also earn a reward (feature coming soon).
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Your Unique Referral Code (8 Characters)</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control bg-light text-center fw-bold text-uppercase" id="referral-code-display" readonly value="LOADING...">
+                                <button class="btn btn-outline-primary" type="button" id="copy-code-btn" onclick="copyReferralCode()">
+                                    <i class="fas fa-copy"></i> Copy Code
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Sharable Referral Link</label>
+                            <textarea class="form-control bg-light small" id="referral-link-display" rows="2" readonly>Loading...</textarea>
+                            <small class="text-muted">Share this link directly via WhatsApp or Email.</small>
+                        </div>
+                    </div>
+                    <!-- END NEW -->
                 </div>
             </div>
         </div>
@@ -233,5 +266,21 @@
     
     <!-- Custom JavaScript -->
     <script src="script.js"></script>
+
+    <script>
+        // Custom function for copying referral code (since execCommand is safer in IFrames)
+        function copyReferralCode() {
+            const codeInput = document.getElementById('referral-code-display');
+            const codeLink = document.getElementById('referral-link-display');
+            
+            // Prioritize copying the link
+            codeLink.select();
+            document.execCommand('copy');
+            
+            // Deselect and notify
+            window.getSelection().removeAllRanges();
+            window.firebaseHelpers.showAlert('Referral Link copied to clipboard!', 'success');
+        }
+    </script>
 </body>
 </html>
