@@ -4,6 +4,17 @@ let equipmentData = [];
 let ordersData = [];
 let earningsChart = null;
 let detailedEarningsChart = null;
+let sellerNotifications = [];
+
+// Chat Globals
+let sellerActiveChatId = null;
+let sellerChatUnsubscribe = null;
+let sellertypingTimeout = null;
+
+
+// Seller Alerts
+const SELLER_ALERTS_COLLECTION = 'seller_alerts';
+let dismissedAlerts = new Set();
 
 // Image Library
 const libraryImages = [
@@ -22,6 +33,14 @@ function getPublicCollectionRef(collectionName) {
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     return window.FirebaseDB.collection('artifacts').doc(appId)
         .collection('public').doc('data').collection(collectionName);
+}
+
+function getSellerAlertsRef() {
+    if (!window.currentUser || !window.FirebaseDB) return null;
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    
+    return window.FirebaseDB.collection('artifacts').doc(appId)
+        .collection('users').doc(window.currentUser.uid).collection(SELLER_ALERTS_COLLECTION).doc('dismissed');
 }
 
 // --- INITIALIZATION ---
@@ -60,14 +79,56 @@ window.loadSellerDashboard = async () => {
     
     // Update UI
     updateSellerInfo();
+    setupOnlineStatusToggle(); // NEW: Online status toggle
     
     // Load data
+    await loadDismissedAlerts();
     loadDashboardData();
     loadProfileData();
     
     if (loadingEl) loadingEl.classList.remove('active');
     showSection('dashboard');
     loadLibraryImages(); // Load image library
+}
+
+// --- ONLINE STATUS MANAGEMENT ---
+function setupOnlineStatusToggle() {
+    const toggle = document.getElementById('seller-online-toggle');
+    const statusText = document.getElementById('online-status-text');
+    
+    if (!toggle || !window.currentUser) return;
+
+    // Set initial state
+    const isOnline = sellerData.isOnline || false;
+    toggle.checked = isOnline;
+    updateStatusText(isOnline);
+
+    // Add listener
+    toggle.addEventListener('change', async (e) => {
+        const newStatus = e.target.checked;
+        updateStatusText(newStatus);
+        
+        try {
+            await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update({
+                isOnline: newStatus,
+                lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            window.firebaseHelpers.showAlert(newStatus ? 'You are now Online' : 'You are now Offline', 'success');
+        } catch (error) {
+            console.error('Error updating status:', error);
+            toggle.checked = !newStatus;
+            updateStatusText(!newStatus);
+            window.firebaseHelpers.showAlert('Failed to update status', 'danger');
+        }
+    });
+}
+
+function updateStatusText(isOnline) {
+    const statusText = document.getElementById('online-status-text');
+    if (statusText) {
+        statusText.textContent = isOnline ? 'Status: Online' : 'Status: Offline';
+        statusText.className = isOnline ? 'me-2 fw-bold text-success' : 'me-2 fw-bold text-muted';
+    }
 }
 
 // --- SELLER INFO ---
@@ -155,6 +216,10 @@ function showSection(sectionId) {
         case 'earnings':
             loadEarningsData();
             break;
+        case 'notifications':
+            loadNotifications();
+            loadSellerConversations();
+            break;
         case 'reviews':
             loadReviews();
             break;
@@ -169,7 +234,10 @@ async function loadDashboardData() {
     try {
         if (!window.currentUser) return;
         
-        const stats = await calculateSellerStats();
+        const [stats, notificationData] = await Promise.all([
+            calculateSellerStats(),
+            calculateSellerNotifications()
+        ]);
         
         // Update stats cards
         const totalEarningsEl = document.getElementById('total-earnings');
@@ -184,6 +252,21 @@ async function loadDashboardData() {
         const sellerRatingEl = document.getElementById('seller-rating');
         if (sellerRatingEl) sellerRatingEl.textContent = stats.rating.toFixed(1);
         
+        // Update notification badges (now includes chat messages)
+        const newMessagesCountEl = document.getElementById('new-messages-count');
+        if (newMessagesCountEl) newMessagesCountEl.textContent = notificationData.unreadCount || '';
+        
+        const newMessagesCountMobileEl = document.getElementById('new-messages-count-mobile');
+        if (newMessagesCountMobileEl) newMessagesCountMobileEl.textContent = notificationData.unreadCount || '';
+        
+        const notificationCountEl = document.getElementById('notification-count');
+        if (notificationCountEl) notificationCountEl.textContent = notificationData.unreadCount || '';
+        
+        const quickAlertCountEl = document.getElementById('quick-alert-count');
+        if (quickAlertCountEl) quickAlertCountEl.textContent = notificationData.unreadCount || '';
+
+        displayTopNotifications(notificationData.recentNotifications);
+        
         // Load recent orders
         await loadRecentOrders();
         
@@ -195,6 +278,254 @@ async function loadDashboardData() {
         window.firebaseHelpers.showAlert('Error loading dashboard data', 'danger');
     }
 }
+
+// --- NOTIFICATIONS & ALERTS ---
+async function loadDismissedAlerts() {
+    const docRef = getSellerAlertsRef();
+    if (!docRef) return;
+    
+    try {
+        const doc = await docRef.get();
+        if (doc.exists && doc.data().alerts) {
+            dismissedAlerts = new Set(doc.data().alerts);
+        }
+    } catch (error) {
+        console.error("Error loading dismissed alerts:", error);
+    }
+}
+
+async function markAlertAsRead(orderId) {
+    if (!orderId || dismissedAlerts.has(orderId)) return;
+
+    dismissedAlerts.add(orderId);
+    const docRef = getSellerAlertsRef();
+    if (!docRef) return;
+
+    try {
+        await docRef.set({
+            alerts: Array.from(dismissedAlerts),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        
+        loadDashboardData();
+    } catch (error) {
+        console.error("Error marking alert as read:", error);
+        window.firebaseHelpers.showAlert('Error dismissing alert. Please refresh.', 'danger');
+    }
+}
+window.markOrderAlertAsRead = markAlertAsRead;
+
+async function calculateSellerNotifications() {
+    if (!window.currentUser) return { unreadCount: 0, recentNotifications: [] };
+
+    let notifications = [];
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+    try {
+        // 1. Pending Orders and Returns (Alerts)
+        const ordersSnapshot = await getPublicCollectionRef('orders')
+            .where('sellerIds', 'array-contains', window.currentUser.uid)
+            .where('status', 'in', ['pending', 'returned'])
+            .orderBy('createdAt', 'desc')
+            .get();
+
+        ordersSnapshot.forEach(doc => {
+            const order = doc.data();
+            const orderId = doc.id;
+            const status = order.status;
+            const itemNames = order.equipmentNames.split(',').slice(0, 2).join(', ');
+            
+            let message = '';
+            if (status === 'pending') {
+                 message = `New Rental Request: ${itemNames}`;
+            } else if (status === 'returned') {
+                 message = `Equipment Returned: ${itemNames}`;
+            }
+            
+            const isNewAlert = !dismissedAlerts.has(orderId);
+
+            notifications.push({
+                id: orderId,
+                type: status === 'pending' ? 'order_request' : 'order_returned',
+                message: message,
+                relatedId: orderId,
+                date: order.createdAt,
+                read: !isNewAlert,
+                action: () => viewOrderDetails(orderId)
+            });
+        });
+
+        // 2. New Reviews (Alerts)
+        const yesterday = firebase.firestore.Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
+        const reviewsSnapshot = await window.FirebaseDB.collection('reviews')
+            .where('sellerId', '==', window.currentUser.uid)
+            .where('createdAt', '>', yesterday)
+            .orderBy('createdAt', 'desc')
+            .get();
+
+        reviewsSnapshot.forEach(doc => {
+            const review = doc.data();
+            // Note: Since reviews don't have a specific read/dismiss mechanism, 
+            // they are treated as unread if they were created recently (last 24h).
+            notifications.push({
+                id: doc.id,
+                type: 'new_review',
+                message: `New Review (${review.rating}★) for ${review.equipmentName || 'Equipment'}`,
+                relatedId: doc.id,
+                date: review.createdAt,
+                read: false,
+                action: () => showSection('reviews')
+            });
+        });
+
+        // 3. Unread Chat Messages (Communication) <-- FIX ADDED HERE
+        const conversationsSnapshot = await window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations')
+            .where('sellerId', '==', window.currentUser.uid)
+            .get();
+            
+        let unreadChatCount = 0;
+        
+        conversationsSnapshot.forEach(doc => {
+            const chat = doc.data();
+            unreadChatCount += chat.unreadCountSeller || 0;
+            
+            // Optionally add the latest chat to the notifications list if it has unread messages
+            if (chat.unreadCountSeller > 0 && notifications.length < 10) {
+                 notifications.push({
+                    id: doc.id,
+                    type: 'new_chat_message',
+                    message: `New message from ${chat.customerName}: ${chat.lastMessage.substring(0, 20)}...`,
+                    relatedId: doc.id,
+                    date: chat.updatedAt,
+                    read: false, // Mark as unread since unreadCountSeller > 0
+                    action: () => { 
+                         showSection('notifications');
+                         // This automatically focuses on the chat list which is the primary UI for conversations
+                    }
+                 });
+            }
+        });
+
+
+        notifications.sort((a, b) => (b.date?.toDate() || 0) - (a.date?.toDate() || 0));
+        
+        sellerNotifications = notifications;
+        
+        // Count unread order and review alerts that were not manually dismissed
+        const unreadAlerts = notifications.filter(n => n.type.startsWith('order_') || n.type === 'new_review').filter(n => !n.read).length;
+        
+        // Final unread count includes both Alerts and Chat Messages
+        const totalUnreadCount = unreadAlerts + unreadChatCount;
+        
+        return { unreadCount: totalUnreadCount, recentNotifications: notifications };
+
+    } catch (error) {
+        console.error('Error calculating seller notifications:', error);
+        return { unreadCount: 0, recentNotifications: [] };
+    }
+}
+
+function displayTopNotifications(notifications) {
+    const list = document.getElementById('top-notifications-list');
+    if (!list) return;
+
+    list.innerHTML = '<li><h6 class="dropdown-header">Notifications</h6></li>';
+
+    const recentAlerts = notifications.slice(0, 5);
+
+    if (recentAlerts.length === 0) {
+        list.innerHTML += '<li><a class="dropdown-item" href="#">No pending alerts</a></li>';
+        return;
+    }
+
+    recentAlerts.forEach(notification => {
+        const timeAgo = notification.date ? window.firebaseHelpers.formatTimeAgo(notification.date) : 'N/A';
+        let icon = 'fas fa-info-circle';
+        let iconClass = 'text-muted';
+
+        if (notification.type === 'order_request') {
+            icon = 'fas fa-clipboard-list';
+            iconClass = 'text-warning';
+        } else if (notification.type === 'order_returned') {
+            icon = 'fas fa-undo-alt';
+            iconClass = 'text-primary';
+        } else if (notification.type === 'new_review') {
+            icon = 'fas fa-star';
+            iconClass = 'text-success';
+        } else if (notification.type === 'new_chat_message') { // NEW CHAT ICON
+             icon = 'fas fa-comment-dots';
+             iconClass = 'text-info';
+        }
+        
+        list.innerHTML += `
+            <li>
+                <a class="dropdown-item" href="#" 
+                   onclick="handleNotificationClick('${notification.id}')"
+                   title="${notification.message}">
+                    <i class="${icon} me-2 ${iconClass}"></i>
+                    ${notification.message.substring(0, 35)}${notification.message.length > 35 ? '...' : ''} 
+                    <small class="float-end text-muted">${timeAgo}</small>
+                </a>
+            </li>
+        `;
+    });
+
+    list.innerHTML += '<li><hr class="dropdown-divider"></li>';
+    list.innerHTML += '<li><a class="dropdown-item text-center" href="#" onclick="showSection(\'notifications\')">View All Alerts</a></li>';
+}
+
+function handleNotificationClick(notificationId) {
+    const notification = sellerNotifications.find(n => n.id === notificationId);
+    if (notification && notification.action) {
+        if (notification.type === 'order_request') {
+             markAlertAsRead(notification.relatedId);
+             viewOrderDetails(notification.relatedId);
+        } else if (notification.type === 'order_returned') {
+             viewOrderDetails(notification.relatedId);
+        } else if (notification.type === 'new_chat_message') {
+             // For chat message, navigate to notifications/chat section
+             showSection('notifications');
+        }
+        notification.action();
+    }
+}
+
+async function markAllOrderAlertsAsRead() {
+    if (!window.currentUser) {
+        window.firebaseHelpers.showAlert('Please log in to clear alerts.', 'danger');
+        return;
+    }
+
+    const pendingOrderIds = sellerNotifications
+        .filter(n => n.type === 'order_request' && !n.read)
+        .map(n => n.relatedId);
+
+    if (pendingOrderIds.length === 0) {
+        window.firebaseHelpers.showAlert('No pending order alerts to clear.', 'info');
+        return;
+    }
+
+    pendingOrderIds.forEach(id => dismissedAlerts.add(id));
+    
+    const docRef = getSellerAlertsRef();
+    if (!docRef) return;
+
+    try {
+        await docRef.set({
+            alerts: Array.from(dismissedAlerts),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        
+        window.firebaseHelpers.showAlert(`Cleared ${pendingOrderIds.length} order alerts.`, 'success');
+        loadDashboardData();
+        loadNotifications();
+
+    } catch (error) {
+        console.error("Error clearing all alerts:", error);
+        window.firebaseHelpers.showAlert('Error clearing all alerts. Please refresh.', 'danger');
+    }
+}
+window.markAllOrderAlertsAsRead = markAllOrderAlertsAsRead;
 
 // --- STATISTICS ---
 async function calculateSellerStats() {
@@ -1437,6 +1768,225 @@ async function loadTopEquipment() {
         
     } catch (error) {
         console.error('Error loading top equipment:', error);
+    }
+}
+
+// --- NOTIFICATIONS UI ---
+async function loadNotifications() {
+    if (!window.currentUser) return;
+    
+    const notificationData = await calculateSellerNotifications();
+    const notifications = notificationData.recentNotifications;
+    
+    const listContainer = document.getElementById('seller-alerts-list');
+    if (!listContainer) return;
+    listContainer.innerHTML = '';
+
+    if (notifications.length === 0) {
+        listContainer.innerHTML = `
+            <div class="text-center py-5">
+                <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
+                <h4>All clear!</h4>
+                <p class="text-muted">You have no pending rental requests or new reviews.</p>
+            </div>
+        `;
+    } else {
+        notifications.forEach(notification => {
+            const timeAgo = notification.date ? window.firebaseHelpers.formatTimeAgo(notification.date) : 'N/A';
+            let typeIcon = 'fas fa-info-circle';
+            let badgeColor = 'bg-info';
+            let actionText = 'View Details';
+            let isOrder = false;
+    
+            if (notification.type === 'order_request') {
+                typeIcon = 'fas fa-clipboard-list';
+                badgeColor = 'bg-warning';
+                actionText = 'Review Request';
+                isOrder = true;
+            } else if (notification.type === 'order_returned') {
+                typeIcon = 'fas fa-undo-alt';
+                badgeColor = 'bg-primary';
+                actionText = 'Mark Completed';
+                isOrder = true;
+            } else if (notification.type === 'new_review') {
+                typeIcon = 'fas fa-star';
+                badgeColor = 'bg-success';
+                actionText = 'View Review';
+            } else if (notification.type === 'new_chat_message') {
+                typeIcon = 'fas fa-comment-dots';
+                badgeColor = 'bg-info';
+                actionText = 'Open Chat';
+            }
+            
+            const unreadClass = (isOrder && !notification.read) || notification.type === 'new_chat_message' ? 'notification-unread' : '';
+    
+            listContainer.innerHTML += `
+                <div class="list-group-item notification-item ${unreadClass} d-flex justify-content-between align-items-center p-3 mb-2 rounded shadow-sm"
+                     onclick="handleNotificationClick('${notification.id}')">
+                    <div class="d-flex align-items-center">
+                        <i class="${typeIcon} fa-2x me-3" style="color: var(--sun-yellow);"></i>
+                        <div>
+                            <h6 class="mb-1">${notification.message}</h6>
+                            <small class="text-muted">
+                                <span class="badge ${badgeColor}">${notification.type.replace('_', ' ')}</span>
+                                <span class="ms-2">Received: ${timeAgo}</span>
+                            </small>
+                        </div>
+                    </div>
+                    <div>
+                        <button class="btn btn-sm btn-outline-primary">
+                            ${actionText} <i class="fas fa-arrow-right ms-1"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+}
+
+// --- CHAT SYSTEM ---
+async function loadSellerConversations() {
+    const chatListContainer = document.getElementById('active-chats-list');
+    if (!chatListContainer) return;
+    
+    chatListContainer.innerHTML = '<div class="text-muted small">Loading...</div>';
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const conversationsRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations');
+    
+    conversationsRef
+        .where('sellerId', '==', window.currentUser.uid)
+        .orderBy('updatedAt', 'desc')
+        .onSnapshot(snapshot => {
+            chatListContainer.innerHTML = '';
+            
+            if (snapshot.empty) {
+                chatListContainer.innerHTML = '<div class="text-muted small p-2">No active conversations.</div>';
+                return;
+            }
+
+            snapshot.forEach(doc => {
+                const chat = doc.data();
+                const isActive = doc.id === sellerActiveChatId ? 'border-primary bg-light' : '';
+                const unread = chat.unreadCountSeller > 0 ? `<span class="badge bg-danger rounded-pill ms-1">${chat.unreadCountSeller}</span>` : '';
+                
+                chatListContainer.innerHTML += `
+                    <div class="card p-2 shadow-sm border ${isActive}" style="min-width: 180px; cursor: pointer; max-width: 200px;" 
+                         onclick="loadSellerChatMessages('${doc.id}', '${chat.customerName}', '${chat.orderId}')">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong>${chat.customerName}</strong>
+                            ${unread}
+                        </div>
+                        <small class="text-muted text-truncate">${chat.lastMessage || '...'}</small>
+                        <small class="text-muted" style="font-size: 0.65rem;">Order #${chat.orderId.substring(0,6)}</small>
+                    </div>
+                `;
+            });
+        }, error => {
+            console.error("Error loading seller chats:", error);
+            chatListContainer.innerHTML = '<div class="text-danger small">Error loading chats.</div>';
+        });
+}
+
+function loadSellerChatMessages(chatId, customerName, orderId) {
+    sellerActiveChatId = chatId;
+    
+    document.getElementById('chat-empty-state').style.display = 'none';
+    document.getElementById('seller-chat-interface').style.display = 'flex';
+    document.getElementById('chat-customer-name').textContent = customerName;
+    document.getElementById('chat-order-id').textContent = `Order #${orderId.substring(0,8)}`;
+    
+    const messagesContainer = document.getElementById('chat-messages');
+    messagesContainer.innerHTML = `<div class="text-center py-5 text-muted"><p>Loading chat...</p></div>`;
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const chatDocRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations').doc(chatId);
+    const messagesRef = chatDocRef.collection('messages');
+
+    // 1. Listen for Messages
+    if (sellerChatUnsubscribe) sellerChatUnsubscribe();
+
+    sellerChatUnsubscribe = messagesRef.orderBy('timestamp', 'asc').onSnapshot(snapshot => {
+        messagesContainer.innerHTML = '';
+        
+        if (snapshot.empty) {
+            messagesContainer.innerHTML = '<div class="text-center text-muted mt-5"><p>No messages yet.</p></div>';
+        } else {
+            snapshot.forEach(doc => {
+                const msg = doc.data();
+                const isMe = msg.senderId === window.currentUser.uid;
+                const date = msg.timestamp ? msg.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '...';
+                
+                messagesContainer.innerHTML += `
+                    <div style="display: flex; justify-content: ${isMe ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
+                        <div class="message-bubble ${isMe ? 'message-sent' : 'message-received'}">
+                            ${msg.text}
+                            <span class="message-time">${date}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        chatDocRef.update({ unreadCountSeller: 0 });
+    });
+
+    // 2. Listen for Customer Typing Status
+    chatDocRef.onSnapshot(doc => {
+        const data = doc.data();
+        const indicator = document.getElementById('seller-typing-indicator');
+        if (data && data.typing && data.typing.customer) {
+            indicator.style.display = 'block';
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        } else {
+            indicator.style.display = 'none';
+        }
+    });
+
+    // 3. Handle Seller Typing Input
+    const input = document.getElementById('message-input');
+    input.oninput = () => {
+        chatDocRef.set({ typing: { seller: true } }, { merge: true });
+        
+        clearTimeout(sellertypingTimeout);
+        sellertypingTimeout = setTimeout(() => {
+            chatDocRef.set({ typing: { seller: false } }, { merge: true });
+        }, 2000);
+    };
+    
+    input.onkeypress = (e) => {
+        if (e.key === 'Enter') sendMessage();
+    };
+}
+
+async function sendMessage() {
+    const input = document.getElementById('message-input');
+    const text = input.value.trim();
+    if (!text || !sellerActiveChatId) return;
+    
+    input.value = ''; 
+    
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const chatRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations').doc(sellerActiveChatId);
+    
+    try {
+        clearTimeout(sellertypingTimeout);
+        chatRef.set({ typing: { seller: false } }, { merge: true });
+
+        await chatRef.collection('messages').add({
+            senderId: window.currentUser.uid,
+            text: text,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        await chatRef.update({
+            lastMessage: text,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            unreadCountCustomer: firebase.firestore.FieldValue.increment(1)
+        });
+    } catch (error) {
+        console.error("Error sending message:", error);
     }
 }
 
