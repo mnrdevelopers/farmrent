@@ -162,7 +162,7 @@ async function loadDashboardData() {
         initializeRevenueChart(stats.revenueData);
         
     } catch (error) {
-        console.error('Error loading dashboard data:', error);
+        console.error('Error loading dashboard data', error);
         window.firebaseHelpers.showAlert('Error loading dashboard data', 'danger');
     }
 }
@@ -2302,7 +2302,7 @@ function listenForAdminChatListUpdates() {
                 return;
             }
 
-            // Map to track read state before rendering for sound notification logic
+            // FIX: Initialize chatStates map locally to prevent global scope pollution or LHS error if not initialized
             const chatStates = {};
             // Correct logic to determine if a chat received a new message, fixing the assignment error
             snapshot.docChanges().forEach(change => {
