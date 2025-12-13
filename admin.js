@@ -87,7 +87,8 @@ function showSection(sectionId) {
     });
     
     // Show selected section
-    document.getElementById(`${sectionId}-section`).style.display = 'block';
+    const targetSection = document.getElementById(`${sectionId}-section`);
+    if(targetSection) targetSection.style.display = 'block';
     
     // Update active nav link
     const navLink = Array.from(document.querySelectorAll('.nav-link')).find(link => 
@@ -528,6 +529,8 @@ async function loadUsers() {
 // Display users in table
 function displayUsers(users) {
     const usersTable = document.getElementById('users-table');
+    if (!usersTable) return;
+
     usersTable.innerHTML = '';
     
     if (users.length === 0) {
@@ -638,7 +641,8 @@ async function viewUserDetails(userId) {
                 </div>
             `;
             
-            document.getElementById('user-modal-body').innerHTML = modalBody;
+            const modalBodyEl = document.getElementById('user-modal-body');
+            if(modalBodyEl) modalBodyEl.innerHTML = modalBody;
             const modal = new bootstrap.Modal(document.getElementById('userModal'));
             modal.show();
         }
@@ -719,6 +723,8 @@ async function loadSellers() {
 // Display sellers
 function displaySellers(sellers) {
     const sellersTable = document.getElementById('sellers-table');
+    if (!sellersTable) return;
+
     sellersTable.innerHTML = '';
     
     if (sellers.length === 0) {
@@ -786,7 +792,12 @@ function filterSellers(status) {
     document.querySelectorAll('#sellers-section .btn-group .btn').forEach(btn => {
         btn.classList.remove('active');
     });
-    event.target.classList.add('active');
+    // This assumes the event is passed correctly in the onclick. 
+    // Since it's called with filterSellers('status'), we need to find the correct button.
+    const activeButton = Array.from(document.querySelectorAll('#sellers-section .btn-group .btn')).find(btn => 
+        btn.getAttribute('onclick')?.includes(`'${status}'`)
+    );
+    if (activeButton) activeButton.classList.add('active');
 }
 
 // Search sellers
@@ -889,6 +900,8 @@ async function loadEquipment() {
 // Display equipment
 function displayEquipment(equipmentList) {
     const equipmentGrid = document.getElementById('equipment-grid');
+    if (!equipmentGrid) return;
+    
     equipmentGrid.innerHTML = '';
     
     if (equipmentList.length === 0) {
@@ -1043,29 +1056,32 @@ async function viewEquipmentDetails(equipmentId) {
                 </div>
             `;
             
-            document.getElementById('equipment-modal-body').innerHTML = modalBody;
+            const modalBodyEl = document.getElementById('equipment-modal-body');
+            if(modalBodyEl) modalBodyEl.innerHTML = modalBody;
             
             // Update modal footer with actions
             const modalFooter = document.querySelector('#equipmentModal .modal-footer');
-            modalFooter.innerHTML = `<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>`;
+            if(modalFooter) {
+                modalFooter.innerHTML = `<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>`;
 
-            if (equipment.status === 'approved') {
-                const isFeatured = equipment.featured === true;
-                modalFooter.innerHTML += `
-                    <button type="button" class="btn ${isFeatured ? 'btn-warning' : 'btn-primary'}" 
-                            onclick="markEquipmentAsFeatured('${equipmentId}', ${!isFeatured}, true)">
-                        <i class="fas fa-star me-2"></i> ${isFeatured ? 'Unmark as Featured' : 'Mark as Featured'}
-                    </button>
-                `;
-            } else if (equipment.status === 'pending') {
-                 modalFooter.innerHTML += `
-                    <button type="button" class="btn btn-success" onclick="approveEquipment('${equipmentId}', true)">
-                        <i class="fas fa-check me-2"></i> Approve
-                    </button>
-                    <button type="button" class="btn btn-danger" onclick="rejectEquipment('${equipmentId}')">
-                        <i class="fas fa-times me-2"></i> Reject
-                    </button>
-                `;
+                if (equipment.status === 'approved') {
+                    const isFeatured = equipment.featured === true;
+                    modalFooter.innerHTML += `
+                        <button type="button" class="btn ${isFeatured ? 'btn-warning' : 'btn-primary'}" 
+                                onclick="markEquipmentAsFeatured('${equipmentId}', ${!isFeatured}, true)">
+                            <i class="fas fa-star me-2"></i> ${isFeatured ? 'Unmark as Featured' : 'Mark as Featured'}
+                        </button>
+                    `;
+                } else if (equipment.status === 'pending') {
+                    modalFooter.innerHTML += `
+                        <button type="button" class="btn btn-success" onclick="approveEquipment('${equipmentId}', true)">
+                            <i class="fas fa-check me-2"></i> Approve
+                        </button>
+                        <button type="button" class="btn btn-danger" onclick="rejectEquipment('${equipmentId}')">
+                            <i class="fas fa-times me-2"></i> Reject
+                        </button>
+                    `;
+                }
             }
 
             const modal = new bootstrap.Modal(document.getElementById('equipmentModal'));
@@ -1092,7 +1108,7 @@ async function approveEquipment(equipmentId, closeAndReload = false) {
         
         if (closeAndReload) {
             const modal = bootstrap.Modal.getInstance(document.getElementById('equipmentModal'));
-            modal.hide();
+            if(modal) modal.hide();
         }
         
         loadDashboardData();
@@ -1141,7 +1157,7 @@ async function markEquipmentAsFeatured(equipmentId, isFeatured, closeAndReload =
         
         if (closeAndReload) {
             const modal = bootstrap.Modal.getInstance(document.getElementById('equipmentModal'));
-            modal.hide();
+            if(modal) modal.hide();
         }
 
         loadEquipment(); // Reload equipment grid
@@ -1174,6 +1190,8 @@ async function loadOrders() {
 // Display orders
 function displayOrders(orders) {
     const ordersTable = document.getElementById('orders-table');
+    if (!ordersTable) return;
+
     ordersTable.innerHTML = '';
     
     if (orders.length === 0) {
@@ -1300,7 +1318,8 @@ async function viewOrderDetails(orderId) {
                 ` : ''}
             `;
             
-            document.getElementById('order-modal-body').innerHTML = modalBody;
+            const modalBodyEl = document.getElementById('order-modal-body');
+            if(modalBodyEl) modalBodyEl.innerHTML = modalBody;
             const modal = new bootstrap.Modal(document.getElementById('orderModal'));
             modal.show();
         }
@@ -1318,7 +1337,9 @@ function exportOrders() {
 // Load reports
 async function loadReports() {
     try {
-        const period = parseInt(document.getElementById('report-period').value);
+        const periodEl = document.getElementById('report-period');
+        if (!periodEl) return;
+        const period = parseInt(periodEl.value);
         const reportData = await calculateReportData(period);
         
         // Update report stats
@@ -1470,173 +1491,182 @@ async function calculateReportData(periodDays) {
 // Initialize report charts
 function initializeReportCharts(reportData) {
     // Detailed Report Chart
-    const detailedCtx = document.getElementById('detailedReportChart').getContext('2d');
-    if (detailedReportChart) detailedReportChart.destroy();
-    
-    // Generate labels for the period
-    const labels = [];
-    for (let i = reportData.periodDays - 1; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-    }
-    
-    detailedReportChart = new Chart(detailedCtx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: 'Orders',
-                    data: reportData.dailyData.map(d => d.orders),
-                    backgroundColor: '#2196f3',
-                    borderColor: '#1976d2',
-                    borderWidth: 1,
-                    yAxisID: 'y'
-                },
-                {
-                    label: 'Revenue (₹)',
-                    data: reportData.dailyData.map(d => d.revenue),
-                    backgroundColor: '#4caf50',
-                    borderColor: '#388e3c',
-                    borderWidth: 1,
-                    yAxisID: 'y1',
-                    type: 'line'
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    display: true
-                }
+    const detailedCtx = document.getElementById('detailedReportChart')?.getContext('2d');
+    if (detailedCtx) {
+        if (detailedReportChart) detailedReportChart.destroy();
+        
+        // Generate labels for the period
+        const labels = [];
+        for (let i = reportData.periodDays - 1; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+        }
+        
+        detailedReportChart = new Chart(detailedCtx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Orders',
+                        data: reportData.dailyData.map(d => d.orders),
+                        backgroundColor: '#2196f3',
+                        borderColor: '#1976d2',
+                        borderWidth: 1,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Revenue (₹)',
+                        data: reportData.dailyData.map(d => d.revenue),
+                        backgroundColor: '#4caf50',
+                        borderColor: '#388e3c',
+                        borderWidth: 1,
+                        yAxisID: 'y1',
+                        type: 'line'
+                    }
+                ]
             },
-            scales: {
-                y: {
-                    type: 'linear',
-                    display: true,
-                    position: 'left',
-                    title: {
-                        display: true,
-                        text: 'Orders'
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: true
                     }
                 },
-                y1: {
-                    type: 'linear',
-                    display: true,
-                    position: 'right',
-                    title: {
+                scales: {
+                    y: {
+                        type: 'linear',
                         display: true,
-                        text: 'Revenue (₹)'
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: 'Orders'
+                        }
                     },
-                    grid: {
-                        drawOnChartArea: false
-                    },
-                    ticks: {
-                        callback: function(value) {
-                            return '₹' + value.toLocaleString();
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'Revenue (₹)'
+                        },
+                        grid: {
+                            drawOnChartArea: false
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return '₹' + value.toLocaleString();
+                            }
                         }
                     }
                 }
             }
-        }
-    });
+        });
+    }
+
 
     // Order Status Chart
-    const statusCtx = document.getElementById('orderStatusChart').getContext('2d');
-    if (orderStatusChart) orderStatusChart.destroy();
-    
-    orderStatusChart = new Chart(statusCtx, {
-        type: 'doughnut',
-        data: {
-            labels: reportData.orderStatusData.map(item => item.status.charAt(0).toUpperCase() + item.status.slice(1)),
-            datasets: [{
-                data: reportData.orderStatusData.map(item => item.count),
-                backgroundColor: [
-                    '#4caf50',
-                    '#2196f3',
-                    '#ff9800',
-                    '#f44336'
-                ]
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'bottom'
+    const statusCtx = document.getElementById('orderStatusChart')?.getContext('2d');
+    if (statusCtx) {
+        if (orderStatusChart) orderStatusChart.destroy();
+        
+        orderStatusChart = new Chart(statusCtx, {
+            type: 'doughnut',
+            data: {
+                labels: reportData.orderStatusData.map(item => item.status.charAt(0).toUpperCase() + item.status.slice(1)),
+                datasets: [{
+                    data: reportData.orderStatusData.map(item => item.count),
+                    backgroundColor: [
+                        '#4caf50',
+                        '#2196f3',
+                        '#ff9800',
+                        '#f44336'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
                 }
             }
-        }
-    });
+        });
+    }
 
     // Category Chart
-    const categoryCtx = document.getElementById('categoryChart').getContext('2d');
-    if (categoryChart) categoryChart.destroy();
-    
-    categoryChart = new Chart(categoryCtx, {
-        type: 'pie',
-        data: {
-            labels: reportData.categoryData.map(item => item.category),
-            datasets: [{
-                data: reportData.categoryData.map(item => item.count),
-                backgroundColor: [
-                    '#2196f3',
-                    '#4caf50',
-                    '#ff9800',
-                    '#9c27b0',
-                    '#00bcd4'
-                ]
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'bottom'
+    const categoryCtx = document.getElementById('categoryChart')?.getContext('2d');
+    if (categoryCtx) {
+        if (categoryChart) categoryChart.destroy();
+        
+        categoryChart = new Chart(categoryCtx, {
+            type: 'pie',
+            data: {
+                labels: reportData.categoryData.map(item => item.category),
+                datasets: [{
+                    data: reportData.categoryData.map(item => item.count),
+                    backgroundColor: [
+                        '#2196f3',
+                        '#4caf50',
+                        '#ff9800',
+                        '#9c27b0',
+                        '#00bcd4'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
                 }
             }
-        }
-    });
+        });
+    }
 
     // User Growth Chart
-    const userGrowthCtx = document.getElementById('userGrowthChart').getContext('2d');
-    if (userGrowthChart) userGrowthChart.destroy();
-    
-    userGrowthChart = new Chart(userGrowthCtx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Total Users',
-                data: reportData.userGrowthData,
-                borderColor: '#9c27b0',
-                backgroundColor: 'rgba(156, 39, 176, 0.1)',
-                borderWidth: 2,
-                fill: true,
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    display: true
-                }
+    const userGrowthCtx = document.getElementById('userGrowthChart')?.getContext('2d');
+    if (userGrowthCtx) {
+        if (userGrowthChart) userGrowthChart.destroy();
+        
+        userGrowthChart = new Chart(userGrowthCtx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Total Users',
+                    data: reportData.userGrowthData,
+                    borderColor: '#9c27b0',
+                    backgroundColor: 'rgba(156, 39, 176, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
             },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return value.toLocaleString();
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: true
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return value.toLocaleString();
+                            }
                         }
                     }
                 }
             }
-        }
-    });
+        });
+    }
 }
 
 // Load categories (MODIFIED TO PULL UNIQUE CATEGORIES FROM EQUIPMENT COLLECTION)
@@ -1697,6 +1727,8 @@ function getCategoryIcon(categoryName) {
 // Display categories
 function displayCategories(categories) {
     const categoriesGrid = document.getElementById('categories-grid');
+    if (!categoriesGrid) return;
+
     categoriesGrid.innerHTML = '';
     
     // Add a notice about the removal of manual category management
@@ -1747,7 +1779,9 @@ function createCategoryCard(category) {
 
 // Search categories
 function searchCategories() {
-    const searchTerm = document.getElementById('category-search').value.toLowerCase();
+    const searchTerm = document.getElementById('category-search')?.value.toLowerCase();
+    if (!searchTerm) return;
+
     const filteredCategories = categoriesData.filter(category => 
         category.name.toLowerCase().includes(searchTerm) ||
         category.id.includes(searchTerm)
@@ -1785,6 +1819,8 @@ async function loadNotifications() {
     const listContainer = document.getElementById('notifications-list');
     const loading = document.getElementById('notifications-loading');
     const countElement = document.getElementById('notifications-count');
+    
+    if(!listContainer || !loading || !countElement) return;
 
     loading.style.display = 'none';
     listContainer.innerHTML = '';
@@ -1874,7 +1910,7 @@ async function loadSettingsData() {
 }
 
 // Save settings
-document.getElementById('system-settings-form').addEventListener('submit', async function(e) {
+document.getElementById('system-settings-form')?.addEventListener('submit', async function(e) {
     e.preventDefault();
     
     try {
@@ -1940,7 +1976,11 @@ function listenForAdminChatListUpdates() {
             
             if (snapshot.empty) {
                 listContainer.innerHTML = '<div class="text-center py-5 text-muted small">No active conversations.</div>';
-                document.getElementById('chat-unread-count').textContent = 0;
+                
+                // FIX: Add null check for chat-unread-count (Fixes line 1982 error)
+                const chatUnreadCountEl = document.getElementById('chat-unread-count');
+                if (chatUnreadCountEl) chatUnreadCountEl.textContent = 0;
+                
                 return;
             }
 
@@ -1979,12 +2019,17 @@ function listenForAdminChatListUpdates() {
             });
             
             // Update the main admin badge
-            document.getElementById('chat-unread-count').textContent = totalUnread > 0 ? totalUnread : '0';
+            // FIX: Add null check for chat-unread-count (Fixes line 1982 error)
+            const chatUnreadCountEl = document.getElementById('chat-unread-count');
+            if (chatUnreadCountEl) chatUnreadCountEl.textContent = totalUnread > 0 ? totalUnread : '0';
 
         }, error => {
             console.error("Error listening to admin chat list:", error);
             listContainer.innerHTML = '<div class="text-center py-5 text-danger small">Error loading chats.</div>';
-            document.getElementById('chat-unread-count').textContent = '0';
+            
+            // FIX: Add null check for chat-unread-count
+            const chatUnreadCountEl = document.getElementById('chat-unread-count');
+            if (chatUnreadCountEl) chatUnreadCountEl.textContent = '0';
         });
 }
 
@@ -1997,16 +2042,22 @@ function loadAdminConversations() {
     
     // Reset active chat state
     adminActiveChatId = null;
-    document.getElementById('admin-chat-messages').innerHTML = `
-         <div id="chat-empty-state-admin" class="text-center text-muted mt-5">
-            <i class="fas fa-comments fa-4x mb-3 text-secondary"></i>
-            <h5>Select a conversation from the left to start support.</h5>
-        </div>
-    `;
+    const messagesContainer = document.getElementById('admin-chat-messages');
+    if(messagesContainer) {
+        messagesContainer.innerHTML = `
+             <div id="chat-empty-state-admin" class="text-center text-muted mt-5">
+                <i class="fas fa-comments fa-4x mb-3 text-secondary"></i>
+                <h5>Select a conversation from the left to start support.</h5>
+            </div>
+        `;
+    }
+
     document.getElementById('chat-customer-name-admin').textContent = 'Select a Conversation';
     document.getElementById('chat-details-admin').textContent = 'Order #N/A | Seller: N/A';
-    document.getElementById('admin-message-input').disabled = true;
-    document.getElementById('admin-send-btn').disabled = true;
+    const adminMessageInput = document.getElementById('admin-message-input');
+    if (adminMessageInput) adminMessageInput.disabled = true;
+    const adminSendBtn = document.getElementById('admin-send-btn');
+    if (adminSendBtn) adminSendBtn.disabled = true;
     
     listenForAdminChatListUpdates();
 }
@@ -2020,10 +2071,21 @@ async function loadAdminChatMessages(chatId, customerName, orderShortId, sellerB
     // UI Setup
     document.getElementById('chat-customer-name-admin').textContent = customerName;
     document.getElementById('chat-details-admin').textContent = `Order #${orderShortId} | Seller: ${sellerBusinessName || 'N/A'}`;
-    document.getElementById('admin-message-input').disabled = false;
-    document.getElementById('admin-send-btn').disabled = false;
-    document.getElementById('admin-chat-messages').innerHTML = '<div class="text-center mt-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
-    document.getElementById('chat-empty-state-admin').style.display = 'none';
+    
+    const adminMessageInput = document.getElementById('admin-message-input');
+    if (adminMessageInput) adminMessageInput.disabled = false;
+    const adminSendBtn = document.getElementById('admin-send-btn');
+    if (adminSendBtn) adminSendBtn.disabled = false;
+    
+    const messagesContainer = document.getElementById('admin-chat-messages');
+    if (!messagesContainer) return;
+
+    messagesContainer.innerHTML = '<div class="text-center mt-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+    
+    // FIX: Add null check before accessing style (Fixes line 2026 error)
+    const emptyStateEl = document.getElementById('chat-empty-state-admin');
+    if(emptyStateEl) emptyStateEl.style.display = 'none';
+
 
     // 1. Get Chat References
     const chatDocRef = getPublicCollectionRef('conversations').doc(chatId);
@@ -2075,7 +2137,7 @@ async function loadAdminChatMessages(chatId, customerName, orderShortId, sellerB
         const indicator = document.getElementById('admin-typing-indicator');
         if (data && data.typing && data.typing.customer && indicator) {
             indicator.style.display = 'block';
-            document.getElementById('admin-chat-messages').scrollTop = document.getElementById('admin-chat-messages').scrollHeight;
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
         } else if (indicator) {
             indicator.style.display = 'none';
         }
