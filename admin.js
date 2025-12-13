@@ -18,14 +18,6 @@ let adminChatUnsubscribe = null;
 let adminTypingTimeout = null;
 // END NEW CHAT GLOBALS
 
-// New Admin Status and Notification Globals
-let adminOnlineStatus = true;
-let notificationSoundEnabled = true;
-let notificationAudio = null;
-let customerOnlineStatus = {};
-let adminStatusUnsubscribe = null;
-let customerStatusUnsubscribe = null;
-
 
 // Helper to get the Firestore document reference for public collections
 function getPublicCollectionRef(collectionName) {
@@ -41,6 +33,38 @@ function getPublicCollectionRef(collectionName) {
 function getPlatformSettingsRef() {
     return getPublicCollectionRef('settings').doc('platform');
 }
+
+// Initialize admin dashboard
+document.addEventListener('DOMContentLoaded', async () => {
+    // Check authentication
+    const authCheck = await window.firebaseHelpers.checkAuthAndRole('admin');
+    
+    if (!authCheck.authenticated) {
+        window.location.href = 'auth.html?role=admin';
+        return;
+    }
+    
+    if (!authCheck.authorized) {
+        window.location.href = 'index.html';
+        return;
+    }
+    
+    currentAdmin = authCheck.user;
+    
+    // Update UI with admin data
+    updateAdminInfo();
+    loadDashboardData();
+    loadSettingsData();
+    
+    // Hide loading spinner
+    document.getElementById('loading').classList.remove('active');
+    
+    // Initialize dashboard
+    showSection('dashboard');
+    
+    // NEW: Start listening for chat list updates on load
+    listenForAdminChatListUpdates();
+});
 
 // Update admin information in UI
 function updateAdminInfo() {
@@ -147,7 +171,7 @@ async function loadDashboardData() {
         document.getElementById('pending-sellers-count').textContent = stats.pendingSellers;
         document.getElementById('pending-equipment-count').textContent = stats.pendingEquipment;
         // NEW: Update Notification Badge Count
-        document.getElementById('new-messages-count').textContent = stats.unreadNotifications; 
+        document.getElementById('new-notifications-count').textContent = stats.unreadNotifications; 
         document.getElementById('notification-count').textContent = stats.unreadNotifications; 
         // Update Chat Badge Count (from listener)
         // Note: The listener `listenForAdminChatListUpdates` updates `chat-unread-count` in real-time
@@ -162,7 +186,7 @@ async function loadDashboardData() {
         initializeRevenueChart(stats.revenueData);
         
     } catch (error) {
-        console.error('Error loading dashboard data', error);
+        console.error('Error loading dashboard data:', error);
         window.firebaseHelpers.showAlert('Error loading dashboard data', 'danger');
     }
 }
@@ -1933,362 +1957,17 @@ async function logout() {
 // *** ADMIN CHAT SUPPORT LOGIC (NEW) ***
 // ***********************************************
 
-// Initialize notification sound
-function initNotificationSound() {
-    notificationAudio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-correct-answer-tone-2870.mp3');
-    notificationAudio.load();
-    
-    // Check if sound is enabled in localStorage
-    try {
-        const soundEnabled = localStorage.getItem('admin_notification_sound');
-        if (soundEnabled !== null) {
-            notificationSoundEnabled = soundEnabled === 'true';
-            document.getElementById('notification-sound-toggle')?.checked = notificationSoundEnabled;
-        }
-    } catch (e) {
-        console.warn("Could not access localStorage for notification settings:", e);
-    }
-}
-
-// Play notification sound
-function playNotificationSound() {
-    if (notificationSoundEnabled && notificationAudio) {
-        notificationAudio.currentTime = 0;
-        notificationAudio.play().catch(e => console.log("Audio play failed:", e));
-        
-        // Show visual notification
-        showSoundNotification();
-    }
-}
-
-// Show visual sound notification
-function showSoundNotification() {
-    const notification = document.createElement('div');
-    notification.className = 'sound-notification';
-    notification.innerHTML = '<i class="fas fa-bell me-2"></i>New message received';
-    document.body.appendChild(notification);
-    
-    notification.style.display = 'block';
-    
-    setTimeout(() => {
-        notification.style.opacity = '0';
-        notification.style.transform = 'translateX(100%)';
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
-}
-
-// Toggle notification sound
-function toggleNotificationSound() {
-    notificationSoundEnabled = !notificationSoundEnabled;
-    
-    try {
-        localStorage.setItem('admin_notification_sound', notificationSoundEnabled.toString());
-    } catch (e) {
-         console.warn("Could not save to localStorage for notification settings:", e);
-    }
-    
-    const toggleBtn = document.getElementById('notification-sound-toggle');
-    if (toggleBtn) {
-        toggleBtn.checked = notificationSoundEnabled;
-    }
-    
-    window.firebaseHelpers.showAlert(
-        `Notification sound ${notificationSoundEnabled ? 'enabled' : 'disabled'}`,
-        'success'
-    );
-}
-
-// Toggle admin online status
-async function toggleAdminOnlineStatus() {
-    adminOnlineStatus = !adminOnlineStatus;
-    
-    try {
-        // Update admin status in Firestore
-        // Use window.FirebaseDB if getPublicCollectionRef returns a chain starting with it
-        const statusRef = getPublicCollectionRef('admin_status').doc('current');
-        await statusRef.set({
-            online: adminOnlineStatus,
-            lastActive: firebase.firestore.FieldValue.serverTimestamp(),
-            adminId: currentAdmin.uid,
-            adminName: currentAdmin.name
-        }, { merge: true });
-        
-        // Update UI
-        const statusText = document.getElementById('admin-status-text');
-        const statusToggle = document.getElementById('admin-online-toggle');
-        
-        if (statusText) {
-            statusText.textContent = adminOnlineStatus ? 'Online' : 'Offline';
-            statusText.className = adminOnlineStatus ? 'text-success' : 'text-secondary';
-        }
-        
-        if (statusToggle) {
-            statusToggle.checked = adminOnlineStatus;
-        }
-        
-        // Show status to customers if implemented
-        if (!adminOnlineStatus) {
-            window.firebaseHelpers.showAlert('You are now offline. Customers will see you as unavailable.', 'warning');
-        } else {
-            window.firebaseHelpers.showAlert('You are now online and available for support.', 'success');
-        }
-        
-    } catch (error) {
-        console.error('Error updating admin status:', error);
-    }
-}
-
-// Initialize admin status
-async function initAdminOnlineStatus() {
-    try {
-        // Set initial status to Online
-        const statusRef = getPublicCollectionRef('admin_status').doc('current');
-        await statusRef.set({
-            online: true,
-            lastActive: firebase.firestore.FieldValue.serverTimestamp(),
-            adminId: currentAdmin.uid,
-            adminName: currentAdmin.name
-        }, { merge: true });
-        
-        // Listen for status changes (for multi-admin scenarios)
-        adminStatusUnsubscribe = statusRef.onSnapshot((doc) => {
-            if (doc.exists) {
-                const data = doc.data();
-                adminOnlineStatus = data.online;
-                
-                // Update UI
-                const statusText = document.getElementById('admin-status-text');
-                const statusToggle = document.getElementById('admin-online-toggle');
-                
-                if (statusText) {
-                    statusText.textContent = adminOnlineStatus ? 'Online' : 'Offline';
-                    statusText.className = adminOnlineStatus ? 'text-success' : 'text-secondary';
-                }
-                
-                if (statusToggle) {
-                    statusToggle.checked = adminOnlineStatus;
-                }
-            }
-        });
-        
-    } catch (error) {
-        console.error('Error initializing admin status:', error);
-    }
-}
-
-// Show pre-chat modal
-function showPreChatModal() {
-    const modal = new bootstrap.Modal(document.getElementById('preChatModal'));
-    modal.show();
-}
-
-// Start new support chat
-async function startNewSupportChat() {
-    const name = document.getElementById('pre-chat-name').value.trim();
-    const email = document.getElementById('pre-chat-email').value.trim();
-    const phone = document.getElementById('pre-chat-phone').value.trim();
-    const topic = document.getElementById('pre-chat-topic').value;
-    const description = document.getElementById('pre-chat-description').value.trim();
-    
-    // Validation
-    if (!name || !email || !description) {
-        window.firebaseHelpers.showAlert('Please fill all required fields', 'warning');
-        return;
-    }
-    
-    try {
-        // Generate a unique chat ID
-        const chatId = `support_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const chatRef = getPublicCollectionRef('conversations').doc(chatId);
-        
-        // Create chat document
-        await chatRef.set({
-            chatId: chatId,
-            customerId: `support_${email.replace(/[^a-zA-Z0-9]/g, '_')}`,
-            customerName: name,
-            customerEmail: email,
-            customerPhone: phone,
-            sellerId: 'admin',
-            sellerBusinessName: 'FarmRent Support',
-            orderId: `support_${Date.now()}`,
-            topic: topic,
-            description: description,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            lastMessage: `Support initiated: ${description.substring(0, 50)}...`,
-            type: 'support',
-            status: 'active',
-            unreadCountAdmin: 0,
-            unreadCountCustomer: 1
-        });
-        
-        // Add initial system message
-        await chatRef.collection('messages').add({
-            senderId: 'system',
-            text: `Support conversation started. Customer: ${name} (${email}). Topic: ${topic || 'General Inquiry'}. Issue: ${description}`,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-            type: 'system'
-        });
-        
-        // Add admin welcome message
-        await chatRef.collection('messages').add({
-            senderId: currentAdmin.uid,
-            text: `Hello ${name}! This is FarmRent Support. How can I help you today?`,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        // Update last message
-        await chatRef.update({
-            lastMessage: `Hello ${name}! This is FarmRent Support. How can I help you today?`,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            unreadCountCustomer: firebase.firestore.FieldValue.increment(1)
-        });
-        
-        // Close modal and reset form
-        const modal = bootstrap.Modal.getInstance(document.getElementById('preChatModal'));
-        modal.hide();
-        
-        document.getElementById('pre-chat-form').reset();
-        
-        // Show success message and load the chat
-        window.firebaseHelpers.showAlert('New support conversation created!', 'success');
-        
-        // Load the new chat
-        setTimeout(() => {
-            loadAdminChatMessages(chatId, name, 'SUPPORT', 'FarmRent Support');
-        }, 500);
-        
-    } catch (error) {
-        console.error('Error creating support chat:', error);
-        window.firebaseHelpers.showAlert('Error creating support conversation', 'danger');
-    }
-}
-
-// Check customer online status (using heuristic based on last activity/typing)
-async function checkCustomerOnlineStatus(chatId) {
-    try {
-        const chatDoc = await getPublicCollectionRef('conversations').doc(chatId).get();
-        if (chatDoc.exists) {
-            const chatData = chatDoc.data();
-            // const customerId = chatData.customerId; // Not used directly, but good practice
-            
-            // For now, we'll use a simple heuristic: if they've typed recently or sent a message
-            // In a real app, you'd have presence system
-            const lastActivity = chatData.updatedAt;
-            if (lastActivity) {
-                const lastActivityTime = lastActivity.toDate();
-                const now = new Date();
-                const minutesAgo = (now - lastActivityTime) / (1000 * 60);
-                
-                customerOnlineStatus[adminActiveChatId] = minutesAgo < 5; // Online if active in last 5 minutes
-                updateCustomerStatusUI(chatData);
-            }
-        }
-    } catch (error) {
-        console.error('Error checking customer status:', error);
-    }
-}
-
-// Update customer status UI
-function updateCustomerStatusUI(chatData) {
-    const onlineBadge = document.getElementById('customer-status-badge');
-    const offlineBadge = document.getElementById('customer-offline-badge');
-    
-    // Default to false if not found
-    const customerIsOnline = customerOnlineStatus[adminActiveChatId] === true; 
-    const customerIsTyping = chatData && chatData.typing && chatData.typing.customer;
-
-    if (customerIsTyping || customerIsOnline) {
-        // Customer is typing or was recently active (online)
-        if (onlineBadge) onlineBadge.style.display = 'inline-block';
-        if (offlineBadge) offlineBadge.style.display = 'none';
-    } else {
-        // Customer is offline
-        if (onlineBadge) onlineBadge.style.display = 'none';
-        if (offlineBadge) offlineBadge.style.display = 'inline-block';
-    }
-}
-
-// Add Quick Response buttons
-function addQuickResponseButtons() {
-    const quickResponses = [
-        "Hello! How can I help you today?",
-        "Thanks for contacting FarmRent support.",
-        "Can you please provide more details?",
-        "I'll check that for you right away.",
-        "Please share your order ID if available.",
-        "Is there anything else I can help with?",
-        "Your issue has been escalated to our technical team.",
-        "We'll get back to you within 24 hours.",
-        "Thank you for your patience.",
-        "Have a great day!"
-    ];
-    
-    const inputContainer = document.getElementById('admin-chat-input-container');
-    if (!inputContainer) return;
-    
-    // Check if quick responses already exist
-    let quickResponseDiv = inputContainer.querySelector('.quick-response-buttons');
-    if (!quickResponseDiv) {
-        quickResponseDiv = document.createElement('div');
-        quickResponseDiv.className = 'quick-response-buttons';
-        // Insert before the input field, which is often the first child of the container in the template
-        const inputField = document.getElementById('admin-message-input');
-        if (inputField && inputField.parentNode === inputContainer) {
-            inputContainer.insertBefore(quickResponseDiv, inputField.parentNode.firstChild);
-        } else {
-             inputContainer.insertBefore(quickResponseDiv, inputContainer.firstChild);
-        }
-    }
-    
-    quickResponseDiv.innerHTML = '';
-    
-    quickResponses.forEach(response => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'quick-response-btn';
-        button.textContent = response.length > 30 ? response.substring(0, 30) + '...' : response;
-        button.title = response;
-        button.onclick = () => {
-            document.getElementById('admin-message-input').value = response;
-            document.getElementById('admin-message-input').focus();
-        };
-        quickResponseDiv.appendChild(button);
-    });
-}
-
-// Initialize chat enhancements
-function initChatEnhancements() {
-    initNotificationSound();
-    initAdminOnlineStatus();
-    
-    // Add notification sound toggle to UI (assuming admin_dashboard.html has the necessary element placeholders)
-    // This is generally added to the navbar/header area in a real app, but for simplicity, we'll append to the body as per the prompt's implied placement logic.
-    const soundToggle = document.createElement('div');
-    soundToggle.className = 'notification-sound-toggle';
-    soundToggle.innerHTML = `
-        <div class="form-check form-switch d-none">
-            <input class="form-check-input" type="checkbox" id="notification-sound-toggle" 
-                    ${notificationSoundEnabled ? 'checked' : ''} 
-                    onchange="toggleNotificationSound()">
-            <label class="form-check-label" for="notification-sound-toggle">
-                <i class="fas fa-bell"></i>
-            </label>
-        </div>
-    `;
-    // document.body.appendChild(soundToggle); // Disabled direct body append as it might break layout. Assuming it's already in the HTML.
-}
-
-
 /**
- * NEW: Listens to all customer conversations in real-time for the Admin chat list. (ENHANCED)
+ * NEW: Listens to all customer conversations in real-time for the Admin chat list.
  */
 function listenForAdminChatListUpdates() {
     const listContainer = document.getElementById('admin-chat-list');
     if (!listContainer) return;
     
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     const conversationsRef = getPublicCollectionRef('conversations');
     
+    // Use an index-less query on the entire collection, ordering by updatedAt for the list view
     conversationsRef
         .orderBy('updatedAt', 'desc')
         .onSnapshot(snapshot => {
@@ -2297,85 +1976,58 @@ function listenForAdminChatListUpdates() {
             
             if (snapshot.empty) {
                 listContainer.innerHTML = '<div class="text-center py-5 text-muted small">No active conversations.</div>';
-                const chatUnreadCountEl = document.getElementById('new-messages-count');
+                
+                // FIX: Add null check for chat-unread-count (Fixes line 1982 error)
+                const chatUnreadCountEl = document.getElementById('chat-unread-count');
                 if (chatUnreadCountEl) chatUnreadCountEl.textContent = 0;
+                
                 return;
             }
 
-            // FIX: Initialize chatStates map locally to prevent global scope pollution or LHS error if not initialized
-            const chatStates = {};
-            // Correct logic to determine if a chat received a new message, fixing the assignment error
-            snapshot.docChanges().forEach(change => {
-                const chat = change.doc.data();
-                // Check if the document was modified AND the admin unread count is > 0, and it's not the currently active chat
-                if (change.type === 'modified') {
-                   // Fixed version
-chatStates[change.doc.id] = { 
-    unreadCount: chat.unreadCountAdmin || 0,
-    wasNewMessage: (chat.unreadCountAdmin || 0) > 0
-};
-                }
-            });
-
             snapshot.forEach(doc => {
                 const chat = doc.data();
+                // Admin chat is the ONLY place where we manage all chats (sellerId field is present in the document for context)
+                const isSystemChat = doc.id.includes('ADMIN'); // Placeholder for non-order chat if implemented later
                 
+                // For now, check if chat is active (has messages or has been created)
                 if (chat.customerId) {
-                    const isActive = doc.id === adminActiveChatId ? 'active' : '';
-                    const unreadCount = chat.unreadCountAdmin || 0;
-                    totalUnread += unreadCount;
-                    
-                    const time = chat.updatedAt ? window.firebaseHelpers.formatTimeAgo(chat.updatedAt) : '';
-                    const unreadBadge = unreadCount > 0 ? `<span class="unread-count">${unreadCount}</span>` : '';
-                    const orderShortId = (chat.orderId || 'N/A').substring(0, 8);
-                    const sellerName = chat.sellerBusinessName ? `(Seller: ${chat.sellerBusinessName})` : '';
-                    
-                    // Add unread animation class if there are unread messages
-                    const unreadClass = unreadCount > 0 ? 'unread' : '';
-                    
-                    listContainer.innerHTML += `
-                        <div class="chat-list-item ${isActive} ${unreadClass}" 
-                             onclick="loadAdminChatMessages('${doc.id}', '${chat.customerName}', '${chat.type === 'support' ? 'SUPPORT' : orderShortId}', '${chat.sellerBusinessName}')">
-                            <div class="d-flex align-items-center">
-                                <div class="me-2">
-                                    ${chat.type === 'support' ? 
-                                        '<i class="fas fa-headset text-primary"></i>' : 
-                                        '<i class="fas fa-shopping-cart text-success"></i>'
-                                    }
-                                </div>
-                                <div class="d-flex flex-column flex-grow-1">
-                                    <div class="d-flex justify-content-between">
-                                        <strong class="text-truncate" style="max-width: 150px;">${chat.customerName}</strong>
-                                        <small class="text-muted">${time}</small>
-                                    </div>
-                                    <small class="text-muted text-truncate" style="max-width: 180px;">
-                                        ${chat.lastMessage || 'Start conversation...'}
-                                    </small>
-                                    <small class="text-muted" style="font-size: 0.75rem;">
-                                        ${chat.type === 'support' ? 'Support Ticket' : `Order #${orderShortId}`}
-                                    </small>
-                                </div>
-                                ${unreadBadge}
-                            </div>
-                        </div>
-                    `;
-                    
-                    // Play sound if new unread message arrived from *this* chat and it's not the active one
-                    const state = chatStates[doc.id];
-                    // The bug was likely related to the `chatStates` logic previously. This revised check is safer.
-                    if (state && state.wasNewMessage && doc.id !== adminActiveChatId) {
-                         playNotificationSound();
-                    }
-                }
+                     
+                     const isActive = doc.id === adminActiveChatId ? 'active' : '';
+                     const unreadCount = chat.unreadCountAdmin || 0; // Assuming chats have an unreadCountAdmin field
+                     totalUnread += unreadCount;
+
+                     const time = chat.updatedAt ? window.firebaseHelpers.formatTimeAgo(chat.updatedAt) : '';
+                     const unreadBadge = unreadCount > 0 ? `<span class="unread-count">${unreadCount}</span>` : '';
+                     const orderShortId = (chat.orderId || 'N/A').substring(0, 8);
+                     const sellerName = chat.sellerBusinessName ? `(Seller: ${chat.sellerBusinessName})` : '';
+
+                     listContainer.innerHTML += `
+                         <div class="chat-list-item ${isActive}" 
+                              onclick="loadAdminChatMessages('${doc.id}', '${chat.customerName}', '${orderShortId}', '${chat.sellerBusinessName}')">
+                             <div class="d-flex flex-column">
+                                 <strong class="text-truncate" style="max-width: 180px;">${chat.customerName}</strong>
+                                 <small class="text-muted text-truncate" style="max-width: 180px;">${chat.lastMessage || 'Start conversation...'}</small>
+                                 <small class="text-muted" style="font-size: 0.75rem;">Order #${orderShortId} ${sellerName}</small>
+                             </div>
+                             <div class="text-end">
+                                 <small class="text-muted d-block">${time}</small>
+                                 ${unreadBadge}
+                             </div>
+                         </div>
+                     `;
+                 }
             });
             
             // Update the main admin badge
+            // FIX: Add null check for chat-unread-count (Fixes line 1982 error)
             const chatUnreadCountEl = document.getElementById('new-messages-count');
             if (chatUnreadCountEl) chatUnreadCountEl.textContent = totalUnread > 0 ? totalUnread : '0';
 
         }, error => {
             console.error("Error listening to admin chat list:", error);
             listContainer.innerHTML = '<div class="text-center py-5 text-danger small">Error loading chats.</div>';
+            
+            // FIX: Add null check for chat-unread-count
             const chatUnreadCountEl = document.getElementById('new-messages-count');
             if (chatUnreadCountEl) chatUnreadCountEl.textContent = '0';
         });
@@ -2420,7 +2072,7 @@ function loadAdminConversations() {
 }
 
 /**
- * NEW: Loads and subscribes to messages for the selected chat ID. (ENHANCED)
+ * NEW: Loads and subscribes to messages for the selected chat ID.
  */
 async function loadAdminChatMessages(chatId, customerName, orderShortId, sellerBusinessName) {
     adminActiveChatId = chatId;
@@ -2439,11 +2091,16 @@ async function loadAdminChatMessages(chatId, customerName, orderShortId, sellerB
 
     messagesContainer.innerHTML = '<div class="text-center mt-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
     
+    // Ensure empty state is hidden
     const emptyStateEl = document.getElementById('chat-empty-state-admin');
     if(emptyStateEl) emptyStateEl.style.display = 'none';
     
-    // Update active class in chat list (Re-trigger list update)
-    listenForAdminChatListUpdates(); 
+    // Update active class in chat list
+    document.querySelectorAll('.chat-list-item').forEach(item => item.classList.remove('active'));
+    // Find and activate the correct item (using direct selector is complex, rely on JS for now)
+    // Re-run the list rendering to update the active state correctly
+    listenForAdminChatListUpdates();
+
 
     // 1. Get Chat References
     const chatDocRef = getPublicCollectionRef('conversations').doc(chatId);
@@ -2468,43 +2125,26 @@ async function loadAdminChatMessages(chatId, customerName, orderShortId, sellerB
         } else {
             snapshot.forEach(doc => {
                 const msg = doc.data();
+                // Admin is the current user. Customer is the other person.
                 const isMe = msg.senderId === currentAdmin.uid;
-                const isSystem = msg.senderId === 'system';
+                // const senderName = isMe ? 'You (Admin)' : customerName; // Sender name not needed in bubble style
                 const date = msg.timestamp ? msg.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
                 
-                if (isSystem) {
-                    messagesContainer.innerHTML += `
-                        <div class="system-message">
-                            <i class="fas fa-info-circle me-2"></i>
+                messagesContainer.innerHTML += `
+                    <div style="display: flex; justify-content: ${isMe ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
+                        <div class="chat-message-bubble ${isMe ? 'message-sent-admin' : 'message-received-customer'}">
                             ${msg.text}
-                            <small class="text-muted d-block mt-1">${date}</small>
+                            <span class="message-time-admin">${date}</span>
                         </div>
-                    `;
-                } else {
-                    messagesContainer.innerHTML += `
-                        <div style="display: flex; justify-content: ${isMe ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
-                            <div class="chat-message-bubble ${isMe ? 'message-sent-admin' : 'message-received-customer'}">
-                                ${msg.text}
-                                <span class="message-time-admin">${date}</span>
-                                ${isMe ? '<span class="message-status delivered"><i class="fas fa-check-double"></i></span>' : ''}
-                            </div>
-                        </div>
-                    `;
-                }
+                    </div>
+                `;
             });
-            // Scroll to bottom
+            // CRITICAL: Scroll to bottom
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
         
         // Mark read by Admin
-        chatDocRef.update({ 
-            unreadCountAdmin: 0,
-            lastReadByAdmin: firebase.firestore.FieldValue.serverTimestamp()
-        }); 
-        
-        // Check for customer online status
-        checkCustomerOnlineStatus(chatId);
-        
+        chatDocRef.update({ unreadCountAdmin: 0 }); 
     }, error => {
         console.error("Error listening to messages:", error);
         messagesContainer.innerHTML = `
@@ -2514,7 +2154,7 @@ async function loadAdminChatMessages(chatId, customerName, orderShortId, sellerB
         `;
     });
 
-    // 3. Listen for Typing with enhanced indicator
+    // 3. Listen for Typing
     chatDocRef.onSnapshot(doc => {
         const data = doc.data();
         const indicator = document.getElementById('admin-typing-indicator');
@@ -2522,20 +2162,13 @@ async function loadAdminChatMessages(chatId, customerName, orderShortId, sellerB
 
         if (data && data.typing && data.typing.customer && indicator) {
             indicator.style.display = 'block';
-            indicator.innerHTML = `<i class="fas fa-pencil-alt me-1"></i>${customerName} is typing <span class="typing-dots"><span>.</span><span>.</span><span>.</span></span>`;
             if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
         } else if (indicator) {
             indicator.style.display = 'none';
         }
-        
-        // Update customer online status
-        updateCustomerStatusUI(data);
     });
 
-    // 4. Add Quick Response buttons
-    addQuickResponseButtons();
-
-    // 5. Handle Typing Input and Enter key press
+    // 4. Handle Typing Input and Enter key press
     const input = document.getElementById('admin-message-input');
     if (input) {
         input.oninput = () => {
@@ -2547,41 +2180,23 @@ async function loadAdminChatMessages(chatId, customerName, orderShortId, sellerB
         };
         
         input.onkeypress = (e) => { 
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
+            if (e.key === 'Enter') {
+                e.preventDefault(); // Prevent default form submission/new line
                 sendAdminMessage(); 
             }
         };
-        
-        // Auto-focus
+        // Auto-focus the input after loading messages
         setTimeout(() => input.focus(), 100);
     }
 }
 
 /**
- * NEW: Sends a message from the Admin to the customer. (ENHANCED)
+ * NEW: Sends a message from the Admin to the customer.
  */
 async function sendAdminMessage() {
     const input = document.getElementById('admin-message-input');
     const text = input.value.trim();
     if (!text || !adminActiveChatId || !currentAdmin) return;
-    
-    // Add to UI immediately for better UX
-    const messagesContainer = document.getElementById('admin-chat-messages');
-    const tempId = `temp_${Date.now()}`;
-    
-    if (messagesContainer) {
-        messagesContainer.innerHTML += `
-            <div style="display: flex; justify-content: flex-end; margin-bottom: 8px;" data-temp-id="${tempId}">
-                <div class="chat-message-bubble message-sent-admin">
-                    ${text}
-                    <span class="message-time-admin">Just now</span>
-                    <span class="message-status sent"><i class="fas fa-check"></i></span>
-                </div>
-            </div>
-        `;
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
     
     input.value = '';
     
@@ -2589,123 +2204,32 @@ async function sendAdminMessage() {
     
     try {
         clearTimeout(adminTypingTimeout);
+        // Turn off typing indicator immediately
         await chatRef.set({ typing: { admin: false } }, { merge: true });
 
-        // Send message to Firestore
-        const messageRef = await chatRef.collection('messages').add({
+        await chatRef.collection('messages').add({
             senderId: currentAdmin.uid,
             text: text,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-            status: 'delivered'
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
         
-        // Update conversation summary
+        // Update conversation summary, increment customer unread count
         await chatRef.update({
             lastMessage: text,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            unreadCountCustomer: firebase.firestore.FieldValue.increment(1)
+            unreadCountCustomer: firebase.firestore.FieldValue.increment(1) // Alert customer
         });
-        
-        // Update message status to delivered (will be handled by snapshot listener as well, but this is immediate server update)
-        await messageRef.update({
-            status: 'delivered'
-        });
-        
-        // Update UI status (only necessary if snapshot is slow, otherwise listener will handle)
-        const sentMessage = messagesContainer.querySelector(`[data-temp-id="${tempId}"]`);
-        if (sentMessage) {
-            const statusSpan = sentMessage.querySelector('.message-status');
-            if (statusSpan) {
-                statusSpan.className = 'message-status delivered';
-                statusSpan.innerHTML = '<i class="fas fa-check-double"></i>';
-            }
-            sentMessage.removeAttribute('data-temp-id'); // Remove temporary ID
-        }
-        
     } catch (error) {
         console.error("Error sending admin message:", error);
         window.firebaseHelpers.showAlert('Failed to send message.', 'danger');
-        
-        // Show error in UI
-        if (messagesContainer) {
-            const sentMessage = messagesContainer.querySelector(`[data-temp-id="${tempId}"]`);
-            if (sentMessage) {
-                const statusSpan = sentMessage.querySelector('.message-status');
-                if (statusSpan) {
-                    statusSpan.className = 'message-status error';
-                    statusSpan.innerHTML = '<i class="fas fa-exclamation-circle"></i>';
-                    statusSpan.title = 'Failed to send';
-                }
-            }
-        }
     }
 }
 
-
-// Make globally accessible (existing)
+// Make globally accessible
 window.loadAdminConversations = loadAdminConversations;
 window.loadAdminChatMessages = loadAdminChatMessages;
 window.sendAdminMessage = sendAdminMessage;
 
-// Make globally accessible (new)
-window.showPreChatModal = showPreChatModal;
-window.startNewSupportChat = startNewSupportChat;
-window.toggleAdminOnlineStatus = toggleAdminOnlineStatus;
-window.toggleNotificationSound = toggleNotificationSound;
-window.showSection = showSection; // FIX: Export showSection globally
-
 // ***********************************************
 // *** END ADMIN CHAT SUPPORT LOGIC ***
 // ***********************************************
-
-// Update the DOMContentLoaded event listener
-document.addEventListener('DOMContentLoaded', async () => {
-    // Check authentication
-    const authCheck = await window.firebaseHelpers.checkAuthAndRole('admin');
-    
-    if (!authCheck.authenticated) {
-        window.location.href = 'auth.html?role=admin';
-        return;
-    }
-    
-    if (!authCheck.authorized) {
-        window.location.href = 'index.html';
-        return;
-    }
-    
-    currentAdmin = authCheck.user;
-    
-    // Update UI with admin data
-    updateAdminInfo();
-    loadDashboardData();
-    loadSettingsData();
-    
-    // Hide loading spinner
-    document.getElementById('loading').classList.remove('active');
-    
-    // Initialize dashboard
-    showSection('dashboard');
-    
-    // Initialize chat enhancements
-    initChatEnhancements();
-    
-    // Start listening for chat list updates
-    listenForAdminChatListUpdates();
-});
-
-// Clean up listeners on page unload
-window.addEventListener('beforeunload', () => {
-    if (adminStatusUnsubscribe) adminStatusUnsubscribe();
-    if (customerStatusUnsubscribe) customerStatusUnsubscribe();
-    if (adminChatUnsubscribe) adminChatUnsubscribe();
-    
-    // Set admin offline
-    if (currentAdmin) {
-        const statusRef = getPublicCollectionRef('admin_status').doc('current');
-        statusRef.set({
-            online: false,
-            lastActive: firebase.firestore.FieldValue.serverTimestamp(),
-            adminId: currentAdmin.uid
-        }, { merge: true }).catch(console.error);
-    }
-});
