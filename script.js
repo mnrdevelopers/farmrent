@@ -3446,7 +3446,8 @@ async function loadProfilePage() {
     if (profileUserNameEl) profileUserNameEl.textContent = user.name || 'User';
     
     // NEW: Update Coin Display
-    const profileCoinBalanceEl = document.getElementById('profile-coin-balance");
+    // FIX: Corrected Syntax Error in element ID string
+    const profileCoinBalanceEl = document.getElementById('profile-coin-balance');
     if (profileCoinBalanceEl) profileCoinBalanceEl.textContent = `${availableCoins || 0} Coins`;
     
     // NEW: Update Referral Info
