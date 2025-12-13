@@ -237,7 +237,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (path !== 'seller.html' && path !== 'seller-pending.html' && path !== 'admin.html') {
         // Wait a bit for auth to fully initialize
         setTimeout(() => {
-            if (document.getElementById('chat-widget-container')) {
+            // Check if the container exists (it's in orders.html, index.html, etc. but not explicitly in all pages)
+            if (document.body) {
+                if (!document.getElementById('chat-widget-container')) {
+                     document.body.insertAdjacentHTML('beforeend', '<div id="chat-widget-container"></div>');
+                }
                 renderChatWidget();
             }
         }, 1000);
@@ -669,6 +673,7 @@ function updateNavbarPincodeDisplay() {
     }
 }
 // --- END PINCODE SYSTEM INTEGRATION FUNCTIONS ---
+
 
 // --- NEW PINCODE WARNING RESOLUTION HELPERS (CALLED FROM FIREBASE-CONFIG.JS HTML) ---
 
@@ -4245,8 +4250,11 @@ function toggleChatWindow() {
         }
         
         // Hide the floating badge when the full window is opened
-        if (!windowEl.classList.contains('hidden')) {
-             updateChatBadgeCount(0); // Optimistically hide, actual unread count is handled inside loadChatMessages
+        if (!windowEl.classList.contains('hidden') && activeChatId) {
+             // If a chat is open, marking it read will clear the badge. 
+             // Actual logic is in loadChatMessages.
+             const chatDocRef = getPublicCollectionRef('conversations').doc(activeChatId);
+             chatDocRef.update({ unreadCountCustomer: 0 });
         }
     }
 }
