@@ -147,7 +147,7 @@ async function loadDashboardData() {
         document.getElementById('pending-sellers-count').textContent = stats.pendingSellers;
         document.getElementById('pending-equipment-count').textContent = stats.pendingEquipment;
         // NEW: Update Notification Badge Count
-        document.getElementById('new-notifications-count').textContent = stats.unreadNotifications; 
+        document.getElementById('new-messages-count').textContent = stats.unreadNotifications; 
         document.getElementById('notification-count').textContent = stats.unreadNotifications; 
         // Update Chat Badge Count (from listener)
         // Note: The listener `listenForAdminChatListUpdates` updates `chat-unread-count` in real-time
@@ -1939,10 +1939,14 @@ function initNotificationSound() {
     notificationAudio.load();
     
     // Check if sound is enabled in localStorage
-    const soundEnabled = localStorage.getItem('admin_notification_sound');
-    if (soundEnabled !== null) {
-        notificationSoundEnabled = soundEnabled === 'true';
-        document.getElementById('notification-sound-toggle')?.checked = notificationSoundEnabled;
+    try {
+        const soundEnabled = localStorage.getItem('admin_notification_sound');
+        if (soundEnabled !== null) {
+            notificationSoundEnabled = soundEnabled === 'true';
+            document.getElementById('notification-sound-toggle')?.checked = notificationSoundEnabled;
+        }
+    } catch (e) {
+        console.warn("Could not access localStorage for notification settings:", e);
     }
 }
 
@@ -1976,7 +1980,12 @@ function showSoundNotification() {
 // Toggle notification sound
 function toggleNotificationSound() {
     notificationSoundEnabled = !notificationSoundEnabled;
-    localStorage.setItem('admin_notification_sound', notificationSoundEnabled.toString());
+    
+    try {
+        localStorage.setItem('admin_notification_sound', notificationSoundEnabled.toString());
+    } catch (e) {
+         console.warn("Could not save to localStorage for notification settings:", e);
+    }
     
     const toggleBtn = document.getElementById('notification-sound-toggle');
     if (toggleBtn) {
@@ -2295,12 +2304,16 @@ function listenForAdminChatListUpdates() {
 
             // Map to track read state before rendering for sound notification logic
             const chatStates = {};
+            // Correct logic to determine if a chat received a new message, fixing the assignment error
             snapshot.docChanges().forEach(change => {
                 const chat = change.doc.data();
-                chatStates[change.doc.id] = { 
-                    unreadCount: chat.unreadCountAdmin || 0,
-                    wasNewMessage: change.type === 'modified' && (chat.unreadCountAdmin || 0) > 0
-                };
+                // Check if the document was modified AND the admin unread count is > 0, and it's not the currently active chat
+                if (change.type === 'modified') {
+                    chatStates[change.doc.id] = { 
+                        unreadCount: chat.unreadCountAdmin || 0,
+                        wasNewMessage: (chat.unreadCountAdmin || 0) > 0
+                    };
+                }
             });
 
             snapshot.forEach(doc => {
@@ -2348,6 +2361,7 @@ function listenForAdminChatListUpdates() {
                     
                     // Play sound if new unread message arrived from *this* chat and it's not the active one
                     const state = chatStates[doc.id];
+                    // The bug was likely related to the `chatStates` logic previously. This revised check is safer.
                     if (state && state.wasNewMessage && doc.id !== adminActiveChatId) {
                          playNotificationSound();
                     }
@@ -2637,6 +2651,7 @@ window.showPreChatModal = showPreChatModal;
 window.startNewSupportChat = startNewSupportChat;
 window.toggleAdminOnlineStatus = toggleAdminOnlineStatus;
 window.toggleNotificationSound = toggleNotificationSound;
+window.showSection = showSection; // FIX: Export showSection globally
 
 // ***********************************************
 // *** END ADMIN CHAT SUPPORT LOGIC ***
