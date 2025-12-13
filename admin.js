@@ -16,6 +16,8 @@ let allNotifications = []; // New global variable to hold notifications
 let adminActiveChatId = null;
 let adminChatUnsubscribe = null;
 let adminTypingTimeout = null;
+const ADMIN_ALERTS_COLLECTION = 'admin_alerts';
+let dismissedAdminAlerts = new Set();
 // END NEW CHAT GLOBALS
 
 
@@ -53,6 +55,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Update UI with admin data
     updateAdminInfo();
+    await loadDismissedAdminAlerts();
     loadDashboardData();
     loadSettingsData();
     
@@ -194,6 +197,30 @@ async function loadDashboardData() {
     }
 }
 
+// Helper function for admin alerts reference
+function getAdminAlertsRef() {
+    if (!currentAdmin || !window.FirebaseDB) return null;
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    
+    return window.FirebaseDB.collection('artifacts').doc(appId)
+        .collection('users').doc(currentAdmin.uid).collection(ADMIN_ALERTS_COLLECTION).doc('dismissed');
+}
+
+// Load dismissed alerts on initialization
+async function loadDismissedAdminAlerts() {
+    const docRef = getAdminAlertsRef();
+    if (!docRef) return;
+    
+    try {
+        const doc = await docRef.get();
+        if (doc.exists && doc.data().alerts) {
+            dismissedAdminAlerts = new Set(doc.data().alerts);
+        }
+    } catch (error) {
+        console.error("Error loading dismissed admin alerts:", error);
+    }
+}
+
 // Calculate platform statistics
 async function calculatePlatformStats() {
     try {
@@ -253,31 +280,37 @@ async function calculatePlatformStats() {
             }
         });
 
-        // --- 4. Notifications ---
+       // --- 4. Notifications ---
         let notifications = [];
 
         pendingSellersSnapshot.forEach(doc => {
             const seller = doc.data();
+            const notificationId = `seller-${doc.id}`;
+            const isDismissed = dismissedAdminAlerts.has(notificationId);
+            
             notifications.push({
-                id: `seller-${doc.id}`,
+                id: notificationId,
                 type: 'seller_approval',
                 message: `New Seller registration: ${seller.name || 'New User'} (${seller.businessName || 'N/A'})`,
                 relatedId: doc.id,
                 date: seller.createdAt,
-                read: false, 
+                read: isDismissed, // Use dismissal status
                 action: () => showSection('sellers')
             });
         });
 
         pendingEquipmentSnapshot.forEach(doc => {
             const equipment = doc.data();
+            const notificationId = `equipment-${doc.id}`;
+            const isDismissed = dismissedAdminAlerts.has(notificationId);
+            
             notifications.push({
-                id: `equipment-${doc.id}`,
+                id: notificationId,
                 type: 'equipment_approval',
                 message: `New Equipment listing pending: ${equipment.name || 'N/A'} (Seller: ${equipment.sellerName || 'Unknown'})`,
                 relatedId: doc.id,
                 date: equipment.createdAt,
-                read: false,
+                read: isDismissed, // Use dismissal status
                 action: () => showSection('equipment')
             });
         });
@@ -319,12 +352,33 @@ async function calculatePlatformStats() {
     }
 }
 
+// Mark alert as read
+async function markAdminAlertAsRead(alertId) {
+    if (!alertId || dismissedAdminAlerts.has(alertId)) return;
+
+    dismissedAdminAlerts.add(alertId);
+    const docRef = getAdminAlertsRef();
+    if (!docRef) return;
+
+    try {
+        await docRef.set({
+            alerts: Array.from(dismissedAdminAlerts),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        
+        loadDashboardData(); // Refresh dashboard
+    } catch (error) {
+        console.error("Error marking admin alert as read:", error);
+        window.firebaseHelpers.showAlert('Error dismissing alert. Please refresh.', 'danger');
+    }
+}
+
+
 // NEW: Display top navbar notifications
 function displayTopNotifications(notifications) {
     const list = document.getElementById('top-notifications-list');
     if (!list) return;
 
-    // Clear previous items except the header
     list.innerHTML = '<li><h6 class="dropdown-header">Notifications</h6></li>';
 
     if (notifications.length === 0) {
@@ -334,10 +388,11 @@ function displayTopNotifications(notifications) {
 
     notifications.forEach(notification => {
         const timeAgo = notification.date ? window.firebaseHelpers.formatTimeAgo(notification.date) : 'Just now';
+        const isReadClass = notification.read ? 'text-muted' : 'font-weight-bold text-primary';
         
         list.innerHTML += `
             <li>
-                <a class="dropdown-item ${notification.read ? 'text-muted' : 'font-weight-bold'}" href="#" 
+                <a class="dropdown-item ${isReadClass}" href="#" 
                    onclick="handleNotificationClick('${notification.id}')"
                    title="${notification.message}">
                     <i class="fas fa-${notification.type.includes('seller') ? 'store' : 'tractor'} me-2"></i>
@@ -354,12 +409,49 @@ function displayTopNotifications(notifications) {
 
 // NEW: Handle click on a top navbar notification
 function handleNotificationClick(notificationId) {
-    // For now, clicking redirects to the relevant section
+    // Mark as read when clicked
+    markAdminAlertAsRead(notificationId);
+    
     const notification = allNotifications.find(n => n.id === notificationId);
-    if (notification) {
-        if (notification.action) {
-            notification.action();
-        }
+    if (notification && notification.action) {
+        notification.action();
+    }
+}
+
+// Mark all notifications as read
+async function markAllAdminAlertsAsRead() {
+    if (!currentAdmin) {
+        window.firebaseHelpers.showAlert('Please log in to clear alerts.', 'danger');
+        return;
+    }
+
+    const unreadNotifications = allNotifications.filter(n => !n.read);
+    
+    if (unreadNotifications.length === 0) {
+        window.firebaseHelpers.showAlert('No pending alerts to clear.', 'info');
+        return;
+    }
+
+    unreadNotifications.forEach(notification => {
+        dismissedAdminAlerts.add(notification.id);
+    });
+    
+    const docRef = getAdminAlertsRef();
+    if (!docRef) return;
+
+    try {
+        await docRef.set({
+            alerts: Array.from(dismissedAdminAlerts),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        
+        window.firebaseHelpers.showAlert(`Cleared ${unreadNotifications.length} alerts.`, 'success');
+        loadDashboardData();
+        loadNotifications();
+
+    } catch (error) {
+        console.error("Error clearing all admin alerts:", error);
+        window.firebaseHelpers.showAlert('Error clearing all alerts. Please refresh.', 'danger');
     }
 }
 
@@ -1820,25 +1912,23 @@ async function loadNotifications() {
     const stats = await calculatePlatformStats();
     const notifications = stats.recentNotifications; // Use all notifications found
 
-    const listContainer = document.getElementById('notifications-list');
+     const listContainer = document.getElementById('notifications-list');
     const loading = document.getElementById('notifications-loading');
     const countElement = document.getElementById('notifications-count');
     
     if(!listContainer || !loading || !countElement) return;
 
     loading.style.display = 'none';
-    listContainer.innerHTML = '';
     
-    countElement.textContent = notifications.length;
-
-    if (notifications.length === 0) {
-        listContainer.innerHTML = `
-            <div class="text-center py-5">
-                <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
-                <h4>All clear!</h4>
-                <p class="text-muted">No pending system alerts or approval requests.</p>
-            </div>
-        `;
+    // Add mark all as read button
+    listContainer.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5>System Notifications</h5>
+            <button class="btn btn-sm btn-primary" onclick="markAllAdminAlertsAsRead()">
+                <i class="fas fa-check-circle me-1"></i> Mark All as Read
+            </button>
+        </div>
+    `;
         return;
     }
 
@@ -1961,26 +2051,21 @@ async function logout() {
 // *** ADMIN CHAT SUPPORT LOGIC (NEW) ***
 // ***********************************************
 
-/**
- * FIX 2: Implementation of the missing function to toggle Admin online status.
- */
+// Add this function to admin.js (after the existing toggle function)
 function setupAdminOnlineToggleListener() {
     const toggle = document.getElementById('admin-online-toggle');
     if (!toggle) return;
     
-    // Set initial state (assuming Admin is online by default, no persistence needed for this demo)
-    const isOnline = true; // Hardcoded true for admin demo
+    // Set initial state
+    const isOnline = true; // Admin is always online for demo
     toggle.checked = isOnline;
     updateAdminStatusText(isOnline);
     
-    // Attach the change listener which calls the exported function
+    // Attach the change listener
     toggle.addEventListener('change', toggleAdminOnlineStatus);
 }
 
-/**
- * FIX 2: Implementation of the missing function toggleAdminOnlineStatus.
- * Toggles the admin's online status in the chat header UI.
- */
+// Update the existing toggleAdminOnlineStatus function:
 function toggleAdminOnlineStatus() {
     const toggle = document.getElementById('admin-online-toggle');
     if (!toggle) return;
@@ -1988,10 +2073,11 @@ function toggleAdminOnlineStatus() {
     const newStatus = toggle.checked;
     updateAdminStatusText(newStatus);
     
-    // No need to save to Firestore as admin is assumed online for support
-    window.firebaseHelpers.showAlert(newStatus ? 'Admin Chat Status: Online' : 'Admin Chat Status: Offline', newStatus ? 'success' : 'warning');
+    window.firebaseHelpers.showAlert(
+        newStatus ? 'Admin Chat Status: Online' : 'Admin Chat Status: Offline', 
+        newStatus ? 'success' : 'warning'
+    );
 }
-window.toggleAdminOnlineStatus = toggleAdminOnlineStatus; // Export globally
 
 function updateAdminStatusText(isOnline) {
     const statusText = document.getElementById('admin-status-text');
@@ -2000,7 +2086,6 @@ function updateAdminStatusText(isOnline) {
         statusText.className = isOnline ? 'text-success' : 'text-muted';
     }
 }
-
 
 /**
  * FIX 3: Implementation of the missing function showPreChatModal.
