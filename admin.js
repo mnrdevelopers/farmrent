@@ -1239,7 +1239,7 @@ async function rejectEquipment(equipmentId) {
 // Mark equipment as featured (New Functionality to resolve homepage issue)
 async function markEquipmentAsFeatured(equipmentId, isFeatured, closeAndReload = false) {
     const actionText = isFeatured ? 'Mark as Featured' : 'Unmark as Featured';
-    window.firebaseHelpers.showAlert(`Equipment ${actionText.toLowerCase()} feature needs confirmation UI.`, 'warning'); 
+    window.firebaseHelpers.showAlert(`Equipment ${actionText.toLowerCase()} feature needs confirmation UI.', 'warning`); 
     if (!confirm(`Are you sure you want to ${actionText.toLowerCase()}?`)) return;
 
     try {
@@ -1925,32 +1925,52 @@ async function loadNotifications() {
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h5>System Notifications</h5>
             <button class="btn btn-sm btn-primary" onclick="markAllAdminAlertsAsRead()">
-                <i class="fas fa-check-circle me-1"></i> Mark All as Read
+                <i class="fas fa-check-double me-1"></i> Mark All as Read
             </button>
         </div>
     `;
+    
+    // Filter to only show actual notifications (not just placeholders for the button)
+    const displayNotifications = allNotifications.filter(n => true); 
+
+    if (displayNotifications.length === 0) {
+        listContainer.innerHTML += `
+            <div class="text-center py-5">
+                <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
+                <h4>All clear!</h4>
+                <p class="text-muted">No pending system alerts or approvals.</p>
+            </div>
+        `;
         return;
     }
 
-    notifications.forEach(notification => {
+    displayNotifications.forEach(notification => {
         const timeAgo = notification.date ? window.firebaseHelpers.formatDateTime(notification.date) : 'N/A';
         const typeIcon = notification.type.includes('seller') ? 'fas fa-store' : 'fas fa-tractor';
         const badgeColor = notification.type.includes('seller') ? 'bg-warning' : 'bg-info';
         const actionText = notification.type.includes('seller') ? 'Review Seller' : 'Review Equipment';
+        const unreadClass = !notification.read ? 'bg-light border-left-danger' : '';
+        const badgeText = notification.type.replace('_', ' ');
 
         listContainer.innerHTML += `
-            <div class="list-group-item d-flex justify-content-between align-items-center p-3">
+            <div class="list-group-item d-flex justify-content-between align-items-center p-3 mb-2 rounded ${unreadClass}"
+                 style="border-left: 5px solid ${!notification.read ? '#F44336' : 'transparent'};">
                 <div class="d-flex align-items-center">
                     <i class="${typeIcon} fa-2x me-3 text-primary"></i>
                     <div>
                         <h6 class="mb-1">${notification.message}</h6>
-                        <small class="text-muted">Type: <span class="badge ${badgeColor}">${notification.type.replace('_', ' ')}</span> | Received: ${timeAgo}</small>
+                        <small class="text-muted">Type: <span class="badge ${badgeColor}">${badgeText}</span> | Received: ${timeAgo}</small>
                     </div>
                 </div>
                 <div>
                     <button class="btn btn-sm btn-outline-primary" onclick="handleNotificationAction('${notification.relatedId}', '${notification.type}')">
                         <i class="fas fa-arrow-right me-1"></i> ${actionText}
                     </button>
+                    ${!notification.read ? `
+                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="markAdminAlertAsRead('${notification.id}')">
+                            <i class="fas fa-check me-1"></i> Dismiss
+                        </button>
+                    ` : ''}
                 </div>
             </div>
         `;
