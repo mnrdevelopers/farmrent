@@ -486,14 +486,22 @@ body {
     display: flex;
     flex-direction: column;
     background-color: #fff;
-    overflow-y: hidden;
+    /* Removed overflow-y: hidden; as it conflicts with chat-list-body scroll */
 }
 
 .chat-list-body {
     flex-grow: 1;
-    overflow-y: auto;
+    overflow-y: auto; /* CRITICAL: Enables scrolling for the conversation list */
     background-color: #f6f6f6;
+    /* Optional: Hide scrollbar in chat list */
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
 }
+
+.chat-list-body::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+}
+
 
 .chat-list-item {
     padding: 10px 15px;
@@ -511,11 +519,11 @@ body {
 
 .chat-list-item.active {
     background-color: #ebebeb; /* Slight dark active background */
-    border-left: 3px solid var(--wa-green);
+    border-left: 3px solid var(--admin-blue); /* Use Admin primary color */
 }
 
 .chat-list-item .unread-count {
-    background-color: var(--wa-green);
+    background-color: var(--accent-red); /* Use a high-contrast color for admin alert */
     color: white;
     padding: 2px 7px;
     border-radius: 10px;
@@ -527,18 +535,25 @@ body {
     flex-grow: 1;
     background-color: var(--wa-bg-color); /* Light background for chat window */
     background-image: url("https://www.transparenttextures.com/patterns/subtle-white-feathers.png"); /* Light texture for background */
+    display: flex; /* CRITICAL: To allow nested flex for messages and input */
+    flex-direction: column; /* CRITICAL: To stack header, messages, and footer */
 }
 
 .chat-window-header {
     background-color: white;
+    flex-shrink: 0; /* Header should not shrink */
 }
 
 .chat-messages-body {
-    overflow-y: auto;
-    flex-grow: 1;
+    overflow-y: auto; /* CRITICAL: Enables scrolling for messages */
+    flex-grow: 1; /* CRITICAL: Takes up all available vertical space */
     padding: 15px;
     display: flex;
     flex-direction: column;
+    scroll-behavior: smooth;
+    /* Optional: Hide scrollbar in message body if preferred */
+    /* -ms-overflow-style: none;
+    scrollbar-width: none; */
 }
 
 /* Chat Bubbles */
@@ -576,16 +591,40 @@ body {
     text-align: right;
 }
 
+/* Typing Indicator */
+.typing-indicator {
+    padding: 5px 15px;
+    font-style: italic;
+    font-size: 0.8rem;
+    color: #666;
+    flex-shrink: 0;
+    line-height: 1.2;
+}
+
+
 /* Chat Input Styling */
+#admin-chat-input-container {
+    flex-shrink: 0; /* Input container should not shrink */
+}
+
 #admin-chat-input-container .input-group .form-control {
     border-radius: 20px 0 0 20px !important;
     border-right: none;
     padding: 10px 15px;
+    font-size: 0.95rem;
 }
 
 #admin-chat-input-container .input-group .btn {
     border-radius: 0 20px 20px 0 !important;
     padding: 10px 20px;
+    background-color: var(--admin-blue);
+    border-color: var(--admin-blue);
+    font-size: 0.95rem;
+}
+
+#admin-chat-input-container .input-group .btn:hover {
+    background-color: var(--admin-dark);
+    border-color: var(--admin-dark);
 }
 
 @media (max-width: 768px) {
