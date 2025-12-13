@@ -6,8 +6,6 @@ let earningsChart = null;
 let detailedEarningsChart = null;
 let sellerNotifications = [];
 
-// Removed Chat Globals (sellerActiveChatId, sellerChatUnsubscribe, sellertypingTimeout)
-
 // Seller Alerts
 const SELLER_ALERTS_COLLECTION = 'seller_alerts';
 let dismissedAlerts = new Set();
@@ -1166,8 +1164,12 @@ function loadLibraryImages() {
 window.loadLibraryImages = loadLibraryImages;
 
 function selectLibraryImage(url, element) {
+    // FIX 1: Ensure the click event correctly selects and highlights the element.
     document.getElementById('selected-library-image').value = url;
+    // Ensure all cards are deselected first
     document.querySelectorAll('.library-image-card').forEach(card => card.classList.remove('selected'));
+    
+    // Select the current card (which is passed as 'element')
     element.classList.add('selected');
 }
 window.selectLibraryImage = selectLibraryImage;
@@ -1496,7 +1498,7 @@ async function viewOrderDetails(orderId) {
                     <div class="col-md-6">
                         <h5>Payment Information</h5>
                         <table class="table table-sm">
-                            <tr><th>Payment Status:</th><td><span class="badge bg-${order.paymentStatus === 'paid' ? 'success' : 'danger'}">${order.paymentStatus || 'pending'}</span></td></tr>
+                            <tr><th>Payment Status:</th><td><span class="badge bg-${order.paymentStatus === 'paid' ? 'success' : 'danger'}">${order.paymentStatus || 'N/A'}</span></td></tr>
                             <tr><th>Payment Method:</th><td>${order.paymentMethod || 'N/A'}</td></tr>
                             <tr><th>Transaction ID:</th><td>${order.transactionId || 'N/A'}</td></tr>
                         </table>
@@ -1553,7 +1555,9 @@ async function viewOrderDetails(orderId) {
 }
 
 async function updateOrderStatus(orderId, newStatus) {
-    if (!orderId) {
+    // FIX: Check for the literal string 'undefined' which can result from missing data in HTML interpolation.
+    if (!orderId || orderId === 'undefined') {
+        console.error('Critical Error: Order ID is missing or invalid.');
         window.firebaseHelpers.showAlert('Critical Error: Order ID is missing.', 'danger');
         return;
     }
@@ -1615,36 +1619,50 @@ async function updateOrderStatus(orderId, newStatus) {
             
             window.firebaseHelpers.showAlert(`Order status updated to ${newStatus}!`, 'success');
             
-            // SMS Alert
+            // SMS Alert - FETCH DOCUMENT AFTER UPDATE
             const orderDoc = await orderRef.get();
-            const order = orderDoc.data();
             
-            if (order && order.customerPhone) {
-                let smsMessage = '';
-                const orderShortId = `#${orderId.substring(0, 8)}`;
-                const equipNames = order.equipmentNames.split(',')[0];
+            // Check if document exists before accessing data
+            if (!orderDoc.exists) {
+                 console.error(`Error: Order Document Not Found for ID: ${orderId} after update.`);
+                 window.firebaseHelpers.showAlert('Order updated successfully, but customer notification skipped (document not found for SMS).', 'warning');
+            } else {
+                 const order = orderDoc.data();
+                 
+                 if (order && order.customerPhone) {
+                    let smsMessage = '';
+                    const orderShortId = `#${orderId.substring(0, 8)}`;
+                    const equipNames = order.equipmentNames.split(',')[0];
 
-                if (newStatus === 'active') {
-                    smsMessage = `FarmRent: Order ${orderShortId} for ${equipNames} has been confirmed & is ready for pickup on ${order.pickupDate} at ${order.pickupTime}. Thank you!`;
-                } else if (newStatus === 'pickedup') {
-                    smsMessage = `FarmRent: Order ${orderShortId} status changed to Picked Up. Enjoy your rental! Contact seller ${order.sellerBusinessNames} for any issues.`;
-                } else if (newStatus === 'returned') {
-                    smsMessage = `FarmRent: Equipment for Order ${orderShortId} has been returned. Final check and transaction completion pending.`;
-                } else if (newStatus === 'completed') {
-                    smsMessage = `FarmRent: Order ${orderShortId} completed successfully! Thank you for renting with us.`;
-                }
-                
-                if (smsMessage) {
-                    // Send SMS Alert (Assuming firebaseHelpers.sendSmsAlert is implemented elsewhere)
-                    // await window.firebaseHelpers.sendSmsAlert(order.customerPhone, smsMessage);
+                    if (newStatus === 'active') {
+                        smsMessage = `FarmRent: Order ${orderShortId} for ${equipNames} has been confirmed & is ready for pickup on ${order.pickupDate} at ${order.pickupTime}. Thank you!`;
+                    } else if (newStatus === 'pickedup') {
+                        smsMessage = `FarmRent: Order ${orderShortId} status changed to Picked Up. Enjoy your rental! Contact seller ${order.sellerBusinessNames} for any issues.`;
+                    } else if (newStatus === 'returned') {
+                        smsMessage = `FarmRent: Equipment for Order ${orderShortId} has been returned. Final check and transaction completion pending.`;
+                    } else if (newStatus === 'completed') {
+                        smsMessage = `FarmRent: Order ${orderShortId} completed successfully! Thank you for renting with us.`;
+                    }
+                    
+                    if (smsMessage) {
+                        // Send SMS Alert (Assuming window.firebaseHelpers.sendSmsAlert is implemented elsewhere)
+                        // await window.firebaseHelpers.sendSmsAlert(order.customerPhone, smsMessage);
+                    }
                 }
             }
+
             
             // Mark alert as read/dismissed once action is taken
             markAlertAsRead(orderId); 
 
             // Reload UI elements
-            viewOrderDetails(orderId);
+            // Close the order details modal if it is open (by ID)
+            const orderDetailsModalEl = document.getElementById('orderModal');
+            if (orderDetailsModalEl) {
+                 const detailsModalInstance = bootstrap.Modal.getInstance(orderDetailsModalEl);
+                 if (detailsModalInstance) detailsModalInstance.hide();
+            }
+
             loadDashboardData();
             loadRecentOrders();
             loadOrders();
