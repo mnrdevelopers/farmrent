@@ -187,6 +187,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (path === 'profile.html') {
         loadProfilePage();
         updateNavbarPincodeDisplay();
+        // Setup the pincode listener on profile page explicitly
+        const pincodeInput = document.getElementById('profile-pincode');
+        if (pincodeInput) {
+            // Check if the user is a seller and already has a pincode, they cannot edit it.
+            // If they are a customer or a new seller, they can edit. The logic in loadProfilePage handles readOnly for established sellers.
+            pincodeInput.addEventListener('input', () => {
+                if (window.currentUser?.role === 'seller' && window.currentUser?.pincode && pincodeInput.readOnly) {
+                    return; 
+                }
+                document.getElementById('profile-city').value = '';
+                document.getElementById('profile-state').value = '';
+                const villageSelect = document.getElementById('profile-village');
+                if(villageSelect) {
+                    villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
+                    villageSelect.disabled = true;
+                }
+                
+                if (pincodeInput.value.length === 6) {
+                    window.populateLocationFields('profile-pincode', 'profile-village', 'profile-city', 'profile-state', 'pincode-status-message');
+                }
+            });
+        }
     } else if (path === 'orders.html') {
         loadOrdersPage();
         updateNavbarPincodeDisplay();
@@ -302,7 +324,7 @@ async function getPostOfficeData(pincode) {
         return [];
     }
 }
-// Make getPostOfficeData globally available for seller.js
+// Make getPostOfficeData globally accessible for seller.js
 window.getPostOfficeData = getPostOfficeData;
 
 /**
@@ -726,7 +748,7 @@ async function changePincodeToMatchEquipment(equipmentPincode) {
         if (modalInstance) modalInstance.hide();
     }
     
-    // Delay slightly to ensure savePincode async operations complete before re-triggering modal
+    // Delay slightly to ensure savePincode async operations complete before re-trying or notifying
     setTimeout(() => {
         // If coming from Add to Cart or item page, the item modal is likely closed. Let the user re-try.
         window.firebaseHelpers.showAlert('Location updated. Please click "Add to Cart" or "Rent Now" again.', 'info');
@@ -1958,7 +1980,7 @@ async function loadCheckoutPage() {
     if (customerPhoneInput) customerPhoneInput.value = window.currentUser?.mobile || '';
 
     // **FIX: Update coin display with the freshly fetched value**
-    const coinBalanceDisplay = document.getElementById('coin-balance-display');
+    const coinBalanceDisplay = document.getElementById('coin-balance-text');
     if (coinBalanceDisplay) coinBalanceDisplay.textContent = `${availableCoins || 0} Coins`;
     
     // Initialize razorpayContext with cart data FIRST
@@ -2241,11 +2263,11 @@ async function checkCustomerNotifications() {
                     const orderId = parts[0];
                     const sellerId = parts[1];
                     const sellerName = notif.message.split(':')[0].replace('New message from ', '').trim();
-                    const chatAction = `openOrderChat('${orderId}', '${sellerId}', '${sellerName}')`;
+                    const chatAction = `openOrderChat('${orderId}', '${sellerId}', '${sellerName.replace(/'/g, "\\'")}')`;
                     
                     if (listElement) listElement.innerHTML += `
                         <li>
-                            <a class="dropdown-item d-flex justify-content-between align-items-center ${unreadClass}" href="#" onclick="${chatAction}" title="${notif.message}">
+                            <a class="dropdown-item d-flex justify-content-between align-items-center ${unreadClass}" href="#" onclick="${chatAction}" title="${notif.message.replace(/'/g, "&apos;")}">
                                 <div>
                                     <span class="badge ${notif.badgeClass} me-2"><i class="${notif.icon}"></i></span>
                                     ${notif.message.substring(0, 30)}...
@@ -2259,7 +2281,7 @@ async function checkCustomerNotifications() {
                 
                 if (listElement) listElement.innerHTML += `
                     <li>
-                        <a class="dropdown-item d-flex justify-content-between align-items-center ${unreadClass}" href="${linkUrl}" title="${notif.message}">
+                        <a class="dropdown-item d-flex justify-content-between align-items-center ${unreadClass}" href="${linkUrl}" title="${notif.message.replace(/'/g, "&apos;")}">
                             <div>
                                 <span class="badge ${notif.badgeClass} me-2"><i class="${notif.icon}"></i></span>
                                 ${notif.message.substring(0, 30)}...
@@ -2784,7 +2806,7 @@ function initializeEventListeners() {
         if (pincodeInput) {
             pincodeInput.addEventListener('input', () => {
                 // If the user is a seller and already has a pincode, they cannot edit it
-                if (window.currentUser && window.currentUser.role === 'seller' && window.currentUser.pincode) {
+                if (window.currentUser && window.currentUser.role === 'seller' && window.currentUser.pincode && pincodeInput.readOnly) {
                     return;
                 }
 
@@ -3424,7 +3446,7 @@ async function loadProfilePage() {
     if (profileUserNameEl) profileUserNameEl.textContent = user.name || 'User';
     
     // NEW: Update Coin Display
-    const profileCoinBalanceEl = document.getElementById('profile-coin-balance');
+    const profileCoinBalanceEl = document.getElementById('profile-coin-balance");
     if (profileCoinBalanceEl) profileCoinBalanceEl.textContent = `${availableCoins || 0} Coins`;
     
     // NEW: Update Referral Info
@@ -4276,7 +4298,7 @@ async function loadUserConversations() {
             
             // Professional List Item
             body.innerHTML += `
-                <div class="p-3 border-bottom bg-white hover-bg-light cursor-pointer" onclick="loadChatMessages('${doc.id}', '${chat.sellerBusinessName}', '${chat.sellerId}')" style="cursor:pointer;">
+                <div class="p-3 border-bottom bg-white hover-bg-light cursor-pointer" onclick="loadChatMessages('${doc.id}', '${chat.sellerBusinessName.replace(/'/g, "\\'")}', '${chat.sellerId}')" style="cursor:pointer;">
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <strong class="text-dark">${chat.sellerBusinessName}</strong>
                         <span class="small text-muted">${time}</span>
@@ -4316,10 +4338,12 @@ async function loadChatMessages(chatId, titleName, sellerId) {
 
     // 1. Fetch Seller Status (Online/Offline)
     if (sellerId) {
+        // Use onSnapshot to monitor seller status in real-time
         window.FirebaseDB.collection('users').doc(sellerId).onSnapshot(doc => {
             const seller = doc.data();
             const isOnline = seller && seller.isOnline;
             if (statusText) statusText.textContent = isOnline ? 'Online' : 'Offline';
+            // Use standard CSS class names 'online' or 'offline'
             if (statusDot) statusDot.className = `status-dot ${isOnline ? 'online' : 'offline'}`;
             
             // Show Custom Status Message if Offline
@@ -4327,14 +4351,19 @@ async function loadChatMessages(chatId, titleName, sellerId) {
             const existingMsg = document.getElementById(customMsgId);
             
             if (!isOnline && !existingMsg && body) {
-                const msg = document.createElement('div');
-                msg.id = customMsgId;
-                msg.className = 'system-message';
-                msg.textContent = `Seller is currently offline. You can leave a message.`;
-                body.appendChild(msg);
+                // Only inject if the chat body has finished loading messages (to avoid double insertion)
+                if (body.children.length > 0 && body.children[0].classList && !body.children[0].classList.contains('spinner-border')) {
+                    const msg = document.createElement('div');
+                    msg.id = customMsgId;
+                    msg.className = 'system-message';
+                    msg.textContent = `Seller is currently offline. You can leave a message.`;
+                    body.appendChild(msg);
+                }
             } else if (isOnline && existingMsg) {
                 existingMsg.remove();
             }
+        }, error => {
+            console.error("Error listening to seller status:", error);
         });
     }
 
@@ -4437,7 +4466,7 @@ async function openOrderChat(orderId, sellerId, businessName) {
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             unreadCountCustomer: 0,
-            unreadCountSeller: 1 // New chat alert for seller
+            unreadCountAdmin: 1 // New chat alert for Admin (assuming all chats go to Admin)
         });
     }
 
@@ -4481,7 +4510,7 @@ async function sendChatMessage() {
         await chatRef.update({
             lastMessage: text,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            unreadCountSeller: firebase.firestore.FieldValue.increment(1)
+            unreadCountAdmin: firebase.firestore.FieldValue.increment(1) // Admin receives the message
         });
     } catch (error) {
         console.error("Error sending message:", error);
@@ -4640,3 +4669,15 @@ window.getReferralLink = function(code) {
     // Base URL is index.html. We link to signup with the code.
     return `${baseUrl}/farmrent/auth.html?role=customer&ref=${code}`;
 }
+
+// Global functions that were in the original snippet but removed due to being redundant/mock. Re-adding them as global exports here 
+// for compatibility with other files that might reference them, even if they contain no logic.
+window.getMockLocationData = function(pincode) { return null; };
+window.setupPincodeListener = function(pincodeInputId, cityInputId, stateInputId, villageSelectId, statusMessageId) { 
+    // This function is now superseded by explicit calls to populateLocationFields in auth.html/profile.html
+    console.warn('setupPincodeListener is deprecated. Use event listeners calling populateLocationFields directly.'); 
+};
+window.logout = logout; // Export logout globally
+window.savePincode = savePincode; // Export savePincode globally
+window.getCurrentLocationPincode = getCurrentLocationPincode; // Export location function
+window.skipPincode = skipPincode; // Export skip function
