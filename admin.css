@@ -7,6 +7,12 @@
     --admin-blue: #1a237e;
     --admin-dark: #0d47a1;
     --admin-accent: #2196f3;
+    
+    /* NEW CHAT COLORS (WhatsApp-like) */
+    --wa-bg-color: #e5ddd5;
+    --wa-green: #075E54;
+    --wa-bubble-green: #DCF8C6;
+    --wa-bubble-white: #FFFFFF;
 }
 
 body {
@@ -459,5 +465,141 @@ body {
     
     .table-responsive {
         overflow-x: auto;
+    }
+}
+
+/* -------------------------------------------------------- */
+/* --- NEW: CHAT SECTION STYLES (WhatsApp Web-like) --- */
+/* -------------------------------------------------------- */
+
+.chat-main-container {
+    height: 80vh; /* Set a fixed height for the whole chat interface */
+    display: flex;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background-color: #f0f2f5; /* Light grey background */
+}
+
+.chat-list-pane {
+    width: 300px;
+    min-width: 250px;
+    display: flex;
+    flex-direction: column;
+    background-color: #fff;
+    overflow-y: hidden;
+}
+
+.chat-list-body {
+    flex-grow: 1;
+    overflow-y: auto;
+    background-color: #f6f6f6;
+}
+
+.chat-list-item {
+    padding: 10px 15px;
+    cursor: pointer;
+    transition: background-color 0.15s;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.chat-list-item:hover {
+    background-color: #f2f2f2;
+}
+
+.chat-list-item.active {
+    background-color: #ebebeb; /* Slight dark active background */
+    border-left: 3px solid var(--wa-green);
+}
+
+.chat-list-item .unread-count {
+    background-color: var(--wa-green);
+    color: white;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.chat-window-pane {
+    flex-grow: 1;
+    background-color: var(--wa-bg-color); /* Light background for chat window */
+    background-image: url("https://www.transparenttextures.com/patterns/subtle-white-feathers.png"); /* Light texture for background */
+}
+
+.chat-window-header {
+    background-color: white;
+}
+
+.chat-messages-body {
+    overflow-y: auto;
+    flex-grow: 1;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Chat Bubbles */
+.chat-message-bubble {
+    max-width: 65%;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    position: relative;
+    word-wrap: break-word;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+    line-height: 1.4;
+    margin-bottom: 5px;
+}
+
+.message-sent-admin {
+    background-color: var(--wa-bubble-green);
+    color: #333;
+    align-self: flex-end;
+    border-top-right-radius: 0;
+}
+
+.message-received-customer {
+    background-color: var(--wa-bubble-white);
+    color: #333;
+    align-self: flex-start;
+    border-top-left-radius: 0;
+}
+
+.message-time-admin {
+    font-size: 0.65rem;
+    color: #999;
+    margin-top: 4px;
+    display: block;
+    text-align: right;
+}
+
+/* Chat Input Styling */
+#admin-chat-input-container .input-group .form-control {
+    border-radius: 20px 0 0 20px !important;
+    border-right: none;
+    padding: 10px 15px;
+}
+
+#admin-chat-input-container .input-group .btn {
+    border-radius: 0 20px 20px 0 !important;
+    padding: 10px 20px;
+}
+
+@media (max-width: 768px) {
+    .chat-main-container {
+        flex-direction: column;
+        height: 75vh;
+    }
+    .chat-list-pane {
+        width: 100%;
+        min-height: 150px;
+        max-height: 150px;
+    }
+    .chat-window-pane {
+        width: 100%;
+        flex-grow: 1;
     }
 }
