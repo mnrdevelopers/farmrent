@@ -2309,10 +2309,11 @@ function listenForAdminChatListUpdates() {
                 const chat = change.doc.data();
                 // Check if the document was modified AND the admin unread count is > 0, and it's not the currently active chat
                 if (change.type === 'modified') {
-                    chatStates[change.doc.id] = { 
-                        unreadCount: chat.unreadCountAdmin || 0,
-                        wasNewMessage: (chat.unreadCountAdmin || 0) > 0
-                    };
+                   // Fixed version
+chatStates[change.doc.id] = { 
+    unreadCount: chat.unreadCountAdmin || 0,
+    wasNewMessage: (chat.unreadCountAdmin || 0) > 0
+};
                 }
             });
 
