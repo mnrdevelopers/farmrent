@@ -2020,7 +2020,7 @@ function listenForAdminChatListUpdates() {
             
             // Update the main admin badge
             // FIX: Add null check for chat-unread-count (Fixes line 1982 error)
-            const chatUnreadCountEl = document.getElementById('chat-unread-count');
+            const chatUnreadCountEl = document.getElementById('new-messages-count');
             if (chatUnreadCountEl) chatUnreadCountEl.textContent = totalUnread > 0 ? totalUnread : '0';
 
         }, error => {
@@ -2028,7 +2028,7 @@ function listenForAdminChatListUpdates() {
             listContainer.innerHTML = '<div class="text-center py-5 text-danger small">Error loading chats.</div>';
             
             // FIX: Add null check for chat-unread-count
-            const chatUnreadCountEl = document.getElementById('chat-unread-count');
+            const chatUnreadCountEl = document.getElementById('new-messages-count');
             if (chatUnreadCountEl) chatUnreadCountEl.textContent = '0';
         });
 }
@@ -2043,6 +2043,8 @@ function loadAdminConversations() {
     // Reset active chat state
     adminActiveChatId = null;
     const messagesContainer = document.getElementById('admin-chat-messages');
+    
+    // CRITICAL: Clear all messages and show empty state
     if(messagesContainer) {
         messagesContainer.innerHTML = `
              <div id="chat-empty-state-admin" class="text-center text-muted mt-5">
@@ -2050,15 +2052,22 @@ function loadAdminConversations() {
                 <h5>Select a conversation from the left to start support.</h5>
             </div>
         `;
+        // Ensure manual scroll to top of message list when switching back to list view
+        messagesContainer.scrollTop = 0; 
     }
 
     document.getElementById('chat-customer-name-admin').textContent = 'Select a Conversation';
     document.getElementById('chat-details-admin').textContent = 'Order #N/A | Seller: N/A';
+    
     const adminMessageInput = document.getElementById('admin-message-input');
     if (adminMessageInput) adminMessageInput.disabled = true;
     const adminSendBtn = document.getElementById('admin-send-btn');
     if (adminSendBtn) adminSendBtn.disabled = true;
     
+    // Hide typing indicator when loading list view
+    const indicator = document.getElementById('admin-typing-indicator');
+    if (indicator) indicator.style.display = 'none';
+
     listenForAdminChatListUpdates();
 }
 
@@ -2082,9 +2091,15 @@ async function loadAdminChatMessages(chatId, customerName, orderShortId, sellerB
 
     messagesContainer.innerHTML = '<div class="text-center mt-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
     
-    // FIX: Add null check before accessing style (Fixes line 2026 error)
+    // Ensure empty state is hidden
     const emptyStateEl = document.getElementById('chat-empty-state-admin');
     if(emptyStateEl) emptyStateEl.style.display = 'none';
+    
+    // Update active class in chat list
+    document.querySelectorAll('.chat-list-item').forEach(item => item.classList.remove('active'));
+    // Find and activate the correct item (using direct selector is complex, rely on JS for now)
+    // Re-run the list rendering to update the active state correctly
+    listenForAdminChatListUpdates();
 
 
     // 1. Get Chat References
@@ -2112,32 +2127,42 @@ async function loadAdminChatMessages(chatId, customerName, orderShortId, sellerB
                 const msg = doc.data();
                 // Admin is the current user. Customer is the other person.
                 const isMe = msg.senderId === currentAdmin.uid;
-                const senderName = isMe ? 'You (Admin)' : customerName;
+                // const senderName = isMe ? 'You (Admin)' : customerName; // Sender name not needed in bubble style
                 const date = msg.timestamp ? msg.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
                 
                 messagesContainer.innerHTML += `
                     <div style="display: flex; justify-content: ${isMe ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
-                        <div class="message-bubble ${isMe ? 'message-sent-admin' : 'message-received-customer'}">
+                        <div class="chat-message-bubble ${isMe ? 'message-sent-admin' : 'message-received-customer'}">
                             ${msg.text}
-                            <span class="message-time">${date}</span>
+                            <span class="message-time-admin">${date}</span>
                         </div>
                     </div>
                 `;
             });
+            // CRITICAL: Scroll to bottom
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
         
         // Mark read by Admin
         chatDocRef.update({ unreadCountAdmin: 0 }); 
+    }, error => {
+        console.error("Error listening to messages:", error);
+        messagesContainer.innerHTML = `
+            <div class="text-center text-danger mt-5">
+                <i class="fas fa-exclamation-circle me-2"></i> Error loading messages.
+            </div>
+        `;
     });
 
     // 3. Listen for Typing
     chatDocRef.onSnapshot(doc => {
         const data = doc.data();
         const indicator = document.getElementById('admin-typing-indicator');
+        const messagesContainer = document.getElementById('admin-chat-messages');
+
         if (data && data.typing && data.typing.customer && indicator) {
             indicator.style.display = 'block';
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
         } else if (indicator) {
             indicator.style.display = 'none';
         }
@@ -2155,7 +2180,10 @@ async function loadAdminChatMessages(chatId, customerName, orderShortId, sellerB
         };
         
         input.onkeypress = (e) => { 
-            if (e.key === 'Enter') sendAdminMessage(); 
+            if (e.key === 'Enter') {
+                e.preventDefault(); // Prevent default form submission/new line
+                sendAdminMessage(); 
+            }
         };
         // Auto-focus the input after loading messages
         setTimeout(() => input.focus(), 100);
@@ -2176,6 +2204,7 @@ async function sendAdminMessage() {
     
     try {
         clearTimeout(adminTypingTimeout);
+        // Turn off typing indicator immediately
         await chatRef.set({ typing: { admin: false } }, { merge: true });
 
         await chatRef.collection('messages').add({
