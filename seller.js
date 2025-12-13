@@ -6,6 +6,12 @@ let earningsChart = null;
 let detailedEarningsChart = null;
 let sellerNotifications = [];
 
+// Chat Globals
+let sellerActiveChatId = null;
+let sellerChatUnsubscribe = null;
+let sellertypingTimeout = null;
+
+
 // Seller Alerts
 const SELLER_ALERTS_COLLECTION = 'seller_alerts';
 let dismissedAlerts = new Set();
@@ -73,7 +79,7 @@ window.loadSellerDashboard = async () => {
     
     // Update UI
     updateSellerInfo();
-    setupOnlineStatusToggle(); 
+    setupOnlineStatusToggle(); // NEW: Online status toggle
     
     // Load data
     await loadDismissedAlerts();
@@ -82,7 +88,7 @@ window.loadSellerDashboard = async () => {
     
     if (loadingEl) loadingEl.classList.remove('active');
     showSection('dashboard');
-    loadLibraryImages(); 
+    loadLibraryImages(); // Load image library
 }
 
 // --- ONLINE STATUS MANAGEMENT ---
@@ -212,6 +218,7 @@ function showSection(sectionId) {
             break;
         case 'notifications':
             loadNotifications();
+            loadSellerConversations();
             break;
         case 'reviews':
             loadReviews();
@@ -245,18 +252,18 @@ async function loadDashboardData() {
         const sellerRatingEl = document.getElementById('seller-rating');
         if (sellerRatingEl) sellerRatingEl.textContent = stats.rating.toFixed(1);
         
-        // Update notification badges (only includes alerts)
+        // Update notification badges (now includes chat messages)
         const newMessagesCountEl = document.getElementById('new-messages-count');
-        if (newMessagesCountEl) newMessagesCountEl.textContent = notificationData.unreadCount || '0';
+        if (newMessagesCountEl) newMessagesCountEl.textContent = notificationData.unreadCount || '';
         
         const newMessagesCountMobileEl = document.getElementById('new-messages-count-mobile');
-        if (newMessagesCountMobileEl) newMessagesCountMobileEl.textContent = notificationData.unreadCount || '0';
+        if (newMessagesCountMobileEl) newMessagesCountMobileEl.textContent = notificationData.unreadCount || '';
         
         const notificationCountEl = document.getElementById('notification-count');
-        if (notificationCountEl) notificationCountEl.textContent = notificationData.unreadCount || '0';
+        if (notificationCountEl) notificationCountEl.textContent = notificationData.unreadCount || '';
         
         const quickAlertCountEl = document.getElementById('quick-alert-count');
-        if (quickAlertCountEl) quickAlertCountEl.textContent = notificationData.unreadCount || '0';
+        if (quickAlertCountEl) quickAlertCountEl.textContent = notificationData.unreadCount || '';
 
         displayTopNotifications(notificationData.recentNotifications);
         
@@ -335,7 +342,6 @@ async function calculateSellerNotifications() {
                  message = `Equipment Returned: ${itemNames}`;
             }
             
-            // Determine if the alert is new (not dismissed)
             const isNewAlert = !dismissedAlerts.has(orderId);
 
             notifications.push({
@@ -344,7 +350,7 @@ async function calculateSellerNotifications() {
                 message: message,
                 relatedId: orderId,
                 date: order.createdAt,
-                read: !isNewAlert, // Read if it's already dismissed
+                read: !isNewAlert,
                 action: () => viewOrderDetails(orderId)
             });
         });
@@ -359,21 +365,48 @@ async function calculateSellerNotifications() {
 
         reviewsSnapshot.forEach(doc => {
             const review = doc.data();
+            // Note: Since reviews don't have a specific read/dismiss mechanism, 
+            // they are treated as unread if they were created recently (last 24h).
             notifications.push({
                 id: doc.id,
                 type: 'new_review',
                 message: `New Review (${review.rating}★) for ${review.equipmentName || 'Equipment'}`,
                 relatedId: doc.id,
                 date: review.createdAt,
-                read: false, // New reviews are always considered unread for now
+                read: false,
                 action: () => showSection('reviews')
             });
         });
 
-        // 3. Unread Chat Messages (NO LONGER INCLUDED in Seller Notifications)
-        // Seller chat is centralized under Admin.
-        const unreadChatCount = 0; 
+        // 3. Unread Chat Messages (Communication) <-- FIX ADDED HERE
+        const conversationsSnapshot = await window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations')
+            .where('sellerId', '==', window.currentUser.uid)
+            .get();
+            
+        let unreadChatCount = 0;
         
+        conversationsSnapshot.forEach(doc => {
+            const chat = doc.data();
+            unreadChatCount += chat.unreadCountSeller || 0;
+            
+            // Optionally add the latest chat to the notifications list if it has unread messages
+            if (chat.unreadCountSeller > 0 && notifications.length < 10) {
+                 notifications.push({
+                    id: doc.id,
+                    type: 'new_chat_message',
+                    message: `New message from ${chat.customerName}: ${chat.lastMessage.substring(0, 20)}...`,
+                    relatedId: doc.id,
+                    date: chat.updatedAt,
+                    read: false, // Mark as unread since unreadCountSeller > 0
+                    action: () => { 
+                         showSection('notifications');
+                         // This automatically focuses on the chat list which is the primary UI for conversations
+                    }
+                 });
+            }
+        });
+
+
         notifications.sort((a, b) => (b.date?.toDate() || 0) - (a.date?.toDate() || 0));
         
         sellerNotifications = notifications;
@@ -381,8 +414,8 @@ async function calculateSellerNotifications() {
         // Count unread order and review alerts that were not manually dismissed
         const unreadAlerts = notifications.filter(n => n.type.startsWith('order_') || n.type === 'new_review').filter(n => !n.read).length;
         
-        // Final unread count now only relies on alerts
-        const totalUnreadCount = unreadAlerts;
+        // Final unread count includes both Alerts and Chat Messages
+        const totalUnreadCount = unreadAlerts + unreadChatCount;
         
         return { unreadCount: totalUnreadCount, recentNotifications: notifications };
 
@@ -419,8 +452,10 @@ function displayTopNotifications(notifications) {
         } else if (notification.type === 'new_review') {
             icon = 'fas fa-star';
             iconClass = 'text-success';
+        } else if (notification.type === 'new_chat_message') { // NEW CHAT ICON
+             icon = 'fas fa-comment-dots';
+             iconClass = 'text-info';
         }
-        // Removed Chat Notification Case
         
         list.innerHTML += `
             <li>
@@ -447,8 +482,10 @@ function handleNotificationClick(notificationId) {
              viewOrderDetails(notification.relatedId);
         } else if (notification.type === 'order_returned') {
              viewOrderDetails(notification.relatedId);
-        } 
-        // Removed chat message handling
+        } else if (notification.type === 'new_chat_message') {
+             // For chat message, navigate to notifications/chat section
+             showSection('notifications');
+        }
         notification.action();
     }
 }
@@ -1117,100 +1154,6 @@ function addSpecField() {
 }
 window.addSpecField = addSpecField;
 
-// --- IMAGE SELECTION ---
-function switchImageTab(tabId) {
-    document.querySelectorAll('.image-tab').forEach(tab => {
-        tab.style.display = 'none';
-        tab.classList.remove('active');
-    });
-    document.querySelectorAll('.upload-tab-btn').forEach(btn => btn.classList.remove('active'));
-
-    const targetTab = document.getElementById(`image-${tabId}-tab`);
-    const targetBtn = document.querySelector(`.upload-tab-btn[onclick*="${tabId}"]`);
-    
-    if (targetTab) {
-        targetTab.style.display = 'block';
-        targetTab.classList.add('active');
-    }
-    if (targetBtn) {
-        targetBtn.classList.add('active');
-    }
-    
-    currentImageTab = tabId;
-    
-    // Clear the non-active tab's selection
-    if (tabId === 'upload') {
-        document.getElementById('selected-library-image').value = '';
-        document.querySelectorAll('.library-image-card').forEach(card => card.classList.remove('selected'));
-    } else {
-        document.getElementById('image-upload').value = null;
-        document.getElementById('image-preview').innerHTML = '';
-    }
-}
-window.switchImageTab = switchImageTab;
-
-function loadLibraryImages() {
-    const grid = document.getElementById('library-image-grid');
-    if (!grid) return;
-    
-    grid.innerHTML = libraryImages.map(url => `
-        <div class="col-4 col-sm-3 col-md-2">
-            <div class="library-image-card" onclick="selectLibraryImage('${url}', this)">
-                <img src="${url}" alt="Library Image" class="img-fluid rounded">
-            </div>
-        </div>
-    `).join('');
-}
-window.loadLibraryImages = loadLibraryImages;
-
-function selectLibraryImage(url, element) {
-    // FIX 1: Ensure the click event correctly selects and highlights the element.
-    document.getElementById('selected-library-image').value = url;
-    // Ensure all cards are deselected first
-    document.querySelectorAll('.library-image-card').forEach(card => card.classList.remove('selected'));
-    
-    // Select the current card (which is passed as 'element')
-    element.classList.add('selected');
-}
-window.selectLibraryImage = selectLibraryImage;
-
-function setupImageUploadPreview() {
-    const input = document.getElementById('image-upload');
-    const preview = document.getElementById('image-preview');
-    if (!input || !preview) return;
-
-    input.addEventListener('change', () => {
-        preview.innerHTML = '';
-        if (input.files) {
-            Array.from(input.files).forEach(file => {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    preview.innerHTML += `
-                        <img src="${e.target.result}" class="img-thumbnail" style="width: 80px; height: 80px; object-fit: cover;">
-                    `;
-                };
-                reader.readAsDataURL(file);
-            });
-        }
-    });
-}
-setupImageUploadPreview();
-
-function resetImageSelection() {
-     const uploadInput = document.getElementById('image-upload');
-     if (uploadInput) uploadInput.value = null;
-     const preview = document.getElementById('image-preview');
-     if (preview) preview.innerHTML = '';
-     
-     const libraryInput = document.getElementById('selected-library-image');
-     if (libraryInput) libraryInput.value = '';
-     document.querySelectorAll('.library-image-card').forEach(card => card.classList.remove('selected'));
-     
-     switchImageTab('upload');
-}
-window.resetImageSelection = resetImageSelection;
-
-
 // --- VIEW/EQUIPMENT DETAILS ---
 async function viewEquipmentDetails(equipmentId) {
     try {
@@ -1498,8 +1441,8 @@ async function viewOrderDetails(orderId) {
                     <div class="col-md-6">
                         <h5>Payment Information</h5>
                         <table class="table table-sm">
-                            <tr><th>Payment Status:</th><td><span class="badge bg-${order.paymentStatus === 'paid' ? 'success' : 'danger'}">${order.paymentStatus || 'N/A'}</span></td></tr>
-                            <tr><th>Payment Method:</th><td>${order.paymentMethod || 'N/A'}</td></tr>
+                            <tr><th>Payment Status:</th><td><span class="badge bg-${order.paymentStatus === 'paid' ? 'success' : 'danger'}">${order.paymentStatus || 'pending'}</span></td></tr>
+                            <tr><th>Payment Method:</th><td>${order.paymentMethod || 'Razorpay'}</td></tr>
                             <tr><th>Transaction ID:</th><td>${order.transactionId || 'N/A'}</td></tr>
                         </table>
                     </div>
@@ -1555,9 +1498,7 @@ async function viewOrderDetails(orderId) {
 }
 
 async function updateOrderStatus(orderId, newStatus) {
-    // FIX: Check for the literal string 'undefined' which can result from missing data in HTML interpolation.
-    if (!orderId || orderId === 'undefined') {
-        console.error('Critical Error: Order ID is missing or invalid.');
+    if (!orderId) {
         window.firebaseHelpers.showAlert('Critical Error: Order ID is missing.', 'danger');
         return;
     }
@@ -1619,50 +1560,31 @@ async function updateOrderStatus(orderId, newStatus) {
             
             window.firebaseHelpers.showAlert(`Order status updated to ${newStatus}!`, 'success');
             
-            // SMS Alert - FETCH DOCUMENT AFTER UPDATE
+            // SMS Alert
             const orderDoc = await orderRef.get();
+            const order = orderDoc.data();
             
-            // Check if document exists before accessing data
-            if (!orderDoc.exists) {
-                 console.error(`Error: Order Document Not Found for ID: ${orderId} after update.`);
-                 window.firebaseHelpers.showAlert('Order updated successfully, but customer notification skipped (document not found for SMS).', 'warning');
-            } else {
-                 const order = orderDoc.data();
-                 
-                 if (order && order.customerPhone) {
-                    let smsMessage = '';
-                    const orderShortId = `#${orderId.substring(0, 8)}`;
-                    const equipNames = order.equipmentNames.split(',')[0];
+            if (order && order.customerPhone) {
+                let smsMessage = '';
+                const orderShortId = `#${orderId.substring(0, 8)}`;
+                const equipNames = order.equipmentNames.split(',')[0];
 
-                    if (newStatus === 'active') {
-                        smsMessage = `FarmRent: Order ${orderShortId} for ${equipNames} has been confirmed & is ready for pickup on ${order.pickupDate} at ${order.pickupTime}. Thank you!`;
-                    } else if (newStatus === 'pickedup') {
-                        smsMessage = `FarmRent: Order ${orderShortId} status changed to Picked Up. Enjoy your rental! Contact seller ${order.sellerBusinessNames} for any issues.`;
-                    } else if (newStatus === 'returned') {
-                        smsMessage = `FarmRent: Equipment for Order ${orderShortId} has been returned. Final check and transaction completion pending.`;
-                    } else if (newStatus === 'completed') {
-                        smsMessage = `FarmRent: Order ${orderShortId} completed successfully! Thank you for renting with us.`;
-                    }
-                    
-                    if (smsMessage) {
-                        // Send SMS Alert (Assuming window.firebaseHelpers.sendSmsAlert is implemented elsewhere)
-                        // await window.firebaseHelpers.sendSmsAlert(order.customerPhone, smsMessage);
-                    }
+                if (newStatus === 'active') {
+                    smsMessage = `FarmRent: Order ${orderShortId} for ${equipNames} has been confirmed & is ready for pickup on ${order.pickupDate} at ${order.pickupTime}. Thank you!`;
+                } else if (newStatus === 'pickedup') {
+                    smsMessage = `FarmRent: Order ${orderShortId} status changed to Picked Up. Enjoy your rental! Contact seller ${order.sellerBusinessNames} for any issues.`;
+                } else if (newStatus === 'returned') {
+                    smsMessage = `FarmRent: Equipment for Order ${orderShortId} has been returned. Final check and transaction completion pending.`;
+                } else if (newStatus === 'completed') {
+                    smsMessage = `FarmRent: Order ${orderShortId} completed successfully! Thank you for renting with us.`;
+                }
+                
+                if (smsMessage) {
+                    await window.firebaseHelpers.sendSmsAlert(order.customerPhone, smsMessage);
                 }
             }
 
-            
-            // Mark alert as read/dismissed once action is taken
-            markAlertAsRead(orderId); 
-
-            // Reload UI elements
-            // Close the order details modal if it is open (by ID)
-            const orderDetailsModalEl = document.getElementById('orderModal');
-            if (orderDetailsModalEl) {
-                 const detailsModalInstance = bootstrap.Modal.getInstance(orderDetailsModalEl);
-                 if (detailsModalInstance) detailsModalInstance.hide();
-            }
-
+            viewOrderDetails(orderId);
             loadDashboardData();
             loadRecentOrders();
             loadOrders();
@@ -1807,9 +1729,6 @@ async function loadTopEquipment() {
              if (order.sellerIds && order.sellerIds.includes(window.currentUser.uid) && (order.status === 'completed' || order.status === 'returned')) {
                 order.items.forEach(item => {
                     if (item.sellerId === window.currentUser.uid && equipmentEarnings[item.id] !== undefined) {
-                        // Assuming the item structure stores the final earning amount in 'price' or recalculating:
-                        // This calculation needs to be verified based on how totalAmount/item price is handled in multi-item orders.
-                        // For simplicity, we assume item.price holds the relevant revenue part for this seller/item.
                         item.price = item.price || 0;
                         equipmentEarnings[item.id] += item.price;
                     }
@@ -1893,9 +1812,13 @@ async function loadNotifications() {
                 typeIcon = 'fas fa-star';
                 badgeColor = 'bg-success';
                 actionText = 'View Review';
+            } else if (notification.type === 'new_chat_message') {
+                typeIcon = 'fas fa-comment-dots';
+                badgeColor = 'bg-info';
+                actionText = 'Open Chat';
             }
             
-            const unreadClass = (isOrder && !notification.read) ? 'notification-unread' : '';
+            const unreadClass = (isOrder && !notification.read) || notification.type === 'new_chat_message' ? 'notification-unread' : '';
     
             listContainer.innerHTML += `
                 <div class="list-group-item notification-item ${unreadClass} d-flex justify-content-between align-items-center p-3 mb-2 rounded shadow-sm"
@@ -1918,6 +1841,152 @@ async function loadNotifications() {
                 </div>
             `;
         });
+    }
+}
+
+// --- CHAT SYSTEM ---
+async function loadSellerConversations() {
+    const chatListContainer = document.getElementById('active-chats-list');
+    if (!chatListContainer) return;
+    
+    chatListContainer.innerHTML = '<div class="text-muted small">Loading...</div>';
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const conversationsRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations');
+    
+    conversationsRef
+        .where('sellerId', '==', window.currentUser.uid)
+        .orderBy('updatedAt', 'desc')
+        .onSnapshot(snapshot => {
+            chatListContainer.innerHTML = '';
+            
+            if (snapshot.empty) {
+                chatListContainer.innerHTML = '<div class="text-muted small p-2">No active conversations.</div>';
+                return;
+            }
+
+            snapshot.forEach(doc => {
+                const chat = doc.data();
+                const isActive = doc.id === sellerActiveChatId ? 'border-primary bg-light' : '';
+                const unread = chat.unreadCountSeller > 0 ? `<span class="badge bg-danger rounded-pill ms-1">${chat.unreadCountSeller}</span>` : '';
+                
+                chatListContainer.innerHTML += `
+                    <div class="card p-2 shadow-sm border ${isActive}" style="min-width: 180px; cursor: pointer; max-width: 200px;" 
+                         onclick="loadSellerChatMessages('${doc.id}', '${chat.customerName}', '${chat.orderId}')">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong>${chat.customerName}</strong>
+                            ${unread}
+                        </div>
+                        <small class="text-muted text-truncate">${chat.lastMessage || '...'}</small>
+                        <small class="text-muted" style="font-size: 0.65rem;">Order #${chat.orderId.substring(0,6)}</small>
+                    </div>
+                `;
+            });
+        }, error => {
+            console.error("Error loading seller chats:", error);
+            chatListContainer.innerHTML = '<div class="text-danger small">Error loading chats.</div>';
+        });
+}
+
+function loadSellerChatMessages(chatId, customerName, orderId) {
+    sellerActiveChatId = chatId;
+    
+    document.getElementById('chat-empty-state').style.display = 'none';
+    document.getElementById('seller-chat-interface').style.display = 'flex';
+    document.getElementById('chat-customer-name').textContent = customerName;
+    document.getElementById('chat-order-id').textContent = `Order #${orderId.substring(0,8)}`;
+    
+    const messagesContainer = document.getElementById('chat-messages');
+    messagesContainer.innerHTML = `<div class="text-center py-5 text-muted"><p>Loading chat...</p></div>`;
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const chatDocRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations').doc(chatId);
+    const messagesRef = chatDocRef.collection('messages');
+
+    // 1. Listen for Messages
+    if (sellerChatUnsubscribe) sellerChatUnsubscribe();
+
+    sellerChatUnsubscribe = messagesRef.orderBy('timestamp', 'asc').onSnapshot(snapshot => {
+        messagesContainer.innerHTML = '';
+        
+        if (snapshot.empty) {
+            messagesContainer.innerHTML = '<div class="text-center text-muted mt-5"><p>No messages yet.</p></div>';
+        } else {
+            snapshot.forEach(doc => {
+                const msg = doc.data();
+                const isMe = msg.senderId === window.currentUser.uid;
+                const date = msg.timestamp ? msg.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '...';
+                
+                messagesContainer.innerHTML += `
+                    <div style="display: flex; justify-content: ${isMe ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
+                        <div class="message-bubble ${isMe ? 'message-sent' : 'message-received'}">
+                            ${msg.text}
+                            <span class="message-time">${date}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        chatDocRef.update({ unreadCountSeller: 0 });
+    });
+
+    // 2. Listen for Customer Typing Status
+    chatDocRef.onSnapshot(doc => {
+        const data = doc.data();
+        const indicator = document.getElementById('seller-typing-indicator');
+        if (data && data.typing && data.typing.customer) {
+            indicator.style.display = 'block';
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        } else {
+            indicator.style.display = 'none';
+        }
+    });
+
+    // 3. Handle Seller Typing Input
+    const input = document.getElementById('message-input');
+    input.oninput = () => {
+        chatDocRef.set({ typing: { seller: true } }, { merge: true });
+        
+        clearTimeout(sellertypingTimeout);
+        sellertypingTimeout = setTimeout(() => {
+            chatDocRef.set({ typing: { seller: false } }, { merge: true });
+        }, 2000);
+    };
+    
+    input.onkeypress = (e) => {
+        if (e.key === 'Enter') sendMessage();
+    };
+}
+
+async function sendMessage() {
+    const input = document.getElementById('message-input');
+    const text = input.value.trim();
+    if (!text || !sellerActiveChatId) return;
+    
+    input.value = ''; 
+    
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const chatRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations').doc(sellerActiveChatId);
+    
+    try {
+        clearTimeout(sellertypingTimeout);
+        chatRef.set({ typing: { seller: false } }, { merge: true });
+
+        await chatRef.collection('messages').add({
+            senderId: window.currentUser.uid,
+            text: text,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        await chatRef.update({
+            lastMessage: text,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            unreadCountCustomer: firebase.firestore.FieldValue.increment(1)
+        });
+    } catch (error) {
+        console.error("Error sending message:", error);
     }
 }
 
@@ -2005,22 +2074,16 @@ async function loadReviews() {
 
         const totalReviewsEl = document.getElementById('total-reviews');
         if (totalReviewsEl) totalReviewsEl.textContent = `${ratingCount} reviews`;
-
-        // Update dashboard card if available
-        const sellerRatingEl = document.getElementById('seller-rating');
-        if (sellerRatingEl) sellerRatingEl.textContent = averageRating.toFixed(1);
-
+        
     } catch (error) {
         console.error('Error loading reviews:', error);
-        window.firebaseHelpers.showAlert('Error loading reviews', 'danger');
     }
 }
 
-// --- PROFILE ---
+// --- PROFILE MANAGEMENT ---
 async function loadProfileData() {
-    if (!window.currentUser || !sellerData) return;
+    if (!sellerData) return;
     
-    // Load static fields
     document.getElementById('profile-name').value = sellerData.name || '';
     document.getElementById('profile-email').value = sellerData.email || '';
     document.getElementById('profile-phone').value = sellerData.mobile || '';
@@ -2028,174 +2091,297 @@ async function loadProfileData() {
     document.getElementById('profile-address').value = sellerData.address || '';
     document.getElementById('profile-gst').value = sellerData.gstNumber || '';
     document.getElementById('profile-bio').value = sellerData.bio || '';
-    document.getElementById('join-date').textContent = window.firebaseHelpers.formatDate(sellerData.createdAt) || 'N/A';
-    
-    // Load location fields
     document.getElementById('profile-pincode').value = sellerData.pincode || '';
     document.getElementById('profile-city').value = sellerData.city || '';
     document.getElementById('profile-state').value = sellerData.state || '';
     
-    // If pincode exists, populate the village/post office dropdown
-    const villageSelect = document.getElementById('profile-village');
-    if (sellerData.pincode && sellerData.city && sellerData.state) {
-        villageSelect.innerHTML = `<option value="${sellerData.village || 'N/A'}" selected>${sellerData.village || 'N/A'}</option>`;
-        villageSelect.disabled = false;
-    } else {
-        villageSelect.innerHTML = `<option value="">Enter Pincode Above</option>`;
-        villageSelect.disabled = true;
+    const joinDateEl = document.getElementById('join-date');
+    if (joinDateEl && sellerData.createdAt) {
+        const joinDate = window.firebaseHelpers.formatDate(sellerData.createdAt);
+        joinDateEl.textContent = joinDate;
     }
     
-    // Set verification status
-    document.getElementById('email-verified').textContent = window.currentUser.emailVerified ? 'Yes' : 'No';
-    document.getElementById('email-verified').className = `badge bg-${window.currentUser.emailVerified ? 'success' : 'danger'}`;
+    if (sellerData.pincode && window.populateLocationFields) {
+        (async () => {
+             await window.populateLocationFields('profile-pincode', 'profile-village', 'profile-city', 'profile-state', 'pincode-status-message');
+             const villageSelect = document.getElementById('profile-village');
+             if (villageSelect && sellerData.village) {
+                 setTimeout(() => {
+                     villageSelect.value = sellerData.village;
+                 }, 500);
+             }
+        })();
+    }
     
-    document.getElementById('phone-verified').textContent = sellerData.mobile ? 'Yes' : 'No';
-    document.getElementById('phone-verified').className = `badge bg-${sellerData.mobile ? 'success' : 'warning'}`;
-
-    document.getElementById('business-verified').textContent = sellerData.status === 'approved' ? 'Yes' : 'No';
-    document.getElementById('business-verified').className = `badge bg-${sellerData.status === 'approved' ? 'success' : 'warning'}`;
+    updateSellerInfo();
 }
-
-// --- PROFILE FORM HANDLING ---
+    
 document.getElementById('profile-form')?.addEventListener('submit', async function(e) {
     e.preventDefault();
     
-    const currentPassword = document.getElementById('current-password').value;
-    const newPassword = document.getElementById('new-password').value;
-    const confirmPassword = document.getElementById('confirm-password').value;
+    if (!window.currentUser) return;
 
-    const saveBtn = this.querySelector('button[type="submit"]');
-    const originalText = saveBtn.innerHTML;
-    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
-    saveBtn.disabled = true;
-
+    const pincodeInput = document.getElementById('profile-pincode')?.value;
+    const villageSelect = document.getElementById('profile-village');
+    const cityInput = document.getElementById('profile-city')?.value;
+    const stateInput = document.getElementById('profile-state')?.value;
+    
+    if (!pincodeInput || !/^[0-9]{6}$/.test(pincodeInput)) {
+        window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
+        return;
+    }
+    
+    if (villageSelect && !villageSelect.value) {
+        window.firebaseHelpers.showAlert('Please select your Village/Post Office.', 'danger');
+        return;
+    }
+    
+    if (!cityInput || !stateInput) {
+        window.firebaseHelpers.showAlert('Pincode lookup failed. Please try again.', 'danger');
+        return;
+    }
+    
     try {
-        // 1. Handle Password Change (if fields are filled)
+        const updates = {
+            name: document.getElementById('profile-name')?.value,
+            mobile: document.getElementById('profile-phone')?.value,
+            businessName: document.getElementById('profile-business')?.value,
+            address: document.getElementById('profile-address')?.value,
+            gstNumber: document.getElementById('profile-gst')?.value,
+            city: cityInput,
+            state: stateInput,
+            village: villageSelect ? villageSelect.value : '',
+            pincode: pincodeInput,
+            bio: document.getElementById('profile-bio')?.value,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        const currentPassword = document.getElementById('current-password')?.value;
+        const newPassword = document.getElementById('new-password')?.value;
+        const confirmPassword = document.getElementById('confirm-password')?.value;
+        
         if (newPassword || currentPassword || confirmPassword) {
+            if (!currentPassword) {
+                window.firebaseHelpers.showAlert('Please enter your current password to change it.', 'danger');
+                return;
+            }
             if (newPassword !== confirmPassword) {
-                window.firebaseHelpers.showAlert('New password and confirmation do not match.', 'danger');
+                window.firebaseHelpers.showAlert('New passwords do not match', 'danger');
                 return;
             }
             if (newPassword.length < 6) {
-                window.firebaseHelpers.showAlert('Password must be at least 6 characters.', 'danger');
+                window.firebaseHelpers.showAlert('New password must be at least 6 characters long', 'danger');
                 return;
             }
             
-            if (currentPassword) {
-                 await window.firebaseHelpers.updatePassword(currentPassword, newPassword);
-                 window.firebaseHelpers.showAlert('Password updated successfully.', 'success');
-            } else {
-                 window.firebaseHelpers.showAlert('Please provide your current password to change it.', 'danger');
-                 return;
-            }
+            const credential = firebase.auth.EmailAuthProvider.credential(
+                window.currentUser.email,
+                currentPassword
+            );
+            
+            await window.currentUser.reauthenticateWithCredential(credential);
+            await window.currentUser.updatePassword(newPassword);
+            window.firebaseHelpers.showAlert('Password updated successfully', 'success');
+            
+            document.getElementById('current-password').value = '';
+            document.getElementById('new-password').value = '';
+            document.getElementById('confirm-password').value = '';
         }
-
-        // 2. Handle Profile Data Update
-        const updatedProfile = {
-            name: document.getElementById('profile-name').value,
-            mobile: document.getElementById('profile-phone').value,
-            businessName: document.getElementById('profile-business').value,
-            address: document.getElementById('profile-address').value,
-            gstNumber: document.getElementById('profile-gst').value || null,
-            bio: document.getElementById('profile-bio').value || null,
-            // Location fields are read-only if pincode is set, otherwise taken from inputs
-            pincode: document.getElementById('profile-pincode').value,
-            village: document.getElementById('profile-village').value,
-            city: document.getElementById('profile-city').value,
-            state: document.getElementById('profile-state').value,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
-
-        await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(updatedProfile);
-        window.firebaseHelpers.showAlert('Profile details updated successfully.', 'success');
         
-        // Reload data
-        window.currentUser = { ...window.currentUser, ...updatedProfile };
-        sellerData = window.currentUser;
-        loadProfileData();
-
+        await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(updates);
+        
+        sellerData = { ...sellerData, ...updates };
+        window.currentUser = { ...window.currentUser, ...updates };
+        updateSellerInfo();
+        
+        window.firebaseHelpers.showAlert('Profile updated successfully', 'success');
+        
     } catch (error) {
         console.error('Error updating profile:', error);
         window.firebaseHelpers.showAlert('Error updating profile: ' + error.message, 'danger');
-    } finally {
-        saveBtn.innerHTML = originalText;
-        saveBtn.disabled = false;
-        // Clear password fields regardless of success/fail
-        document.getElementById('current-password').value = '';
-        document.getElementById('new-password').value = '';
-        document.getElementById('confirm-password').value = '';
     }
 });
-
-
-// --- DELETE ACCOUNT ---
+    
 function showDeleteAccountModal() {
     const modal = new bootstrap.Modal(document.getElementById('deleteAccountModal'));
     modal.show();
     
-    const confirmInput = document.getElementById('delete-confirmation');
-    const deleteBtn = document.getElementById('delete-account-btn');
-    
-    confirmInput.value = '';
-    deleteBtn.disabled = true;
-    
-    confirmInput.oninput = () => {
-        deleteBtn.disabled = confirmInput.value !== 'DELETE';
-    };
+    const deleteConfirmation = document.getElementById('delete-confirmation');
+    if (deleteConfirmation) {
+        deleteConfirmation.addEventListener('input', function() {
+            const deleteBtn = document.getElementById('delete-account-btn');
+            if(deleteBtn) deleteBtn.disabled = this.value !== 'DELETE';
+        });
+    }
 }
-window.showDeleteAccountModal = showDeleteAccountModal;
 
 async function deleteAccount() {
-    const confirmInput = document.getElementById('delete-confirmation');
-    if (confirmInput.value !== 'DELETE') {
-        window.firebaseHelpers.showAlert('Please type DELETE to confirm.', 'danger');
-        return;
-    }
+    if (!window.currentUser) return;
     
-    const deleteBtn = document.getElementById('delete-account-btn');
-    deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Deleting...';
-    deleteBtn.disabled = true;
-
     try {
-        // 1. Delete all equipment listings
+        await window.FirebaseDB.collection('users').doc(window.currentUser.uid).delete();
+        
         const equipmentSnapshot = await window.FirebaseDB.collection('equipment')
             .where('sellerId', '==', window.currentUser.uid)
             .get();
         
-        const batch = window.FirebaseDB.batch();
-        equipmentSnapshot.forEach(doc => {
-            batch.delete(doc.ref);
-        });
-        await batch.commit();
-
-        // 2. Mark user profile as 'deleted' (cannot truly delete in canvas env, so mark for cleanup)
-        await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update({
-            status: 'deleted',
-            email: `deleted_${window.currentUser.uid}_${sellerData.email}`,
-            mobile: null,
-            name: 'Deleted User',
-            businessName: 'Deleted Business',
-            deletedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-
-        // 3. Delete Firebase Auth User (This will likely fail in the Canvas environment, but we attempt it)
-        // await window.firebaseHelpers.deleteUser();
-
-        window.firebaseHelpers.showAlert('Account successfully marked for deletion and logged out.', 'success');
+        const deletePromises = equipmentSnapshot.docs.map(doc => doc.ref.delete());
+        await Promise.all(deletePromises);
+        
+        await window.currentUser.delete();
+        
+        window.firebaseHelpers.showAlert('Account deleted successfully', 'success');
         
         setTimeout(() => {
-            window.firebaseHelpers.signOut();
             window.location.href = 'index.html';
-        }, 1000);
-
+        }, 2000);
+        
     } catch (error) {
         console.error('Error deleting account:', error);
-        window.firebaseHelpers.showAlert('Error deleting account. Contact support if the issue persists.', 'danger');
-        deleteBtn.innerHTML = 'Delete Account';
-        deleteBtn.disabled = false;
+        window.firebaseHelpers.showAlert('Error deleting account: ' + error.message, 'danger');
     }
 }
-window.deleteAccount = deleteAccount;
 
-// Run initialization
-window.loadSellerDashboard();
+// --- IMAGE LIBRARY FUNCTIONS ---
+function loadLibraryImages() {
+    const grid = document.getElementById('library-image-grid');
+    if (!grid) return;
+
+    grid.innerHTML = ''; 
+
+    libraryImages.forEach(path => {
+        const col = document.createElement('div');
+        col.className = 'col-4 col-md-3 col-lg-2';
+        const filename = path.split('/').pop().replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
+        const placeholderUrl = `https://placehold.co/100x80/EEEEEE/333333?text=${encodeURIComponent(filename)}`;
+        
+        col.innerHTML = `
+            <div class="image-option" data-image-path="${path}" onclick="selectLibraryImage(this, '${path}')">
+                <img src="${path}" alt="Library Image: ${filename}" onerror="this.onerror=null; this.src='${placeholderUrl}'">
+                <p class="text-center small text-muted mt-1 mb-0" style="font-size:0.75rem;">${filename}</p>
+            </div>
+        `;
+        grid.appendChild(col);
+    });
+}
+
+window.selectLibraryImage = function(element, path) {
+    document.querySelectorAll('.image-option').forEach(el => el.classList.remove('selected'));
+    element.classList.add('selected');
+
+    const hiddenInput = document.getElementById('selected-library-image');
+    if (hiddenInput) hiddenInput.value = path;
+    
+    const fileInput = document.getElementById('image-upload');
+    if (fileInput) fileInput.value = '';
+    
+    const preview = document.getElementById('image-preview');
+    if (preview) preview.innerHTML = '';
+    
+    window.firebaseHelpers.showAlert('Library image selected!', 'info');
+}
+
+window.switchImageTab = function(tabName) {
+    currentImageTab = tabName;
+
+    document.querySelectorAll('.image-tab').forEach(tab => {
+        tab.style.display = 'none';
+    });
+
+    const targetTab = document.getElementById(`image-${tabName}-tab`);
+    if (targetTab) targetTab.style.display = 'block';
+
+    document.querySelectorAll('.upload-tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    const activeBtn = document.querySelector(`.upload-tab-btn[onclick*="${tabName}"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    resetImageSelection();
+}
+
+function resetImageSelection() {
+    const fileInput = document.getElementById('image-upload');
+    if (fileInput) fileInput.value = '';
+    const preview = document.getElementById('image-preview');
+    if (preview) preview.innerHTML = '';
+
+    const hiddenInput = document.getElementById('selected-library-image');
+    if (hiddenInput) hiddenInput.value = '';
+    document.querySelectorAll('.image-option').forEach(el => el.classList.remove('selected'));
+}
+
+// --- EVENT LISTENERS ---
+document.addEventListener('DOMContentLoaded', function() {
+    const pincodeInput = document.getElementById('profile-pincode');
+    if (pincodeInput) {
+        pincodeInput.addEventListener('input', function() {
+            if (sellerData && sellerData.pincode && pincodeInput.readOnly) return;
+
+            const cityInput = document.getElementById('profile-city');
+            if(cityInput) cityInput.value = '';
+            const stateInput = document.getElementById('profile-state');
+            if(stateInput) stateInput.value = '';
+            
+            const villageSelect = document.getElementById('profile-village');
+            if(villageSelect) {
+                villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
+                villageSelect.disabled = true;
+            }
+
+            if (this.value.length === 6 && window.populateLocationFields) {
+                window.populateLocationFields('profile-pincode', 'profile-village', 'profile-city', 'profile-state', 'pincode-status-message');
+            }
+        });
+    }
+});
+
+document.getElementById('image-upload')?.addEventListener('change', function(e) {
+    const preview = document.getElementById('image-preview');
+    const librarySelection = document.getElementById('selected-library-image');
+    if (!preview) return;
+    
+    preview.innerHTML = '';
+    
+    for (let i = 0; i < this.files.length; i++) {
+        const file = this.files[i];
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            const img = document.createElement('img');
+            img.src = e.target.result;
+            img.style.width = '100px';
+            img.style.height = '100px';
+            img.style.objectFit = 'cover';
+            img.style.margin = '5px';
+            img.style.borderRadius = '5px';
+            preview.appendChild(img);
+        }
+        
+        reader.readAsDataURL(file);
+    }
+    
+    if (this.files.length > 0 && librarySelection) {
+        librarySelection.value = '';
+        document.querySelectorAll('.image-option').forEach(el => el.classList.remove('selected'));
+    }
+});
+
+// --- LOGOUT ---
+async function logout() {
+    try {
+        await window.firebaseHelpers.signOut();
+        window.location.href = 'index.html';
+    } catch (error) {
+        console.error('Logout error:', error);
+        window.firebaseHelpers.showAlert('Error logging out', 'danger');
+    }
+}
+
+// Initialize if not called by script.js
+if (!window.loadSellerDashboard) {
+     document.addEventListener('DOMContentLoaded', () => {
+         window.loadSellerDashboard();
+     });
+}
