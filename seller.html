@@ -36,7 +36,7 @@
                 <i class="fas fa-rupee-sign"></i> Earnings
             </a>
             <a class="nav-link" href="#" onclick="showSection('notifications')">
-                <i class="fas fa-bell"></i> Notifications / Chat
+                <i class="fas fa-bell"></i> Notifications
                 <span class="badge bg-danger ms-auto" id="new-messages-count">0</span>
             </a>
             <a class="nav-link" href="#" onclick="showSection('reviews')">
@@ -94,7 +94,7 @@
                     <i class="fas fa-rupee-sign me-2"></i> Earnings
                 </a>
                 <a class="nav-link text-white" href="#" onclick="showSection('notifications')" data-bs-dismiss="offcanvas">
-                    <i class="fas fa-bell me-2"></i> Notifications / Chat
+                    <i class="fas fa-bell me-2"></i> Notifications
                     <span class="badge bg-danger ms-auto" id="new-messages-count-mobile">0</span>
                 </a>
                 <a class="nav-link text-white" href="#" onclick="showSection('reviews')" data-bs-dismiss="offcanvas">
@@ -221,10 +221,10 @@
                                 <i class="fas fa-clipboard-list fa-2x mb-2"></i>
                                 <div>View Orders</div>
                             </button>
-                            <button class="action-btn" onclick="showSection('notifications')">
-                                <i class="fas fa-bell fa-2x mb-2"></i>
-                                <div>Alerts (<span id="quick-alert-count">0</span>)</div>
-                            </button>
+                            <a href="contact.html" class="action-btn">
+                                <i class="fas fa-headset fa-2x mb-2"></i>
+                                <div>Admin Support</div>
+                            </a>
                             <button class="action-btn" onclick="showSection('profile')">
                                 <i class="fas fa-cog fa-2x mb-2"></i>
                                 <div>Settings</div>
@@ -569,12 +569,12 @@
             </div>
         </div>
 
-        <!-- Notifications / Messages Section (UPDATED) -->
+        <!-- Notifications Section (Chat Removed, just Notifications) -->
         <div class="section" id="notifications-section" style="display: none;">
             <div class="page-header d-flex justify-content-between align-items-center">
                 <div>
-                    <h1>Notifications / Chat</h1>
-                    <p class="text-muted">Manage communications and alerts</p>
+                    <h1>Notifications</h1>
+                    <p class="text-muted">Manage your rental alerts and customer reviews.</p>
                 </div>
                 
                 <!-- Online/Offline Toggle Switch -->
@@ -588,71 +588,27 @@
             </div>
             
             <div class="row">
-                <!-- Notifications/Alerts -->
-                <div class="col-md-4 mb-4">
+                <div class="col-md-8 offset-md-2 mb-4">
                     <div class="table-container h-100">
                         <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h5><i class="fas fa-exclamation-triangle me-2 text-warning"></i>Alerts</h5>
+                            <h5><i class="fas fa-exclamation-triangle me-2 text-warning"></i>Rental Alerts</h5>
                             <button class="btn btn-sm btn-outline-secondary" onclick="markAllOrderAlertsAsRead()">Clear All</button>
                         </div>
-                        <div id="seller-alerts-list" class="list-group list-group-flush" style="max-height: 500px; overflow-y: auto;">
+                        <div id="seller-alerts-list" class="list-group list-group-flush" style="max-height: 600px; overflow-y: auto;">
                             <div class="text-center py-4">
                                 <div class="spinner-border spinner-border-sm text-primary"></div>
                                 <p class="mt-2 mb-0">Loading alerts...</p>
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Chat Section (Active Chats & Messaging) -->
-                <div class="col-md-8 mb-4">
-                    <div class="table-container" style="height: 650px; display: flex; flex-direction: column;">
-                        <h5 class="mb-3"><i class="fas fa-comments me-2 text-primary"></i>Live Chat</h5>
-                        
-                        <!-- List of Active Chats -->
-                        <div id="active-chats-list" class="mb-3 d-flex gap-2 overflow-auto pb-2 border-bottom" style="min-height: 90px;">
-                            <div class="text-muted small">Loading conversations...</div>
-                        </div>
-
-                        <!-- Chat Area -->
-                        <div id="seller-chat-interface" style="display: none; flex: 1; flex-direction: column; overflow: hidden;">
-                            <div class="d-flex align-items-center justify-content-between p-2 bg-light border-bottom">
-                                <strong id="chat-customer-name">Select a chat</strong>
-                                <span class="badge bg-secondary" id="chat-order-id"></span>
-                            </div>
-                            
-                            <!-- Messages -->
-                            <div id="chat-messages" style="flex: 1; overflow-y: auto; padding: 15px; background: #e5ddd5; background-image: url('https://www.transparenttextures.com/patterns/subtle-white-feathers.png');">
-                                <!-- Messages will be loaded here -->
-                            </div>
-                            
-                            <!-- Typing Indicator -->
-                            <div id="seller-typing-indicator" class="px-3 py-1 bg-light small text-muted" style="display:none; font-style:italic;">
-                                Customer is typing...
-                            </div>
-
-                            <!-- Input -->
-                            <div class="p-2 bg-light border-top">
-                                <div class="input-group">
-                                    <input type="text" class="form-control" placeholder="Type a message..." id="message-input">
-                                    <button class="btn btn-primary" type="button" onclick="sendMessage()" id="send-btn">
-                                        <i class="fas fa-paper-plane"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Empty State -->
-                        <div id="chat-empty-state" class="text-center py-5 text-muted" style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
-                            <i class="fas fa-comments fa-4x mb-3 text-secondary"></i>
-                            <h5>Select a conversation</h5>
-                            <p>Click on a customer above to start chatting.</p>
+                        <div class="alert alert-info mt-3">
+                            <i class="fas fa-headset me-2"></i>
+                            **Customer Chat Support:** All customer chats are now handled directly by the **FarmRent Admin** for better service quality.
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <!-- END Notifications / Messages Section -->
+        <!-- END Notifications Section -->
 
         <!-- Reviews Section -->
         <div class="section" id="reviews-section" style="display: none;">
