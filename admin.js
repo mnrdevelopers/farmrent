@@ -12,6 +12,13 @@ let categoryChart = null;
 let userGrowthChart = null;
 let allNotifications = []; // New global variable to hold notifications
 
+// NEW CHAT GLOBALS
+let adminActiveChatId = null;
+let adminChatUnsubscribe = null;
+let adminTypingTimeout = null;
+// END NEW CHAT GLOBALS
+
+
 // Helper to get the Firestore document reference for public collections
 function getPublicCollectionRef(collectionName) {
     // Note: __app_id is a global variable provided by the Canvas environment.
@@ -54,6 +61,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Initialize dashboard
     showSection('dashboard');
+    
+    // NEW: Start listening for chat list updates on load
+    listenForAdminChatListUpdates();
 });
 
 // Update admin information in UI
@@ -113,8 +123,11 @@ function showSection(sectionId) {
         case 'categories':
             loadCategories();
             break;
-        case 'notifications': // NEW: Load notifications
+        case 'notifications': 
             loadNotifications();
+            break;
+        case 'chat': // NEW: Load chat section
+            loadAdminConversations();
             break;
         case 'settings':
             loadSettingsData();
@@ -132,7 +145,8 @@ function updatePageTitle(sectionId) {
         orders: 'Orders Management',
         reports: 'Reports & Analytics',
         categories: 'Categories Management',
-        notifications: 'Notifications Management', // NEW TITLE
+        notifications: 'Notifications Management', 
+        chat: 'Customer Support Chat', // NEW TITLE
         settings: 'System Settings'
     };
     
@@ -158,6 +172,8 @@ async function loadDashboardData() {
         // NEW: Update Notification Badge Count
         document.getElementById('new-notifications-count').textContent = stats.unreadNotifications; 
         document.getElementById('notification-count').textContent = stats.unreadNotifications; 
+        // Update Chat Badge Count (from listener)
+        // Note: The listener `listenForAdminChatListUpdates` updates `chat-unread-count` in real-time
         
         // Load top navbar notifications
         displayTopNotifications(stats.recentNotifications);
@@ -165,7 +181,7 @@ async function loadDashboardData() {
         // Load recent activity
         await loadRecentActivity();
         
-        // Initialize revenue chart
+        // Initialize chart
         initializeRevenueChart(stats.revenueData);
         
     } catch (error) {
@@ -179,40 +195,39 @@ async function calculatePlatformStats() {
     try {
         // --- 1. User & Seller Counts ---
         const usersSnapshot = await window.FirebaseDB.collection('users').get();
-        // FIX: Ensure all local variables are declared with 'const'
         const totalUsers = usersSnapshot.size; 
         
         const sellersSnapshot = await window.FirebaseDB.collection('users')
             .where('role', '==', 'seller')
             .get();
         
-        const totalSellers = sellersSnapshot.size; // FIX: Declared locally
+        const totalSellers = sellersSnapshot.size; 
         
         const activeSellersSnapshot = await window.FirebaseDB.collection('users')
             .where('role', '==', 'seller')
             .where('status', '==', 'approved')
             .get();
         
-        const activeSellers = activeSellersSnapshot.size; // FIX: Declared locally
+        const activeSellers = activeSellersSnapshot.size; 
         
         const pendingSellersSnapshot = await window.FirebaseDB.collection('users')
             .where('role', '==', 'seller')
             .where('status', '==', 'pending')
             .get();
         
-        const pendingSellers = pendingSellersSnapshot.size; // FIX: Declared locally
+        const pendingSellers = pendingSellersSnapshot.size; 
         
         // --- 2. Equipment Counts ---
         const equipmentSnapshot = await window.FirebaseDB.collection('equipment').get();
-        const totalEquipment = equipmentSnapshot.size; // FIX: Declared locally
+        const totalEquipment = equipmentSnapshot.size; 
         
         const pendingEquipmentSnapshot = await window.FirebaseDB.collection('equipment')
             .where('status', '==', 'pending')
             .get();
         
-        const pendingEquipment = pendingEquipmentSnapshot.size; // FIX: Declared locally
+        const pendingEquipment = pendingEquipmentSnapshot.size; 
         
-        // --- 3. Revenue Data (Already fixed in last iteration) ---
+        // --- 3. Revenue Data ---
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
@@ -234,7 +249,7 @@ async function calculatePlatformStats() {
             }
         });
 
-        // --- 4. Notifications (NEW LOGIC) ---
+        // --- 4. Notifications ---
         let notifications = [];
 
         pendingSellersSnapshot.forEach(doc => {
@@ -245,7 +260,7 @@ async function calculatePlatformStats() {
                 message: `New Seller registration: ${seller.name || 'New User'} (${seller.businessName || 'N/A'})`,
                 relatedId: doc.id,
                 date: seller.createdAt,
-                read: false, // Default to unread for pending approvals
+                read: false, 
                 action: () => showSection('sellers')
             });
         });
@@ -285,7 +300,6 @@ async function calculatePlatformStats() {
         
     } catch (error) {
         console.error('Error calculating stats:', error);
-        // Ensure failure returns initialized values for all expected fields
         return {
             totalUsers: 0,
             totalSellers: 0,
@@ -339,13 +353,9 @@ function handleNotificationClick(notificationId) {
     // For now, clicking redirects to the relevant section
     const notification = allNotifications.find(n => n.id === notificationId);
     if (notification) {
-        // Since these are only pending approvals, clicking should mark them as read 
-        // by fulfilling the action (e.g., viewing the seller list).
         if (notification.action) {
             notification.action();
         }
-        // Since the source data is transient (it disappears upon approval), we don't update Firebase.
-        // We just navigate and the main screen updates will reflect the change.
     }
 }
 
@@ -640,7 +650,6 @@ async function viewUserDetails(userId) {
 
 // Suspend user
 async function suspendUser(userId) {
-    // FIX: Replaced confirm() with custom modal logic or a temporary alert due to sandbox constraint
     window.firebaseHelpers.showAlert('User suspension feature needs confirmation UI.', 'warning'); 
     if (!confirm('Are you sure you want to suspend this user?')) return;
     
@@ -662,7 +671,6 @@ async function suspendUser(userId) {
 
 // Activate user
 async function activateUser(userId) {
-    // FIX: Replaced confirm() with custom modal logic or a temporary alert due to sandbox constraint
     window.firebaseHelpers.showAlert('User activation feature needs confirmation UI.', 'warning'); 
     if (!confirm('Are you sure you want to activate this user?')) return;
     
@@ -797,7 +805,6 @@ function searchSellers() {
 
 // Approve seller
 async function approveSeller(sellerId) {
-    // FIX: Replaced confirm() with custom modal logic or a temporary alert due to sandbox constraint
     window.firebaseHelpers.showAlert('Seller approval feature needs confirmation UI.', 'warning'); 
     if (!confirm('Approve this seller?')) return;
     
@@ -819,7 +826,6 @@ async function approveSeller(sellerId) {
 
 // Reject seller
 async function rejectSeller(sellerId) {
-    // FIX: Replaced confirm() with custom modal logic or a temporary alert due to sandbox constraint
     window.firebaseHelpers.showAlert('Seller rejection feature needs confirmation UI.', 'warning'); 
     if (!confirm('Reject this seller application?')) return;
     
@@ -841,7 +847,6 @@ async function rejectSeller(sellerId) {
 
 // Suspend seller
 async function suspendSeller(sellerId) {
-    // FIX: Replaced confirm() with custom modal logic or a temporary alert due to sandbox constraint
     window.firebaseHelpers.showAlert('Seller suspension feature needs confirmation UI.', 'warning'); 
     if (!confirm('Suspend this seller account?')) return;
     
@@ -909,7 +914,6 @@ function createEquipmentCard(equipment) {
     const imageUrl = equipment.images && equipment.images[0] ? equipment.images[0] : 'https://via.placeholder.com/300x200/2B5C2B/FFFFFF?text=Equipment';
     const isFeatured = equipment.featured === true;
     
-    // UPDATED: Use pricePerAcre
     return `
         <div class="col-lg-4 col-md-6 mb-4">
             <div class="equipment-card">
@@ -1000,7 +1004,6 @@ async function viewEquipmentDetails(equipmentId) {
                         <h4>${equipment.name}</h4>
                         <p class="text-muted">${equipment.category}</p>
                         <div class="mb-3">
-                            <!-- UPDATED: Display pricePerAcre/acre and pricePerHour/hour -->
                             <h5 class="text-primary">${window.firebaseHelpers.formatCurrency(equipment.pricePerAcre || 0)}/acre</h5>
                             <small class="text-muted">or ${window.firebaseHelpers.formatCurrency(equipment.pricePerHour || 0)}/hour</small>
                         </div>
@@ -1076,7 +1079,6 @@ async function viewEquipmentDetails(equipmentId) {
 
 // Approve equipment
 async function approveEquipment(equipmentId, closeAndReload = false) {
-    // FIX: Replaced confirm() with custom modal logic or a temporary alert due to sandbox constraint
     window.firebaseHelpers.showAlert('Equipment approval feature needs confirmation UI.', 'warning'); 
     if (!confirm('Approve this equipment listing?')) return;
     
@@ -1104,7 +1106,6 @@ async function approveEquipment(equipmentId, closeAndReload = false) {
 
 // Reject equipment
 async function rejectEquipment(equipmentId) {
-    // FIX: Replaced confirm() with custom modal logic or a temporary alert due to sandbox constraint
     window.firebaseHelpers.showAlert('Equipment rejection feature needs confirmation UI.', 'warning'); 
     if (!confirm('Reject this equipment listing?')) return;
     
@@ -1127,7 +1128,6 @@ async function rejectEquipment(equipmentId) {
 // Mark equipment as featured (New Functionality to resolve homepage issue)
 async function markEquipmentAsFeatured(equipmentId, isFeatured, closeAndReload = false) {
     const actionText = isFeatured ? 'Mark as Featured' : 'Unmark as Featured';
-    // FIX: Replaced confirm() with custom modal logic or a temporary alert due to sandbox constraint
     window.firebaseHelpers.showAlert(`Equipment ${actionText.toLowerCase()} feature needs confirmation UI.`, 'warning'); 
     if (!confirm(`Are you sure you want to ${actionText.toLowerCase()}?`)) return;
 
@@ -1756,8 +1756,6 @@ function searchCategories() {
     displayCategories(filteredCategories);
 }
 
-// *** REMOVED/STUBBED OUT MANUAL CRUD FUNCTIONS ***
-
 // Show add category modal (STUBBED - Will alert the user instead)
 function showAddCategoryModal() {
      window.firebaseHelpers.showAlert('Categories are now automatically generated by equipment listings. Manual adding is disabled.', 'info');
@@ -1777,7 +1775,6 @@ function editCategory(categoryId) {
 function deleteCategory(categoryId) {
     window.firebaseHelpers.showAlert('Category deletion is disabled. Remove all equipment in this category to remove it.', 'danger');
 }
-// *** END REMOVED/STUBBED OUT MANUAL CRUD FUNCTIONS ***
 
 // NEW: Load Notifications Section
 async function loadNotifications() {
@@ -1834,10 +1831,8 @@ async function loadNotifications() {
 function handleNotificationAction(relatedId, type) {
     if (type === 'seller_approval') {
         showSection('sellers');
-        // Optionally highlight the seller row (requires additional logic)
     } else if (type === 'equipment_approval') {
         showSection('equipment');
-        // Optionally highlight the equipment item (requires additional logic)
     } else {
         window.firebaseHelpers.showAlert('Unknown notification type.', 'warning');
     }
@@ -1862,6 +1857,10 @@ async function loadSettingsData() {
         document.getElementById('email-notifications').checked = settings.emailNotifications !== undefined ? settings.emailNotifications : true;
         document.getElementById('seller-approval-emails').checked = settings.sellerApprovalEmails !== undefined ? settings.sellerApprovalEmails : true;
         document.getElementById('require-verification').checked = settings.requireVerification !== undefined ? settings.requireVerification : true;
+        
+        // NEW: Load Chat Admin Only status (for future expansion)
+        // document.getElementById('chat-admin-only').checked = settings.chatAdminOnly !== undefined ? settings.chatAdminOnly : true;
+
 
         if (settings.updatedAt) {
             document.getElementById('last-updated').textContent = window.firebaseHelpers.formatDateTime(settings.updatedAt);
@@ -1888,10 +1887,11 @@ document.getElementById('system-settings-form').addEventListener('submit', async
             emailNotifications: document.getElementById('email-notifications').checked,
             sellerApprovalEmails: document.getElementById('seller-approval-emails').checked,
             requireVerification: document.getElementById('require-verification').checked,
+            // NEW: Save Chat Admin Only status
+            // chatAdminOnly: document.getElementById('chat-admin-only').checked,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
         
-        // FIX: Save settings to the dedicated public Firestore document
         await getPlatformSettingsRef().set(settings, { merge: true });
 
         window.firebaseHelpers.showAlert('Settings saved successfully', 'success');
@@ -1916,3 +1916,229 @@ async function logout() {
         window.firebaseHelpers.showAlert('Error logging out', 'danger');
     }
 }
+
+// ***********************************************
+// *** ADMIN CHAT SUPPORT LOGIC (NEW) ***
+// ***********************************************
+
+/**
+ * NEW: Listens to all customer conversations in real-time for the Admin chat list.
+ */
+function listenForAdminChatListUpdates() {
+    const listContainer = document.getElementById('admin-chat-list');
+    if (!listContainer) return;
+    
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const conversationsRef = getPublicCollectionRef('conversations');
+    
+    // Use an index-less query on the entire collection, ordering by updatedAt for the list view
+    conversationsRef
+        .orderBy('updatedAt', 'desc')
+        .onSnapshot(snapshot => {
+            let totalUnread = 0;
+            listContainer.innerHTML = '';
+            
+            if (snapshot.empty) {
+                listContainer.innerHTML = '<div class="text-center py-5 text-muted small">No active conversations.</div>';
+                document.getElementById('chat-unread-count').textContent = 0;
+                return;
+            }
+
+            snapshot.forEach(doc => {
+                const chat = doc.data();
+                // Admin chat is the ONLY place where we manage all chats (sellerId field is present in the document for context)
+                const isSystemChat = doc.id.includes('ADMIN'); // Placeholder for non-order chat if implemented later
+                
+                // For now, check if chat is active (has messages or has been created)
+                if (chat.customerId) {
+                     
+                     const isActive = doc.id === adminActiveChatId ? 'active' : '';
+                     const unreadCount = chat.unreadCountAdmin || 0; // Assuming chats have an unreadCountAdmin field
+                     totalUnread += unreadCount;
+
+                     const time = chat.updatedAt ? window.firebaseHelpers.formatTimeAgo(chat.updatedAt) : '';
+                     const unreadBadge = unreadCount > 0 ? `<span class="unread-count">${unreadCount}</span>` : '';
+                     const orderShortId = (chat.orderId || 'N/A').substring(0, 8);
+                     const sellerName = chat.sellerBusinessName ? `(Seller: ${chat.sellerBusinessName})` : '';
+
+                     listContainer.innerHTML += `
+                         <div class="chat-list-item ${isActive}" 
+                              onclick="loadAdminChatMessages('${doc.id}', '${chat.customerName}', '${orderShortId}', '${chat.sellerBusinessName}')">
+                             <div class="d-flex flex-column">
+                                 <strong class="text-truncate" style="max-width: 180px;">${chat.customerName}</strong>
+                                 <small class="text-muted text-truncate" style="max-width: 180px;">${chat.lastMessage || 'Start conversation...'}</small>
+                                 <small class="text-muted" style="font-size: 0.75rem;">Order #${orderShortId} ${sellerName}</small>
+                             </div>
+                             <div class="text-end">
+                                 <small class="text-muted d-block">${time}</small>
+                                 ${unreadBadge}
+                             </div>
+                         </div>
+                     `;
+                 }
+            });
+            
+            // Update the main admin badge
+            document.getElementById('chat-unread-count').textContent = totalUnread > 0 ? totalUnread : '0';
+
+        }, error => {
+            console.error("Error listening to admin chat list:", error);
+            listContainer.innerHTML = '<div class="text-center py-5 text-danger small">Error loading chats.</div>';
+            document.getElementById('chat-unread-count').textContent = '0';
+        });
+}
+
+/**
+ * NEW: Reloads the list of conversations when the Admin clicks the refresh button.
+ */
+function loadAdminConversations() {
+    // Simply re-trigger the listener or reload logic for the list view
+    if (adminChatUnsubscribe) { adminChatUnsubscribe(); }
+    
+    // Reset active chat state
+    adminActiveChatId = null;
+    document.getElementById('admin-chat-messages').innerHTML = `
+         <div id="chat-empty-state-admin" class="text-center text-muted mt-5">
+            <i class="fas fa-comments fa-4x mb-3 text-secondary"></i>
+            <h5>Select a conversation from the left to start support.</h5>
+        </div>
+    `;
+    document.getElementById('chat-customer-name-admin').textContent = 'Select a Conversation';
+    document.getElementById('chat-details-admin').textContent = 'Order #N/A | Seller: N/A';
+    document.getElementById('admin-message-input').disabled = true;
+    document.getElementById('admin-send-btn').disabled = true;
+    
+    listenForAdminChatListUpdates();
+}
+
+/**
+ * NEW: Loads and subscribes to messages for the selected chat ID.
+ */
+async function loadAdminChatMessages(chatId, customerName, orderShortId, sellerBusinessName) {
+    adminActiveChatId = chatId;
+
+    // UI Setup
+    document.getElementById('chat-customer-name-admin').textContent = customerName;
+    document.getElementById('chat-details-admin').textContent = `Order #${orderShortId} | Seller: ${sellerBusinessName || 'N/A'}`;
+    document.getElementById('admin-message-input').disabled = false;
+    document.getElementById('admin-send-btn').disabled = false;
+    document.getElementById('admin-chat-messages').innerHTML = '<div class="text-center mt-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+    document.getElementById('chat-empty-state-admin').style.display = 'none';
+
+    // 1. Get Chat References
+    const chatDocRef = getPublicCollectionRef('conversations').doc(chatId);
+    const messagesRef = chatDocRef.collection('messages');
+
+    // Stop existing listener if any
+    if (adminChatUnsubscribe) adminChatUnsubscribe();
+
+    // 2. Listen for Messages
+    adminChatUnsubscribe = messagesRef.orderBy('timestamp', 'asc').onSnapshot(snapshot => {
+        const messagesContainer = document.getElementById('admin-chat-messages');
+        if (!messagesContainer) return;
+        
+        messagesContainer.innerHTML = '';
+        
+        if (snapshot.empty) {
+            messagesContainer.innerHTML = `
+                 <div class="system-message mt-4">
+                    Conversation with ${customerName} started.<br>Ready for Admin support.
+                </div>
+            `;
+        } else {
+            snapshot.forEach(doc => {
+                const msg = doc.data();
+                // Admin is the current user. Customer is the other person.
+                const isMe = msg.senderId === currentAdmin.uid;
+                const senderName = isMe ? 'You (Admin)' : customerName;
+                const date = msg.timestamp ? msg.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+                
+                messagesContainer.innerHTML += `
+                    <div style="display: flex; justify-content: ${isMe ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
+                        <div class="message-bubble ${isMe ? 'message-sent-admin' : 'message-received-customer'}">
+                            ${msg.text}
+                            <span class="message-time">${date}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        // Mark read by Admin
+        chatDocRef.update({ unreadCountAdmin: 0 }); 
+    });
+
+    // 3. Listen for Typing
+    chatDocRef.onSnapshot(doc => {
+        const data = doc.data();
+        const indicator = document.getElementById('admin-typing-indicator');
+        if (data && data.typing && data.typing.customer && indicator) {
+            indicator.style.display = 'block';
+            document.getElementById('admin-chat-messages').scrollTop = document.getElementById('admin-chat-messages').scrollHeight;
+        } else if (indicator) {
+            indicator.style.display = 'none';
+        }
+    });
+
+    // 4. Handle Typing Input and Enter key press
+    const input = document.getElementById('admin-message-input');
+    if (input) {
+        input.oninput = () => {
+            chatDocRef.set({ typing: { admin: true } }, { merge: true });
+            clearTimeout(adminTypingTimeout);
+            adminTypingTimeout = setTimeout(() => {
+                chatDocRef.set({ typing: { admin: false } }, { merge: true });
+            }, 2000);
+        };
+        
+        input.onkeypress = (e) => { 
+            if (e.key === 'Enter') sendAdminMessage(); 
+        };
+        // Auto-focus the input after loading messages
+        setTimeout(() => input.focus(), 100);
+    }
+}
+
+/**
+ * NEW: Sends a message from the Admin to the customer.
+ */
+async function sendAdminMessage() {
+    const input = document.getElementById('admin-message-input');
+    const text = input.value.trim();
+    if (!text || !adminActiveChatId || !currentAdmin) return;
+    
+    input.value = '';
+    
+    const chatRef = getPublicCollectionRef('conversations').doc(adminActiveChatId);
+    
+    try {
+        clearTimeout(adminTypingTimeout);
+        await chatRef.set({ typing: { admin: false } }, { merge: true });
+
+        await chatRef.collection('messages').add({
+            senderId: currentAdmin.uid,
+            text: text,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Update conversation summary, increment customer unread count
+        await chatRef.update({
+            lastMessage: text,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            unreadCountCustomer: firebase.firestore.FieldValue.increment(1) // Alert customer
+        });
+    } catch (error) {
+        console.error("Error sending admin message:", error);
+        window.firebaseHelpers.showAlert('Failed to send message.', 'danger');
+    }
+}
+
+// Make globally accessible
+window.loadAdminConversations = loadAdminConversations;
+window.loadAdminChatMessages = loadAdminChatMessages;
+window.sendAdminMessage = sendAdminMessage;
+
+// ***********************************************
+// *** END ADMIN CHAT SUPPORT LOGIC ***
+// ***********************************************
