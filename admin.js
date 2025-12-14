@@ -136,7 +136,7 @@ function updatePageTitle(sectionId) {
         reports: 'Reports & Analytics',
         categories: 'Categories Management',
         notifications: 'Notifications Management', // NEW TITLE
-        settings: 'System Settings'
+        settings: 'System Settings',
         settlements: 'Payment Settlements' // NEW TITLE
     };
     
