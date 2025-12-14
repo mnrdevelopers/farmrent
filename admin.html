@@ -562,18 +562,22 @@
                 <div class="col-12">
                     <div class="table-container">
                         <!-- Settlement Tabs -->
-                        <ul class="nav nav-tabs mb-3">
-                            <li class="nav-item">
-                                <a class="nav-link active" id="unsettled-tab" data-bs-toggle="tab" href="#unsettled-content" role="tab" onclick="displaySettlementData('unsettled')">
-                                    <i class="fas fa-clock me-1"></i> Pending Payments
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" id="settled-tab" data-bs-toggle="tab" href="#settled-content" role="tab" onclick="displaySettlementData('settled')">
-                                    <i class="fas fa-history me-1"></i> Settled History
-                                </a>
-                            </li>
-                        </ul>
+                           <ul class="nav nav-tabs settlement-tabs">
+    <li class="nav-item">
+        <a class="nav-link active" id="unsettled-tab" data-bs-toggle="tab"
+           href="#unsettled-content" role="tab"
+           onclick="displaySettlementData('unsettled')">
+            <i class="fas fa-clock me-1"></i> Pending Payments
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" id="settled-tab" data-bs-toggle="tab"
+           href="#settled-content" role="tab"
+           onclick="displaySettlementData('settled')">
+            <i class="fas fa-history me-1"></i> Settled History
+        </a>
+    </li>
+</ul>
                         
                         <div class="tab-content">
                             <!-- Pending Settlements Table (Default View) -->
