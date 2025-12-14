@@ -1618,6 +1618,11 @@ async function loadEarningsData() {
         let lastMonthEarnings = 0;
         const monthlyEarnings = new Array(12).fill(0);
         
+        const settlementTable = document.getElementById('settlement-history-table');
+        if (settlementTable) settlementTable.innerHTML = '';
+        
+        let settlementRows = []; // NEW: Array to hold settlement rows
+
         ordersSnapshot.forEach(doc => {
             const order = doc.data();
             const orderDate = order.createdAt ? order.createdAt.toDate() : new Date();
@@ -1636,6 +1641,29 @@ async function loadEarningsData() {
                         lastMonthEarnings += amount;
                     }
                 }
+            }
+            
+            // NEW: Populate Settlement History
+            if (order.sellerIds && order.sellerIds.includes(window.currentUser.uid) && order.settlementStatus) {
+                const settledAtDate = order.settledAt ? window.firebaseHelpers.formatDate(order.settledAt) : 'N/A';
+                const statusText = order.settlementStatus === 'settled' ? 'Settled' : 'Unsettled';
+                const statusClass = order.settlementStatus === 'settled' ? 'status-completed' : 'status-pending';
+
+                // Use subtotalAmount, platformCommissionAmount, and sellerNetEarnings
+                const rentalValue = order.subtotalAmount || 0;
+                const platformCut = order.platformCommissionAmount || 0;
+                const netPayout = order.sellerNetEarnings || 0;
+
+                settlementRows.push(`
+                    <tr>
+                        <td>#${doc.id.substring(0, 8)}</td>
+                        <td>${window.firebaseHelpers.formatCurrency(rentalValue)}</td>
+                        <td>-${window.firebaseHelpers.formatCurrency(platformCut)}</td>
+                        <td><strong>${window.firebaseHelpers.formatCurrency(netPayout)}</strong></td>
+                        <td>${settledAtDate}</td>
+                        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                    </tr>
+                `);
             }
         });
         
@@ -1656,6 +1684,22 @@ async function loadEarningsData() {
         
         updateDetailedEarningsChart(monthlyEarnings);
         await loadTopEquipment();
+        
+        // NEW: Display Settlement History
+        if (settlementTable) {
+            if (settlementRows.length > 0) {
+                settlementTable.innerHTML = settlementRows.join('');
+            } else {
+                 settlementTable.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="text-center py-4">
+                            <i class="fas fa-handshake-slash fa-2x text-muted mb-3"></i>
+                            <p>No settlement records found yet.</p>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
         
     } catch (error) {
         console.error('Error loading earnings data:', error);
