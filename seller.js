@@ -1644,15 +1644,17 @@ async function loadEarningsData() {
                 }
             }
             
-            // NEW: Populate Settlement History
-            if (order.sellerIds && order.sellerIds.includes(window.currentUser.uid) && order.settlementStatus) {
+            // NEW: Populate Settlement History (includes unsettled for tracking)
+            if (order.sellerIds && order.sellerIds.includes(window.currentUser.uid) && (order.status === 'completed' || order.status === 'returned')) {
+                const settlementStatus = order.settlementStatus || 'unsettled';
                 const settledAtDate = order.settledAt ? window.firebaseHelpers.formatDate(order.settledAt) : 'N/A';
-                const statusText = order.settlementStatus === 'settled' ? 'Settled' : 'Unsettled';
-                const statusClass = order.settlementStatus === 'settled' ? 'status-completed' : 'status-pending';
+                // Adjust Status Text for tracking history
+                const statusText = settlementStatus === 'settled' ? 'Settled (Paid)' : 'Unsettled (Due)';
+                const statusClass = settlementStatus === 'settled' ? 'status-completed' : 'status-pending';
 
                 // Use subtotalAmount, platformCommissionAmount, and sellerNetEarnings
                 const rentalValue = order.subtotalAmount || 0;
-                const platformCut = order.platformCommissionAmount || 0; // This should be 0 based on new logic
+                const platformCut = order.platformCommissionAmount || 0;
                 const netPayout = order.sellerNetEarnings || 0;
 
                 settlementRows.push(`
@@ -1687,7 +1689,7 @@ async function loadEarningsData() {
         await loadTopEquipment();
         
         // NEW: Display Settlement History
-        if (settlementTable) {
+         if (settlementTable) {
             if (settlementRows.length > 0) {
                 settlementTable.innerHTML = settlementRows.join('');
             } else {
