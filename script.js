@@ -3,6 +3,7 @@ let allEquipmentData = [];
 let selectedEquipment = {};
 let isAuthInitialized = false;
 let platformFeeRate = 0.05; 
+let sellerCommissionRate = 0.15; 
 let customerPincode = null;
 let availableCoins = 0;
 let coinsToApply = 0; 
@@ -139,7 +140,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateNavbarPincodeDisplay();
     }
     initializeEventListeners();
-    await getPlatformFeeRate(); 
+    await getPlatformFinancialSettings(); // UPDATED: Renamed function
     if (path !== 'seller.html' && path !== 'seller-pending.html' && path !== 'admin.html') {
         setTimeout(() => {
             if (document.getElementById('chat-widget-container')) {
@@ -149,7 +150,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-async function getPlatformFeeRate() {
+// UPDATED: Renamed function to reflect that it gets all platform financial settings
+async function getPlatformFinancialSettings() {
     try {
         if (!window.FirebaseDB) {
             await new Promise((resolve) => {
@@ -167,19 +169,26 @@ async function getPlatformFeeRate() {
         }
         if (!window.FirebaseDB) {
             platformFeeRate = 0.05;
+            sellerCommissionRate = 0.15; // NEW Default
             return;
         }
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const settingsRef = window.FirebaseDB.collection('artifacts').doc(appId)
             .collection('public').doc('data').collection('settings').doc('platform');
         const doc = await settingsRef.get();
-        if (doc.exists && doc.data().platformFee !== undefined) {
-            platformFeeRate = (doc.data().platformFee / 100) || 0.05;
+        if (doc.exists) {
+            const data = doc.data();
+            // platformFee is charged to the customer (already in use)
+            platformFeeRate = (data.platformFee / 100) || 0.05;
+            // NEW: sellerCommission is the platform's cut from the rental subtotal.
+            sellerCommissionRate = (data.sellerCommission / 100) || 0.15;
         } else {
             platformFeeRate = 0.05;
+            sellerCommissionRate = 0.15;
         }
     } catch (error) {
         platformFeeRate = 0.05;
+        sellerCommissionRate = 0.15;
     }
 }
 
@@ -1186,7 +1195,7 @@ async function loadCartPage() {
             }
         }, 100);
     });
-    await getPlatformFeeRate(); 
+    await getPlatformFinancialSettings(); // UPDATED: Renamed function
     const cart = await getCartFromFirestore(); 
     await checkCartPincodeCompatibility(cart);
     displayCartItems(cart); 
@@ -1385,7 +1394,7 @@ async function loadCheckoutPage() {
             }
         }, 100);
     });
-    await getPlatformFeeRate(); 
+    await getPlatformFinancialSettings(); // UPDATED: Renamed function
     const user = await window.firebaseHelpers.getCurrentUser();
     const cart = await getCartFromFirestore(); 
     if (!user || cart.length === 0) {
@@ -2435,6 +2444,7 @@ async function processPayment() {
 }
 window.processPayment = processPayment;
 
+// UPDATED: Function to include financial breakdown for settlement
 async function placeOrderInFirestore(orderId, customerData, transactionId, discountedTotalAmount, paymentStatus, paymentMethod, totalDiscount, coinsUsed) {
     const cart = await getCartFromFirestore();
     if (cart.length === 0) {
@@ -2445,6 +2455,18 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, disco
     const sellerIds = [...new Set(cart.map(item => item.sellerId))].join(', ');
     const businessNames = [...new Set(cart.map(item => item.businessName))].join(', ');
     const orderPincode = window.razorpayContext.orderPincode; 
+    
+    // Calculate Subtotal (price before platform fees and discounts)
+    let subtotal = 0;
+    cart.forEach(item => {
+        subtotal += Number(item.price) || 0;
+    });
+
+    // Settlement Calculations
+    const platformCutRate = sellerCommissionRate; // Seller commission rate from settings (e.g., 0.15)
+    const platformCommissionAmount = subtotal * platformCutRate;
+    const sellerNetEarnings = subtotal - platformCommissionAmount; // Amount seller is DUE from platform
+
     try {
         const orderData = {
             userId: window.currentUser.uid,
@@ -2461,8 +2483,21 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, disco
             sellerBusinessNames: businessNames,
             orderPincode: orderPincode, 
             items: cart, 
-            totalAmount: discountedTotalAmount,
-            platformFee: window.razorpayContext.fees,
+            
+            // Financial Breakdown for Settlement
+            subtotalAmount: subtotal, // Total rental cost (100%)
+            platformCommissionRate: platformCutRate,
+            platformCommissionAmount: platformCommissionAmount, // Platform's cut
+            sellerNetEarnings: sellerNetEarnings, // Amount seller is DUE from platform
+            
+            // Settlement Status (Initial)
+            settlementStatus: 'unsettled', // 'unsettled', 'settled'
+            settledAmount: 0,
+            settledAt: null,
+            
+            // Customer-facing totals
+            totalAmount: discountedTotalAmount, // Total customer paid (after discounts, including customer-facing fees)
+            platformFee: window.razorpayContext.fees, // Customer-facing fee
             discount: totalDiscount,
             coinsUsed: coinsUsed,
             status: 'pending',
@@ -2865,9 +2900,36 @@ async function viewOrderDetailsModal(orderId) {
             const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
             const coinsUsed = order.coinsUsed || 0;
             const discountApplied = order.discount || 0;
+            const subtotal = order.subtotalAmount || 0;
+            const platformFee = order.platformFee || 0;
+            
+            // NEW: Financial Details
+            const platformCommission = order.platformCommissionAmount || 0;
+            const sellerPayout = order.sellerNetEarnings || 0;
+            const settlementStatus = order.settlementStatus || 'unsettled';
+            const settledAmount = order.settledAmount || 0;
+            const settledAt = order.settledAt ? window.firebaseHelpers.formatDateTime(order.settledAt) : 'N/A';
+
+
             const discountHtml = coinsUsed > 0 
                 ? `<tr><th>Coin Discount:</th><td><strong class="text-danger">-${window.firebaseHelpers.formatCurrency(discountApplied)} (${coinsUsed} Coins)</strong></td></tr>`
                 : '';
+            
+            // NEW: Settlement HTML
+            const settlementHtml = `
+                <h6 class="mt-4 text-dark"><i class="fas fa-handshake me-2"></i>Platform Settlement Details</h6>
+                <table class="table table-sm table-borderless">
+                    <tr><th>Rental Subtotal:</th><td>${window.firebaseHelpers.formatCurrency(subtotal)}</td></tr>
+                    <tr><th>Platform Commission (${(order.platformCommissionRate * 100).toFixed(1)}%):</th><td><strong class="text-danger">-${window.firebaseHelpers.formatCurrency(platformCommission)}</strong></td></tr>
+                    <tr><th>Seller Payout Due:</th><td><strong class="text-success">${window.firebaseHelpers.formatCurrency(sellerPayout)}</strong></td></tr>
+                    <tr><th>Settlement Status:</th><td><span class="badge bg-${settlementStatus === 'settled' ? 'success' : 'warning'}">${settlementStatus}</span></td></tr>
+                    ${settlementStatus === 'settled' ? `
+                        <tr><th>Settled Amount:</th><td>${window.firebaseHelpers.formatCurrency(settledAmount)}</td></tr>
+                        <tr><th>Settled Date:</th><td>${settledAt}</td></tr>
+                    ` : ''}
+                </table>
+            `;
+
             const detailsHtml = `
                 <h5 class="mb-3">Order # ${orderId.substring(0, 8)} Details</h5>
                 <div class="alert alert-info d-flex justify-content-between">
@@ -2896,16 +2958,17 @@ async function viewOrderDetailsModal(orderId) {
                         </li>
                     `).join('')}
                 </ul>
-                <h6 class="mt-4 text-warning">Payment Summary</h6>
+                <h6 class="mt-4 text-warning">Customer Payment Summary</h6>
                 <table class="table table-sm table-borderless">
-                    <tr><th>Subtotal:</th><td>${window.firebaseHelpers.formatCurrency(order.totalAmount + (order.discount || 0) - (order.platformFee || 0))}</td></tr>
+                    <tr><th>Rental Subtotal:</th><td>${window.firebaseHelpers.formatCurrency(subtotal)}</td></tr>
                     ${discountHtml}
-                    <tr><th>Platform Fee:</th><td>+${window.firebaseHelpers.formatCurrency(order.platformFee || 0)}</td></tr>
+                    <tr><th>Platform Fee (Customer-facing):</th><td>+${window.firebaseHelpers.formatCurrency(platformFee)}</td></tr>
                     <tr><th>Total Paid:</th><td><strong>${window.firebaseHelpers.formatCurrency(order.totalAmount || 0)}</strong></td></tr>
                     <tr><th>Payment Method:</th><td>${order.paymentMethod || 'N/A'}</td></tr>
                     <tr><th>Payment Status:</th><td><span class="badge bg-${order.paymentStatus === 'paid' ? 'success' : 'danger'}">${order.paymentStatus || 'N/A'}</span></td></tr>
                     <tr><th>Transaction ID:</th><td><small>${order.transactionId || 'N/A'}</small></td></tr>
                 </table>
+                ${settlementHtml} <!-- NEW: Settlement Details -->
             `;
             const trackerContainer = document.getElementById('order-tracker-container');
             if (trackerContainer) {
