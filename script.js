@@ -2365,80 +2365,39 @@ function displayCheckoutSummary(cart) {
     window.updatePaymentButtonUI(total);
 }
 
-async function processPayment() {
-    const form = document.getElementById('checkout-form');
-    if (!form.checkValidity()) {
-        form.reportValidity();
-        window.firebaseHelpers.showAlert('Please fill all required customer details.', 'warning');
-        return;
+async function startCashfreePayment() {
+  const cart = await getCartFromFirestore();
+  if (!cart.length) {
+    alert("Cart is empty");
+    return;
+  }
+
+  const customer = {
+    id: currentUser.uid,
+    name: document.getElementById("customer-name").value,
+    email: document.getElementById("customer-email").value,
+    phone: document.getElementById("customer-phone").value
+  };
+
+  const res = await fetch(
+    "https://farmrent-payments.<name>.workers.dev/create-order",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cart, customer })
     }
-    const paymentMethod = document.getElementById('payment-method-select').value;
-    const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
-    if (!userPincode) {
-        window.firebaseHelpers.showAlert('Critical Error: Customer Pincode is not set. Cannot proceed.', 'danger');
-        const payBtn = document.getElementById('pay-now-btn');
-        if (payBtn) payBtn.disabled = true;
-        return;
-    }
-    const isPickup = true; 
-    const { total, orderPickupDate, orderPickupTime, discount, coinsUsed } = window.razorpayContext; 
-    const totalInPaise = Math.round(total * 100);
-    const customerData = {
-        name: document.getElementById('customer-name').value,
-        email: document.getElementById('customer-email').value,
-        phone: document.getElementById('customer-phone').value,
-        address: 'Self-Pickup Confirmed',
-        notes: document.getElementById('additional-notes').value,
-        isPickup: isPickup,
-        pickupDate: orderPickupDate,
-        pickupTime: orderPickupTime,
-    };
-    const orderId = window.firebaseHelpers.generateId(); 
-    if (paymentMethod === 'test_cop') {
-        const payBtn = document.getElementById('pay-now-btn');
-        const originalText = payBtn.innerHTML;
-        payBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Confirming...';
-        payBtn.disabled = true;
-        try {
-            await placeOrderInFirestore(orderId, customerData, 'TEST_COP_TXN', total, 'pending', 'Cash On Pickup (Test)', discount, coinsUsed);
-        } catch (error) {
-            window.firebaseHelpers.showAlert('Test order placement failed. See console for details.', 'danger');
-        } finally {
-            payBtn.innerHTML = originalText;
-            payBtn.disabled = false;
-        }
-    } else { 
-        const keyId = await window.firebaseHelpers.getRazorpayKeyId();
-        if (!keyId) {
-            window.firebaseHelpers.showAlert('Payment gateway key missing. Cannot proceed.', 'danger');
-            return;
-        }
-        const options = {
-            key: keyId, 
-            amount: totalInPaise, 
-            currency: "INR",
-            name: "FarmRent",
-            description: "Rental Equipment Booking",
-            handler: async function (response) {
-                await placeOrderInFirestore(orderId, customerData, response.razorpay_payment_id, total, 'paid', 'Razorpay', discount, coinsUsed);
-            },
-            prefill: {
-                name: customerData.name,
-                email: customerData.email,
-                contact: customerData.phone
-            },
-            theme: {
-                color: "#2B5C2B" 
-            }
-        };
-        const rzp = new window.Razorpay(options);
-        rzp.on('payment.failed', function (response) {
-            window.firebaseHelpers.showAlert('Payment failed: ' + response.error.description, 'danger');
-        });
-        rzp.open();
-    }
+  );
+
+  const data = await res.json();
+
+  const cashfree = Cashfree({
+    mode: "production" // or sandbox
+  });
+
+  cashfree.checkout({
+    paymentSessionId: data.paymentSessionId
+  });
 }
-window.processPayment = processPayment;
 
 // UPDATED: Function to include financial breakdown for settlement
 async function placeOrderInFirestore(orderId, customerData, transactionId, discountedTotalAmount, paymentStatus, paymentMethod, totalDiscount, coinsUsed) {
