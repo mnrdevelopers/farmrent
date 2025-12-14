@@ -525,49 +525,81 @@
             </div>
         </div>
 
-        <!-- Earnings Section -->
-        <div class="section" id="earnings-section" style="display: none;">
-            <div class="page-header">
-                <h1>Earnings & Analytics</h1>
-                <p class="text-muted">Track your earnings and performance</p>
-            </div>
-            
-            <div class="row mb-4">
-                <div class="col-md-8">
-                    <div class="table-container">
-                        <h5 class="mb-3">Earnings Summary</h5>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <div class="dashboard-card">
-                                    <h6 class="text-muted">This Month</h6>
-                                    <h3 class="card-value" id="month-earnings">₹0</h3>
-                                    <small class="text-success" id="month-growth">Loading...</small>
-                                </div>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <div class="dashboard-card">
-                                    <h6 class="text-muted">Last Month</h6>
-                                    <h3 class="card-value" id="last-month-earnings">₹0</h3>
-                                    <small class="text-muted">Previous period</small>
-                                </div>
-                            </div>
+       <!-- Earnings Section -->
+<div class="section" id="earnings-section" style="display: none;">
+    <div class="page-header">
+        <h1>Earnings & Analytics</h1>
+        <p class="text-muted">Track your earnings and performance</p>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="table-container">
+                <h5 class="mb-3">Earnings Summary</h5>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="dashboard-card">
+                            <h6 class="text-muted">This Month</h6>
+                            <h3 class="card-value" id="month-earnings">₹0</h3>
+                            <small class="text-success" id="month-growth">Loading...</small>
                         </div>
-                        <canvas id="detailedEarningsChart"></canvas>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="dashboard-card">
+                            <h6 class="text-muted">Last Month</h6>
+                            <h3 class="card-value" id="last-month-earnings">₹0</h3>
+                            <small class="text-muted">Previous period</small>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-4">
-                    <div class="table-container">
-                        <h5 class="mb-3">Top Earning Equipment</h5>
-                        <div id="top-equipment-list">
-                            <div class="text-center py-3">
-                                <div class="spinner-border spinner-border-sm text-primary"></div>
-                                <p class="mt-2 mb-0">Loading data...</p>
-                            </div>
-                        </div>
+                <canvas id="detailedEarningsChart"></canvas>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="table-container">
+                <h5 class="mb-3">Top Earning Equipment</h5>
+                <div id="top-equipment-list">
+                    <div class="text-center py-3">
+                        <div class="spinner-border spinner-border-sm text-primary"></div>
+                        <p class="mt-2 mb-0">Loading data...</p>
                     </div>
                 </div>
             </div>
         </div>
+    </div>
+    
+    <!-- Settlement History -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="table-container">
+                <h5 class="mb-3"><i class="fas fa-history me-2"></i>Settlement History</h5>
+                <p class="text-muted small">Overview of payments settled by FarmRent for your completed orders.</p>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Rental Value</th>
+                                <th>Platform Cut</th>
+                                <th>Net Payout</th>
+                                <th>Settled On</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="settlement-history-table">
+                            <tr>
+                                <td colspan="6" class="text-center py-4">
+                                    <div class="spinner-border spinner-border-sm text-primary"></div>
+                                    <p class="mt-2 mb-0">Loading settlement history...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
         <!-- Notifications / Messages Section (UPDATED) -->
         <div class="section" id="notifications-section" style="display: none;">
