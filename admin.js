@@ -11,6 +11,7 @@ let orderStatusChart = null;
 let categoryChart = null;
 let userGrowthChart = null;
 let allNotifications = []; // New global variable to hold notifications
+let allOrdersData = []; // Store all orders once fetched, to avoid redundant reads
 
 // Helper to get the Firestore document reference for public collections
 function getPublicCollectionRef(collectionName) {
@@ -183,49 +184,55 @@ async function calculatePlatformStats() {
     try {
         // --- 1. User & Seller Counts ---
         const usersSnapshot = await window.FirebaseDB.collection('users').get();
-        // FIX: Ensure all local variables are declared with 'const'
         const totalUsers = usersSnapshot.size; 
         
         const sellersSnapshot = await window.FirebaseDB.collection('users')
             .where('role', '==', 'seller')
             .get();
         
-        const totalSellers = sellersSnapshot.size; // FIX: Declared locally
+        const totalSellers = sellersSnapshot.size; 
         
         const activeSellersSnapshot = await window.FirebaseDB.collection('users')
             .where('role', '==', 'seller')
             .where('status', '==', 'approved')
             .get();
         
-        const activeSellers = activeSellersSnapshot.size; // FIX: Declared locally
+        const activeSellers = activeSellersSnapshot.size; 
         
         const pendingSellersSnapshot = await window.FirebaseDB.collection('users')
             .where('role', '==', 'seller')
             .where('status', '==', 'pending')
             .get();
         
-        const pendingSellers = pendingSellersSnapshot.size; // FIX: Declared locally
+        const pendingSellers = pendingSellersSnapshot.size; 
         
         // --- 2. Equipment Counts ---
         const equipmentSnapshot = await window.FirebaseDB.collection('equipment').get();
-        const totalEquipment = equipmentSnapshot.size; // FIX: Declared locally
+        const totalEquipment = equipmentSnapshot.size; 
         
         const pendingEquipmentSnapshot = await window.FirebaseDB.collection('equipment')
             .where('status', '==', 'pending')
             .get();
         
-        const pendingEquipment = pendingEquipmentSnapshot.size; // FIX: Declared locally
+        const pendingEquipment = pendingEquipmentSnapshot.size; 
         
-        // --- 3. Revenue Data (Already fixed in last iteration) ---
+        // --- 3. Revenue Data & Settlement Stats ---
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
+        // Fetch all orders for comprehensive use
         const ordersSnapshot = await getPublicCollectionRef('orders').get();
+        allOrdersData = []; // Reset global store
         let todayRevenue = 0;
         let revenueData = [0, 0, 0, 0, 0, 0, 0]; // Last 7 days
-        
+        let pendingSettlementsAmount = 0;
+        let unsettledCount = 0;
+        let settledCount = 0;
+
         ordersSnapshot.forEach(doc => {
-            const order = doc.data();
+            const order = { id: doc.id, ...doc.data() };
+            allOrdersData.push(order); // Store all orders
+            
             const orderDate = order.createdAt ? order.createdAt.toDate() : new Date();
             
             if (orderDate >= today) {
@@ -236,9 +243,19 @@ async function calculatePlatformStats() {
             if (daysAgo >= 0 && daysAgo < 7) {
                 revenueData[6 - daysAgo] += order.totalAmount || 0;
             }
+            
+            // Settlement Stats Calculation
+            if ((order.status === 'completed' || order.status === 'returned')) {
+                 if (order.settlementStatus === 'unsettled') {
+                     pendingSettlementsAmount += order.sellerNetEarnings || 0;
+                     unsettledCount++;
+                 } else if (order.settlementStatus === 'settled') {
+                     settledCount++;
+                 }
+            }
         });
-
-        // --- 4. Notifications (NEW LOGIC) ---
+        
+        // --- 4. Notifications ---
         let notifications = [];
 
         pendingSellersSnapshot.forEach(doc => {
@@ -284,7 +301,10 @@ async function calculatePlatformStats() {
             todayRevenue,
             revenueData,
             unreadNotifications,
-            recentNotifications
+            recentNotifications,
+            pendingSettlementsAmount,
+            unsettledCount,
+            settledCount
         };
         
     } catch (error) {
@@ -300,10 +320,206 @@ async function calculatePlatformStats() {
             todayRevenue: 0,
             revenueData: [0, 0, 0, 0, 0, 0, 0],
             unreadNotifications: 0,
-            recentNotifications: []
+            recentNotifications: [],
+            pendingSettlementsAmount: 0,
+            unsettledCount: 0,
+            settledCount: 0
         };
     }
 }
+
+// Load settlements (Modified to focus on stats update and initial load)
+async function loadSettlements() {
+    try {
+        // Recalculate stats to ensure figures are up-to-date and allOrdersData is populated
+        const stats = await calculatePlatformStats();
+        
+        // Update stats cards using the results from calculatePlatformStats
+        document.getElementById('pending-settlements-amount').textContent = window.firebaseHelpers.formatCurrency(stats.pendingSettlementsAmount);
+        document.getElementById('unsettled-count').textContent = stats.unsettledCount.toLocaleString();
+        document.getElementById('settled-count').textContent = stats.settledCount.toLocaleString();
+
+        // Default to showing the unsettled list
+        displaySettlementData('unsettled'); 
+
+    } catch (error) {
+        console.error('Error loading settlements:', error);
+        window.firebaseHelpers.showAlert('Error loading settlements data', 'danger');
+    }
+}
+
+/**
+ * Displays settlement data based on status (unsettled or settled)
+ * @param {string} status 'unsettled' or 'settled'
+ */
+async function displaySettlementData(status) {
+    const tableId = status === 'settled' ? 'settled-history-table' : 'settlements-table';
+    const settlementsTable = document.getElementById(tableId);
+    if (!settlementsTable) return;
+
+    // Show loading state
+    settlementsTable.innerHTML = `
+        <tr>
+            <td colspan="7" class="text-center py-4">
+                <div class="spinner-border spinner-border-sm text-primary"></div>
+                <p class="mt-2 mb-0">Loading ${status} history...</p>
+            </td>
+        </tr>
+    `;
+    
+    // Ensure allOrdersData is populated (should be done by loadSettlements/calculatePlatformStats)
+    if (allOrdersData.length === 0) {
+        try {
+            const ordersSnapshot = await getPublicCollectionRef('orders').get();
+            ordersSnapshot.forEach(doc => {
+                 allOrdersData.push({ id: doc.id, ...doc.data() });
+            });
+        } catch (e) {
+             console.error("Failed to fetch orders for displaySettlementData:", e);
+             // Leave loading message or set error message
+             settlementsTable.innerHTML = `
+                 <tr>
+                     <td colspan="7" class="text-center py-4 text-danger">
+                         <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
+                         <p>Error fetching order data.</p>
+                     </td>
+                 </tr>
+             `;
+             return;
+        }
+    }
+
+    const ordersToShow = allOrdersData.filter(order => 
+        (order.status === 'completed' || order.status === 'returned') && 
+        order.settlementStatus === status
+    );
+
+    if (ordersToShow.length === 0) {
+        settlementsTable.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center py-4">
+                    <i class="fas fa-info-circle fa-2x text-muted mb-3"></i>
+                    <p>No ${status} records found.</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    settlementsTable.innerHTML = '';
+    ordersToShow.forEach(order => {
+        if (status === 'unsettled') {
+            settlementsTable.innerHTML += createSettlementRow(order);
+        } else {
+            settlementsTable.innerHTML += createSettledHistoryRow(order);
+        }
+    });
+    
+    // Update active tab visual state
+    const unsettledTab = document.getElementById('unsettled-tab');
+    const settledTab = document.getElementById('settled-tab');
+
+    if (unsettledTab && settledTab) {
+        if (status === 'unsettled') {
+            unsettledTab.classList.add('active');
+            settledTab.classList.remove('active');
+            document.getElementById('unsettled-content').classList.add('show', 'active');
+            document.getElementById('settled-content').classList.remove('show', 'active');
+        } else {
+            unsettledTab.classList.remove('active');
+            settledTab.classList.add('active');
+            document.getElementById('unsettled-content').classList.remove('show', 'active');
+            document.getElementById('settled-content').classList.add('show', 'active');
+        }
+    }
+}
+window.displaySettlementData = displaySettlementData; 
+
+/**
+ * Creates a row for PENDING settlements (Unsettled list)
+ */
+function createSettlementRow(order) {
+    const platformCutRate = (order.platformCommissionRate * 100).toFixed(1);
+    
+    return `
+        <tr>
+            <td>#${order.id.substring(0, 8)}</td>
+            <td>${order.sellerBusinessNames || 'N/A'} (ID: ${order.sellerIds?.join(',') || 'N/A'})</td>
+            <td>${window.firebaseHelpers.formatCurrency(order.subtotalAmount || 0)}</td>
+            <td>${window.firebaseHelpers.formatCurrency(order.platformCommissionAmount || 0)} (${platformCutRate}%)</td>
+            <td><strong>${window.firebaseHelpers.formatCurrency(order.sellerNetEarnings || 0)}</strong></td>
+            <td><span class="status-badge status-pending">Unsettled</span></td>
+            <td>
+                <button class="btn-action btn-approve" onclick="processSettlement('${order.id}')" title="Mark as Settled and Paid">
+                    <i class="fas fa-handshake"></i> Settle Payment
+                </button>
+            </td>
+        </tr>
+    `;
+}
+
+/**
+ * NEW: Creates a row for COMPLETED settlements (Settled History list)
+ */
+function createSettledHistoryRow(order) {
+    const settledAt = order.settledAt ? window.firebaseHelpers.formatDateTime(order.settledAt) : 'N/A';
+    const transactionId = order.transactionId || 'N/A';
+    
+    return `
+        <tr>
+            <td>#${order.id.substring(0, 8)}</td>
+            <td>${order.sellerBusinessNames || 'N/A'} (ID: ${order.sellerIds?.join(',') || 'N/A'})</td>
+            <td><strong>${window.firebaseHelpers.formatCurrency(order.settledAmount || 0)}</strong></td>
+            <td>${settledAt}</td>
+            <td><small>${transactionId.substring(0, 15)}...</small></td>
+            <td><span class="status-badge status-approved">Settled</span></td>
+            <td>
+                <button class="btn-action btn-view" onclick="viewOrderDetails('${order.id}')" title="View Order Details">
+                    <i class="fas fa-eye"></i>
+                </button>
+            </td>
+        </tr>
+    `;
+}
+
+// NEW: Process Settlement
+async function processSettlement(orderId) {
+    // FIX: Replaced confirm() with alert due to sandbox constraint
+    window.firebaseHelpers.showAlert('Settlement feature needs confirmation UI.', 'warning'); 
+    if (!confirm(`Confirm payment settlement for Order #${orderId.substring(0, 8)}? This action is irreversible and marks the amount as paid to the seller.`)) return;
+
+    try {
+        const orderRef = getPublicCollectionRef('orders').doc(orderId);
+        const orderDoc = await orderRef.get();
+
+        if (!orderDoc.exists) {
+            window.firebaseHelpers.showAlert('Order not found.', 'danger');
+            return;
+        }
+
+        const order = orderDoc.data();
+        if (order.settlementStatus === 'settled') {
+             window.firebaseHelpers.showAlert('Order already settled.', 'info');
+             return;
+        }
+
+        await orderRef.update({
+            settlementStatus: 'settled',
+            // Use sellerNetEarnings calculated during checkout as the settled amount
+            settledAmount: order.sellerNetEarnings || 0, 
+            settledAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        window.firebaseHelpers.showAlert(`Settlement for Order #${orderId.substring(0, 8)} marked as Paid and Settled.`, 'success');
+        loadSettlements(); // Reload both tables and stats
+        
+    } catch (error) {
+        console.error('Error processing settlement:', error);
+        window.firebaseHelpers.showAlert('Error processing settlement', 'danger');
+    }
+}
+window.processSettlement = processSettlement; // Expose globally for HTML onclick
 
 // NEW: Display top navbar notifications
 function displayTopNotifications(notifications) {
@@ -644,7 +860,7 @@ async function viewUserDetails(userId) {
 
 // Suspend user
 async function suspendUser(userId) {
-    // FIX: Replaced confirm() with custom modal logic or a temporary alert due to sandbox constraint
+    // FIX: Replaced confirm() with alert due to sandbox constraint
     window.firebaseHelpers.showAlert('User suspension feature needs confirmation UI.', 'warning'); 
     if (!confirm('Are you sure you want to suspend this user?')) return;
     
@@ -666,7 +882,7 @@ async function suspendUser(userId) {
 
 // Activate user
 async function activateUser(userId) {
-    // FIX: Replaced confirm() with custom modal logic or a temporary alert due to sandbox constraint
+    // FIX: Replaced confirm() with alert due to sandbox constraint
     window.firebaseHelpers.showAlert('User activation feature needs confirmation UI.', 'warning'); 
     if (!confirm('Are you sure you want to activate this user?')) return;
     
@@ -801,7 +1017,7 @@ function searchSellers() {
 
 // Approve seller
 async function approveSeller(sellerId) {
-    // FIX: Replaced confirm() with custom modal logic or a temporary alert due to sandbox constraint
+    // FIX: Replaced confirm() with alert due to sandbox constraint
     window.firebaseHelpers.showAlert('Seller approval feature needs confirmation UI.', 'warning'); 
     if (!confirm('Approve this seller?')) return;
     
@@ -823,7 +1039,7 @@ async function approveSeller(sellerId) {
 
 // Reject seller
 async function rejectSeller(sellerId) {
-    // FIX: Replaced confirm() with custom modal logic or a temporary alert due to sandbox constraint
+    // FIX: Replaced confirm() with alert due to sandbox constraint
     window.firebaseHelpers.showAlert('Seller rejection feature needs confirmation UI.', 'warning'); 
     if (!confirm('Reject this seller application?')) return;
     
@@ -845,7 +1061,7 @@ async function rejectSeller(sellerId) {
 
 // Suspend seller
 async function suspendSeller(sellerId) {
-    // FIX: Replaced confirm() with custom modal logic or a temporary alert due to sandbox constraint
+    // FIX: Replaced confirm() with alert due to sandbox constraint
     window.firebaseHelpers.showAlert('Seller suspension feature needs confirmation UI.', 'warning'); 
     if (!confirm('Suspend this seller account?')) return;
     
@@ -1080,7 +1296,7 @@ async function viewEquipmentDetails(equipmentId) {
 
 // Approve equipment
 async function approveEquipment(equipmentId, closeAndReload = false) {
-    // FIX: Replaced confirm() with custom modal logic or a temporary alert due to sandbox constraint
+    // FIX: Replaced confirm() with alert due to sandbox constraint
     window.firebaseHelpers.showAlert('Equipment approval feature needs confirmation UI.', 'warning'); 
     if (!confirm('Approve this equipment listing?')) return;
     
@@ -1108,7 +1324,7 @@ async function approveEquipment(equipmentId, closeAndReload = false) {
 
 // Reject equipment
 async function rejectEquipment(equipmentId) {
-    // FIX: Replaced confirm() with custom modal logic or a temporary alert due to sandbox constraint
+    // FIX: Replaced confirm() with alert due to sandbox constraint
     window.firebaseHelpers.showAlert('Equipment rejection feature needs confirmation UI.', 'warning'); 
     if (!confirm('Reject this equipment listing?')) return;
     
@@ -1131,7 +1347,7 @@ async function rejectEquipment(equipmentId) {
 // Mark equipment as featured (New Functionality to resolve homepage issue)
 async function markEquipmentAsFeatured(equipmentId, isFeatured, closeAndReload = false) {
     const actionText = isFeatured ? 'Mark as Featured' : 'Unmark as Featured';
-    // FIX: Replaced confirm() with custom modal logic or a temporary alert due to sandbox constraint
+    // FIX: Replaced confirm() with alert due to sandbox constraint
     window.firebaseHelpers.showAlert(`Equipment ${actionText.toLowerCase()} feature needs confirmation UI.`, 'warning'); 
     if (!confirm(`Are you sure you want to ${actionText.toLowerCase()}?`)) return;
 
@@ -1412,7 +1628,9 @@ async function calculateReportData(periodDays) {
             completed: 0,
             active: 0,
             pending: 0,
-            cancelled: 0
+            cancelled: 0,
+            pickedup: 0,
+            returned: 0
         };
         
         ordersSnapshot.forEach(doc => {
@@ -1422,8 +1640,14 @@ async function calculateReportData(periodDays) {
             }
         });
         
-        const orderStatusData = Object.entries(orderStatusCount)
-            .map(([status, count]) => ({ status, count }));
+        // Merge pickedup/returned into active for simpler donut chart view if too many slices
+        const simplifiedStatusData = [
+            { status: 'Completed', count: orderStatusCount.completed, color: '#4caf50' },
+            { status: 'Active (Confirmed/Rented)', count: orderStatusCount.active + orderStatusCount.pickedup + orderStatusCount.returned, color: '#2196f3' },
+            { status: 'Pending', count: orderStatusCount.pending, color: '#ff9800' },
+            { status: 'Cancelled/Rejected', count: orderStatusCount.cancelled, color: '#f44336' }
+        ].filter(item => item.count > 0);
+        
         
         // Get user growth data
         const userGrowthData = [];
@@ -1450,7 +1674,7 @@ async function calculateReportData(periodDays) {
             newSellers,
             dailyData,
             categoryData,
-            orderStatusData,
+            orderStatusData: simplifiedStatusData, // Use simplified for chart
             userGrowthData,
             periodDays
         };
@@ -1554,15 +1778,10 @@ function initializeReportCharts(reportData) {
     orderStatusChart = new Chart(statusCtx, {
         type: 'doughnut',
         data: {
-            labels: reportData.orderStatusData.map(item => item.status.charAt(0).toUpperCase() + item.status.slice(1)),
+            labels: reportData.orderStatusData.map(item => item.status),
             datasets: [{
                 data: reportData.orderStatusData.map(item => item.count),
-                backgroundColor: [
-                    '#4caf50',
-                    '#2196f3',
-                    '#ff9800',
-                    '#f44336'
-                ]
+                backgroundColor: reportData.orderStatusData.map(item => item.color)
             }]
         },
         options: {
@@ -1852,126 +2071,6 @@ function markAllNotificationsRead() {
     window.firebaseHelpers.showAlert('All pending approvals must be actioned through their respective sections.', 'info');
 }
 
-// NEW: Load Settlements Data
-async function loadSettlements() {
-    try {
-        const ordersCollectionRef = getPublicCollectionRef('orders');
-        // Fetch only completed or returned orders that are unsettled
-        const snapshot = await ordersCollectionRef
-            .where('settlementStatus', '!=', 'settled') // Filter out settled orders
-            // Ordering by settlementStatus is required for the '!=' filter to work
-            .orderBy('settlementStatus') 
-            .get(); 
-
-        let pendingSettlementsAmount = 0;
-        let unsettledCount = 0;
-        let settledCount = 0;
-        const settlementsTable = document.getElementById('settlements-table');
-        if (!settlementsTable) return;
-        settlementsTable.innerHTML = '';
-
-        const ordersToSettle = [];
-
-        // Calculate total settled count (done by separate query to avoid query complexity)
-        const settledSnapshot = await ordersCollectionRef.where('settlementStatus', '==', 'settled').get();
-        settledCount = settledSnapshot.size;
-
-        snapshot.forEach(doc => {
-            const order = { id: doc.id, ...doc.data() };
-            
-            // Filter for orders ready for settlement (must be completed or returned by customer AND explicitly unsettled)
-            if ((order.status === 'completed' || order.status === 'returned') && order.settlementStatus === 'unsettled') {
-                pendingSettlementsAmount += order.sellerNetEarnings || 0;
-                unsettledCount++;
-                ordersToSettle.push(order);
-            }
-        });
-        
-        // Update stats cards
-        document.getElementById('pending-settlements-amount').textContent = window.firebaseHelpers.formatCurrency(pendingSettlementsAmount);
-        document.getElementById('unsettled-count').textContent = unsettledCount.toLocaleString();
-        document.getElementById('settled-count').textContent = settledCount.toLocaleString();
-
-
-        if (ordersToSettle.length === 0) {
-            settlementsTable.innerHTML = `
-                <tr>
-                    <td colspan="7" class="text-center py-4">
-                        <i class="fas fa-check-circle fa-2x text-success mb-3"></i>
-                        <p>All completed orders have been settled.</p>
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-
-        ordersToSettle.forEach(order => {
-            const row = createSettlementRow(order);
-            settlementsTable.innerHTML += row;
-        });
-
-    } catch (error) {
-        console.error('Error loading settlements:', error);
-        window.firebaseHelpers.showAlert('Error loading settlements data', 'danger');
-    }
-}
-
-function createSettlementRow(order) {
-    const platformCutRate = (order.platformCommissionRate * 100).toFixed(1);
-    
-    return `
-        <tr>
-            <td>#${order.id.substring(0, 8)}</td>
-            <td>${order.sellerBusinessNames || 'N/A'} (ID: ${order.sellerIds?.join(',') || 'N/A'})</td>
-            <td>${window.firebaseHelpers.formatCurrency(order.subtotalAmount || 0)}</td>
-            <td>${window.firebaseHelpers.formatCurrency(order.platformCommissionAmount || 0)} (${platformCutRate}%)</td>
-            <td><strong>${window.firebaseHelpers.formatCurrency(order.sellerNetEarnings || 0)}</strong></td>
-            <td><span class="status-badge status-pending">${(order.settlementStatus || 'unsettled').charAt(0).toUpperCase() + (order.settlementStatus || 'unsettled').slice(1)}</span></td>
-            <td>
-                <button class="btn-action btn-approve" onclick="processSettlement('${order.id}')" title="Mark as Settled and Paid">
-                    <i class="fas fa-handshake"></i> Settle Payment
-                </button>
-            </td>
-        </tr>
-    `;
-}
-
-// NEW: Process Settlement
-async function processSettlement(orderId) {
-    window.firebaseHelpers.showAlert('Settlement feature needs confirmation UI.', 'warning'); 
-    if (!confirm(`Confirm payment settlement for Order #${orderId.substring(0, 8)}? This action is irreversible and marks the amount as paid to the seller.`)) return;
-
-    try {
-        const orderRef = getPublicCollectionRef('orders').doc(orderId);
-        const orderDoc = await orderRef.get();
-
-        if (!orderDoc.exists) {
-            window.firebaseHelpers.showAlert('Order not found.', 'danger');
-            return;
-        }
-
-        const order = orderDoc.data();
-        if (order.settlementStatus === 'settled') {
-             window.firebaseHelpers.showAlert('Order already settled.', 'info');
-             return;
-        }
-
-        await orderRef.update({
-            settlementStatus: 'settled',
-            settledAmount: order.sellerNetEarnings || 0,
-            settledAt: firebase.firestore.FieldValue.serverTimestamp(),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-
-        window.firebaseHelpers.showAlert(`Settlement for Order #${orderId.substring(0, 8)} marked as Paid and Settled.`, 'success');
-        loadSettlements();
-        
-    } catch (error) {
-        console.error('Error processing settlement:', error);
-        window.firebaseHelpers.showAlert('Error processing settlement', 'danger');
-    }
-}
-
 // Load settings data
 async function loadSettingsData() {
     try {
@@ -2039,3 +2138,23 @@ async function logout() {
         window.firebaseHelpers.showAlert('Error logging out', 'danger');
     }
 }
+
+// Expose internal functions needed by the HTML template
+window.approveSeller = approveSeller;
+window.viewUserDetails = viewUserDetails;
+window.suspendUser = suspendUser;
+window.activateUser = activateUser;
+window.approveEquipment = approveEquipment;
+window.rejectEquipment = rejectEquipment;
+window.viewOrderDetails = viewOrderDetails;
+window.filterSellers = filterSellers;
+window.markEquipmentAsFeatured = markEquipmentAsFeatured;
+window.showSection = showSection;
+window.logout = logout;
+window.markAllNotificationsRead = markAllNotificationsRead;
+window.handleNotificationAction = handleNotificationAction; // Needed by notifications UI in HTML
+window.loadSettlements = loadSettlements; // Needed by Settlements UI in HTML
+window.displaySettlementData = displaySettlementData; // Needed by Settlements UI in HTML
+window.createSettlementRow = createSettlementRow; // Needed by Settlements UI in HTML
+window.createSettledHistoryRow = createSettledHistoryRow; // Needed by Settlements UI in HTML
+window.processSettlement = processSettlement; // Needed by Settlements UI in HTML
