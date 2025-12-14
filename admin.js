@@ -1981,7 +1981,7 @@ async function loadSettingsData() {
         // Populate fields with saved settings or defaults
         document.getElementById('site-name').value = settings.siteName || 'FarmRent';
         document.getElementById('site-url').value = settings.siteUrl || 'https://farmrent.com';
-        document.getElementById('seller-commission').value = settings.sellerCommission || 15;
+        // Removed: document.getElementById('seller-commission').value = settings.sellerCommission || 15;
         document.getElementById('platform-fee').value = settings.platformFee || 5;
         document.getElementById('email-notifications').checked = settings.emailNotifications !== undefined ? settings.emailNotifications : true;
         document.getElementById('seller-approval-emails').checked = settings.sellerApprovalEmails !== undefined ? settings.sellerApprovalEmails : true;
@@ -2006,8 +2006,7 @@ document.getElementById('system-settings-form').addEventListener('submit', async
         const settings = {
             siteName: document.getElementById('site-name').value,
             siteUrl: document.getElementById('site-url').value,
-            // Ensure numbers are stored as numbers
-            sellerCommission: parseFloat(document.getElementById('seller-commission').value),
+            // Seller Commission is now handled in script.js as a hardcoded 0%
             platformFee: parseFloat(document.getElementById('platform-fee').value),
             emailNotifications: document.getElementById('email-notifications').checked,
             sellerApprovalEmails: document.getElementById('seller-approval-emails').checked,
