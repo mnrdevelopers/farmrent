@@ -119,6 +119,9 @@ function showSection(sectionId) {
         case 'settings':
             loadSettingsData();
             break;
+        case 'settlements': // NEW: Load Settlements
+            loadSettlements();
+            break;
     }
 }
 
@@ -134,6 +137,7 @@ function updatePageTitle(sectionId) {
         categories: 'Categories Management',
         notifications: 'Notifications Management', // NEW TITLE
         settings: 'System Settings'
+        settlements: 'Payment Settlements' // NEW TITLE
     };
     
     document.getElementById('page-title').textContent = titles[sectionId] || 'Admin Panel';
@@ -1846,6 +1850,126 @@ function handleNotificationAction(relatedId, type) {
 // NEW: Mark all notifications as read (simulated/cleared upon action)
 function markAllNotificationsRead() {
     window.firebaseHelpers.showAlert('All pending approvals must be actioned through their respective sections.', 'info');
+}
+
+// NEW: Load Settlements Data
+async function loadSettlements() {
+    try {
+        const ordersCollectionRef = getPublicCollectionRef('orders');
+        // Fetch only completed or returned orders that are unsettled
+        const snapshot = await ordersCollectionRef
+            .where('settlementStatus', '!=', 'settled') // Filter out settled orders
+            // Ordering by settlementStatus is required for the '!=' filter to work
+            .orderBy('settlementStatus') 
+            .get(); 
+
+        let pendingSettlementsAmount = 0;
+        let unsettledCount = 0;
+        let settledCount = 0;
+        const settlementsTable = document.getElementById('settlements-table');
+        if (!settlementsTable) return;
+        settlementsTable.innerHTML = '';
+
+        const ordersToSettle = [];
+
+        // Calculate total settled count (done by separate query to avoid query complexity)
+        const settledSnapshot = await ordersCollectionRef.where('settlementStatus', '==', 'settled').get();
+        settledCount = settledSnapshot.size;
+
+        snapshot.forEach(doc => {
+            const order = { id: doc.id, ...doc.data() };
+            
+            // Filter for orders ready for settlement (must be completed or returned by customer AND explicitly unsettled)
+            if ((order.status === 'completed' || order.status === 'returned') && order.settlementStatus === 'unsettled') {
+                pendingSettlementsAmount += order.sellerNetEarnings || 0;
+                unsettledCount++;
+                ordersToSettle.push(order);
+            }
+        });
+        
+        // Update stats cards
+        document.getElementById('pending-settlements-amount').textContent = window.firebaseHelpers.formatCurrency(pendingSettlementsAmount);
+        document.getElementById('unsettled-count').textContent = unsettledCount.toLocaleString();
+        document.getElementById('settled-count').textContent = settledCount.toLocaleString();
+
+
+        if (ordersToSettle.length === 0) {
+            settlementsTable.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-4">
+                        <i class="fas fa-check-circle fa-2x text-success mb-3"></i>
+                        <p>All completed orders have been settled.</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        ordersToSettle.forEach(order => {
+            const row = createSettlementRow(order);
+            settlementsTable.innerHTML += row;
+        });
+
+    } catch (error) {
+        console.error('Error loading settlements:', error);
+        window.firebaseHelpers.showAlert('Error loading settlements data', 'danger');
+    }
+}
+
+function createSettlementRow(order) {
+    const platformCutRate = (order.platformCommissionRate * 100).toFixed(1);
+    
+    return `
+        <tr>
+            <td>#${order.id.substring(0, 8)}</td>
+            <td>${order.sellerBusinessNames || 'N/A'} (ID: ${order.sellerIds?.join(',') || 'N/A'})</td>
+            <td>${window.firebaseHelpers.formatCurrency(order.subtotalAmount || 0)}</td>
+            <td>${window.firebaseHelpers.formatCurrency(order.platformCommissionAmount || 0)} (${platformCutRate}%)</td>
+            <td><strong>${window.firebaseHelpers.formatCurrency(order.sellerNetEarnings || 0)}</strong></td>
+            <td><span class="status-badge status-pending">${(order.settlementStatus || 'unsettled').charAt(0).toUpperCase() + (order.settlementStatus || 'unsettled').slice(1)}</span></td>
+            <td>
+                <button class="btn-action btn-approve" onclick="processSettlement('${order.id}')" title="Mark as Settled and Paid">
+                    <i class="fas fa-handshake"></i> Settle Payment
+                </button>
+            </td>
+        </tr>
+    `;
+}
+
+// NEW: Process Settlement
+async function processSettlement(orderId) {
+    window.firebaseHelpers.showAlert('Settlement feature needs confirmation UI.', 'warning'); 
+    if (!confirm(`Confirm payment settlement for Order #${orderId.substring(0, 8)}? This action is irreversible and marks the amount as paid to the seller.`)) return;
+
+    try {
+        const orderRef = getPublicCollectionRef('orders').doc(orderId);
+        const orderDoc = await orderRef.get();
+
+        if (!orderDoc.exists) {
+            window.firebaseHelpers.showAlert('Order not found.', 'danger');
+            return;
+        }
+
+        const order = orderDoc.data();
+        if (order.settlementStatus === 'settled') {
+             window.firebaseHelpers.showAlert('Order already settled.', 'info');
+             return;
+        }
+
+        await orderRef.update({
+            settlementStatus: 'settled',
+            settledAmount: order.sellerNetEarnings || 0,
+            settledAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        window.firebaseHelpers.showAlert(`Settlement for Order #${orderId.substring(0, 8)} marked as Paid and Settled.`, 'success');
+        loadSettlements();
+        
+    } catch (error) {
+        console.error('Error processing settlement:', error);
+        window.firebaseHelpers.showAlert('Error processing settlement', 'danger');
+    }
 }
 
 // Load settings data
