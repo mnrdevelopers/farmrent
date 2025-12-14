@@ -53,8 +53,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Hide loading spinner
     document.getElementById('loading').classList.remove('active');
     
-    // Initialize dashboard
-    showSection('dashboard');
+    // Check URL hash for the current section (FIX APPLIED HERE)
+    const hash = window.location.hash.substring(1);
+    // Use the hash if it matches a known section ID, otherwise default to 'dashboard'
+    const validSections = ['dashboard', 'users', 'sellers', 'equipment', 'orders', 'settlements', 'reports', 'categories', 'notifications', 'settings'];
+    const initialSection = validSections.includes(hash) ? hash : 'dashboard';
+
+    // Initialize dashboard to the correct section
+    showSection(initialSection);
 });
 
 // Update admin information in UI
@@ -78,7 +84,8 @@ function showSection(sectionId) {
     });
     
     // Show selected section
-    document.getElementById(`${sectionId}-section`).style.display = 'block';
+    const targetSection = document.getElementById(`${sectionId}-section`);
+    if (targetSection) targetSection.style.display = 'block';
     
     // Update active nav link
     const navLink = Array.from(document.querySelectorAll('.nav-link')).find(link => 
@@ -87,6 +94,9 @@ function showSection(sectionId) {
     if (navLink) {
         navLink.classList.add('active');
     }
+
+    // Update URL hash (Crucial for page reloads)
+    window.location.hash = sectionId;
     
     // Update page title
     updatePageTitle(sectionId);
@@ -423,11 +433,13 @@ async function displaySettlementData(status) {
         if (status === 'unsettled') {
             unsettledTab.classList.add('active');
             settledTab.classList.remove('active');
+            // Ensure content is shown
             document.getElementById('unsettled-content').classList.add('show', 'active');
             document.getElementById('settled-content').classList.remove('show', 'active');
         } else {
             unsettledTab.classList.remove('active');
             settledTab.classList.add('active');
+            // Ensure content is shown
             document.getElementById('unsettled-content').classList.remove('show', 'active');
             document.getElementById('settled-content').classList.add('show', 'active');
         }
@@ -1145,7 +1157,7 @@ function createEquipmentCard(equipment) {
                     </div>
                     <div class="d-flex gap-2">
                         <button class="btn btn-sm btn-outline-primary flex-fill" onclick="viewEquipmentDetails('${equipment.id}')">
-                            <i class="fas fa-eye me-1"></i>View
+                            <i class="fas fa-eye"></i>View
                         </button>
                         ${equipment.status === 'pending' ? `
                             <button class="btn btn-sm btn-success" onclick="approveEquipment('${equipment.id}')">
