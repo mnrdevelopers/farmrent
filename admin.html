@@ -26,7 +26,7 @@
         </div>
         
         <nav class="nav flex-column mt-4">
-            <a class="nav-link active" href="#dashboard" onclick="showSection('dashboard')">
+            <a class="nav-link" href="#dashboard" onclick="showSection('dashboard')">
                 <i class="fas fa-tachometer-alt"></i> Dashboard
             </a>
             <a class="nav-link" href="#users" onclick="showSection('users')">
@@ -95,7 +95,7 @@
         </div>
         <div class="offcanvas-body">
             <nav class="nav flex-column">
-                <a class="nav-link text-white active" href="#" onclick="showSection('dashboard')" data-bs-dismiss="offcanvas">
+                <a class="nav-link text-white" href="#" onclick="showSection('dashboard')" data-bs-dismiss="offcanvas">
                     <i class="fas fa-tachometer-alt me-2"></i> Dashboard
                 </a>
                 <a class="nav-link text-white" href="#" onclick="showSection('users')" data-bs-dismiss="offcanvas">
@@ -174,7 +174,7 @@
         </nav>
 
         <!-- Dashboard Section -->
-        <div class="section" id="dashboard-section">
+        <div class="section" id="dashboard-section" style="display: none;">
             <!-- Stats Cards -->
             <div class="row mb-4">
                 <div class="col-xl-3 col-md-6 mb-4">
