@@ -1,172 +1,110 @@
-// Main application JavaScript
 let currentUser = null;
 let allEquipmentData = [];
 let selectedEquipment = {};
 let isAuthInitialized = false;
 let platformFeeRate = 0.05; 
 let customerPincode = null;
-// NEW: Coins state
 let availableCoins = 0;
-let coinsToApply = 0; // Coins the customer wishes to apply to the current order
+let coinsToApply = 0; 
+const CUSTOMER_NOTIFICATIONS_COLLECTION = 'customer_notifications';
+let lastClearTime = 0; 
+let activeChatId = null;
+let chatUnsubscribe = null;
+let typingTimeout = null;
+let chatBadgeUnsubscribe = null;
 
-// NEW: Referral Utility Functions
-/**
- * Generates a simple, unique 8-character referral code.
- * @returns {string} The referral code.
- */
 function generateReferralCode() {
     return Math.random().toString(36).substring(2, 10).toUpperCase();
 }
 
-/**
- * Looks up the UID of the referrer based on a referral code.
- * @param {string} code - The 8-character referral code.
- * @returns {Promise<string|null>} The UID of the referrer or null if not found.
- */
 async function lookupReferralCode(code) {
      if (!code || code.length !== 8 || !window.FirebaseDB) return null;
-     
      try {
          const snapshot = await window.FirebaseDB.collection('users')
              .where('referralCode', '==', code)
              .limit(1)
              .get();
-             
          if (!snapshot.empty) {
-             return snapshot.docs[0].id; // Return the UID of the referrer
+             return snapshot.docs[0].id;
          }
-     } catch (e) {
-         console.error("Error looking up referral code:", e);
-     }
+     } catch (e) {}
      return null;
 }
-// END NEW: Referral Utility Functions
+window.lookupReferralCode = lookupReferralCode;
 
-// NEW: Collection name for user's notification settings (private collection)
-const CUSTOMER_NOTIFICATIONS_COLLECTION = 'customer_notifications';
-let lastClearTime = 0; // Global variable to store the last notification clear time from Firestore
-
-// Chat system variables
-let activeChatId = null;
-let chatUnsubscribe = null;
-let typingTimeout = null;
-// NEW: Global unsubscribe handle for the floating chat badge listener
-let chatBadgeUnsubscribe = null;
-
-
-// --- NEW HELPER: Get Notification Status Ref ---
 function getCustomerNotificationRef(userId) {
     if (!window.FirebaseDB) return null;
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-    
-    // Path: /artifacts/{appId}/users/{userId}/customer_notifications/readStatus
     return window.FirebaseDB.collection('artifacts').doc(appId)
         .collection('users').doc(userId).collection(CUSTOMER_NOTIFICATIONS_COLLECTION).doc('readStatus');
 }
 
-// --- NEW HELPER: Load persisted clear time ---
 async function loadLastClearTime() {
     if (!window.currentUser || !window.FirebaseDB) {
-        lastClearTime = 0; // Reset for logged out users
+        lastClearTime = 0;
         return;
     }
-    
     try {
         const docRef = getCustomerNotificationRef(window.currentUser.uid);
         const doc = await docRef.get();
-        
         if (doc.exists && doc.data().lastClearTime) {
-            // Firestore timestamp is converted to milliseconds for comparison
             lastClearTime = doc.data().lastClearTime.toMillis();
         } else {
             lastClearTime = 0;
         }
     } catch (error) {
-        console.error('Error loading last clear time:', error);
         lastClearTime = 0;
     }
 }
 
-
-// --- NEW CART HELPER FUNCTIONS (To resolve ReferenceError: getCartFromFirestore is not defined) ---
-
-// Helper function to get the Firestore document reference for the user's private cart
 function getCartDocRef(userId) {
     if (!window.FirebaseDB) return null;
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-    
-    // Path: /artifacts/{appId}/users/{userId}/cart/currentCart
     return window.FirebaseDB.collection('artifacts').doc(appId)
         .collection('users').doc(userId).collection('cart').doc('currentCart');
 }
 
-/**
- * Retrieves the user's cart data from Firestore or local storage (if logged out).
- * @returns {Promise<Array>} The cart array.
- */
 async function getCartFromFirestore() {
     if (window.currentUser && window.FirebaseDB) {
         try {
             const docRef = getCartDocRef(window.currentUser.uid);
             if (!docRef) return [];
-
             const doc = await docRef.get();
             if (doc.exists) {
                 return doc.data().items || [];
             }
             return [];
         } catch (error) {
-            console.error('Error fetching cart from Firestore:', error);
-            // Fallback to local storage if Firestore fails but user is logged in (shouldn't happen often)
             return JSON.parse(localStorage.getItem('cart') || '[]');
         }
     } else {
-        // Fallback to local storage for unauthenticated users
         return JSON.parse(localStorage.getItem('cart') || '[]');
     }
 }
-// Make getCartFromFirestore globally accessible for firebase-config.js (via window.getCartFromFirestore)
 window.getCartFromFirestore = getCartFromFirestore;
 
-/**
- * Updates the user's cart data in Firestore or local storage.
- * @param {Array} cart - The new cart array to save.
- * @returns {Promise<void>}
- */
 async function updateCartInFirestore(cart) {
     if (window.currentUser && window.FirebaseDB) {
         try {
             const docRef = getCartDocRef(window.currentUser.uid);
             if (!docRef) return;
-            
             await docRef.set({
                 items: cart,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
-            
-            // Sync up cart count after saving
             updateCartCount();
         } catch (error) {
-            console.error('Error updating cart in Firestore:', error);
-            // Fallback to local storage on Firestore error
             localStorage.setItem('cart', JSON.stringify(cart));
             updateCartCount();
         }
     } else {
-        // Save to local storage for unauthenticated users
         localStorage.setItem('cart', JSON.stringify(cart));
         updateCartCount();
     }
 }
-// --- END NEW CART HELPER FUNCTIONS ---
 
-
-// Initialize page
 document.addEventListener('DOMContentLoaded', async () => {
-    // We await initializeAuth() before proceeding to ensure currentUser is correctly set.
     await initializeAuth(); 
-    
-    // Check which page we are on
     const path = window.location.pathname.split('/').pop();
     if (path === 'browse.html') {
         loadBrowsePageData();
@@ -176,12 +114,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (path === 'checkout.html') {
         loadCheckoutPage();
         updateNavbarPincodeDisplay();
-        // Setup the onchange listener for the payment method select box
         const paymentSelect = document.getElementById('payment-method-select');
         if (paymentSelect) {
             paymentSelect.onchange = function() {
                 const total = window.razorpayContext?.total || 0;
-                window.updatePaymentButtonUI(total); // Call the updated UI logic directly
+                window.updatePaymentButtonUI(total);
             };
         }
     } else if (path === 'profile.html') {
@@ -191,29 +128,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadOrdersPage();
         updateNavbarPincodeDisplay();
     } else if (path === 'seller.html' || path === 'seller-pending.html') {
-        // FIX: Check if loadSellerDashboard is defined (it's defined in seller.js, 
-        // which might load after this script or in a separate scope.
-        // It is defined as a global function in seller.js now.)
         if (window.loadSellerDashboard) {
             window.loadSellerDashboard();
-        } else {
-            console.warn("loadSellerDashboard is not defined. Ensure seller.js is loaded and exported correctly.");
         }
         updateNavbarPincodeDisplay();
-    } else if (path === 'index.html' || path === '') { // Handles index.html
+    } else if (path === 'index.html' || path === '') {
         loadHomepageData();
-        checkAndPromptForPincode(); // Initiates the pincode flow
+        checkAndPromptForPincode();
     } else {
         updateNavbarPincodeDisplay();
     }
-
     initializeEventListeners();
     await getPlatformFeeRate(); 
-    
-  // NEW: Initialize Chat Widget on all pages (except seller specific ones handled by seller.js)
-    // Update this section to use the new renderChatWidget function:
     if (path !== 'seller.html' && path !== 'seller-pending.html' && path !== 'admin.html') {
-        // Wait a bit for auth to fully initialize
         setTimeout(() => {
             if (document.getElementById('chat-widget-container')) {
                 renderChatWidget();
@@ -222,12 +149,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// --- NEW FUNCTION: Fetch Platform Fee Rate ---
 async function getPlatformFeeRate() {
     try {
-        // Wait for Firebase services to be initialized
         if (!window.FirebaseDB) {
-            console.log("Waiting for FirebaseDB before fetching platform fee...");
             await new Promise((resolve) => {
                 const check = setInterval(() => {
                     if (window.FirebaseDB) {
@@ -235,84 +159,52 @@ async function getPlatformFeeRate() {
                         resolve();
                     }
                 }, 100);
-                
                 setTimeout(() => {
                     clearInterval(check);
                     resolve();
                 }, 5000);
             });
         }
-
         if (!window.FirebaseDB) {
-            console.warn('FirebaseDB not available, using default platform fee rate');
             platformFeeRate = 0.05;
             return;
         }
-
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const settingsRef = window.FirebaseDB.collection('artifacts').doc(appId)
             .collection('public').doc('data').collection('settings').doc('platform');
-
         const doc = await settingsRef.get();
         if (doc.exists && doc.data().platformFee !== undefined) {
             platformFeeRate = (doc.data().platformFee / 100) || 0.05;
-            console.log(`Platform fee rate loaded: ${platformFeeRate * 100}%`);
         } else {
-            console.warn('Platform fee setting not found, using default rate of 5%.');
             platformFeeRate = 0.05;
         }
     } catch (error) {
-        console.error('Error fetching platform fee rate:', error);
         platformFeeRate = 0.05;
     }
 }
-// --- END NEW FUNCTION: Fetch Platform Fee Rate ---
 
-// --- LOCATION LOOKUP FUNCTIONS (Post Office API Integration) ---
-
-/**
- * Fetches location data (Post Offices, District, State) for a given Pincode using the India Post API.
- * @param {string} pincode 
- * @returns {Promise<Array>} Array of Post Office objects, or empty array on failure.
- */
 async function getPostOfficeData(pincode) {
     if (!window.firebaseHelpers.pincodeSystem.validatePincode(pincode)) {
-        console.warn("Invalid Pincode format provided.");
         return [];
     }
-
     try {
         const apiUrl = await window.firebaseHelpers.getPostOfficeApiUrl(); 
         const response = await fetch(`${apiUrl}${pincode}`);
-
         if (!response.ok) {
             throw new Error(`API returned status ${response.status}`);
         }
-        
         const data = await response.json();
-        
         if (data && data.length > 0 && data[0].Status === 'Success') {
             return data[0].PostOffice;
         } else {
-            console.log(`Post Office API lookup failed for Pincode ${pincode}: ${data[0]?.Message || 'No Data'}`);
             return [];
         }
     } catch (error) {
-        console.error("Error fetching Post Office data:", error);
         return [];
     }
 }
-// Make getPostOfficeData globally available for seller.js
 window.getPostOfficeData = getPostOfficeData;
 
-/**
- * Automatically populates City, State, and a Village/Post Office dropdown based on Pincode input.
- * @param {string} pincodeInputId ID of the Pincode input field.
- * @param {string} villageSelectId ID of the select element for Villages/Post Offices.
- * @param {string} cityInputId ID of the City input field.
- * @param {string} stateInputId ID of the State input field.
- * @param {string} statusElementId ID of an element to show status/loading text (optional).
- */
 async function populateLocationFields(pincodeInputId, villageSelectId, cityInputId, stateInputId, statusElementId) {
     const pincodeInput = document.getElementById(pincodeInputId);
     const villageSelect = document.getElementById(villageSelectId);
@@ -321,7 +213,6 @@ async function populateLocationFields(pincodeInputId, villageSelectId, cityInput
     const statusElement = document.getElementById(statusElementId);
     
     if (!pincodeInput || !villageSelect || !cityInput || !stateInput) return;
-
     villageSelect.innerHTML = '<option value="">Loading...</option>';
     villageSelect.disabled = true;
     cityInput.value = '';
@@ -329,26 +220,18 @@ async function populateLocationFields(pincodeInputId, villageSelectId, cityInput
     if (statusElement) statusElement.textContent = 'Verifying Pincode...';
     if (statusElement) statusElement.classList.remove('text-danger', 'text-success', 'text-warning');
     if (statusElement) statusElement.classList.add('text-muted');
-
     const pincode = pincodeInput.value;
-
     if (!window.firebaseHelpers.pincodeSystem.validatePincode(pincode)) {
         villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
         if (statusElement) statusElement.textContent = '';
         return;
     }
-
     const postOffices = await getPostOfficeData(pincode);
-
     if (postOffices.length > 0) {
         const firstOffice = postOffices[0];
         cityInput.value = firstOffice.District || '';
         stateInput.value = firstOffice.State || '';
-
-        // Populate village dropdown
         villageSelect.innerHTML = '<option value="">Select your Village/Post Office *</option>';
-        
-        // Remove duplicates and populate
         const uniquePostOffices = [...new Set(postOffices.map(office => office.Name))];
         uniquePostOffices.forEach(name => {
             const option = document.createElement('option');
@@ -356,7 +239,6 @@ async function populateLocationFields(pincodeInputId, villageSelectId, cityInput
             option.textContent = name;
             villageSelect.appendChild(option);
         });
-
         villageSelect.disabled = false;
         if (statusElement) {
             statusElement.textContent = `Location confirmed: ${cityInput.value}, ${stateInput.value}. Select your village.`;
@@ -373,13 +255,8 @@ async function populateLocationFields(pincodeInputId, villageSelectId, cityInput
         }
     }
 }
-// Make populateLocationFields globally available for auth.html, profile.html, etc.
 window.populateLocationFields = populateLocationFields;
 
-/**
- * Use Geolocation API to find coordinates and then use Geoapify reverse geocoding to find the Pincode.
- * Replaces simulated logic.
- */
 async function getCurrentLocationPincode() {
     const statusElement = document.getElementById('location-status');
     const inputElement = document.getElementById('pincode-input');
@@ -392,14 +269,12 @@ async function getCurrentLocationPincode() {
         window.firebaseHelpers.showAlert('Geolocation not supported.', 'danger');
         return;
     }
-
     if(statusElement) statusElement.textContent = 'Fetching location...';
     if(statusElement) statusElement.classList.remove('text-danger', 'text-warning', 'text-success', 'text-info');
     if(statusElement) statusElement.classList.add('text-muted');
     if(buttonElement) buttonElement.disabled = true;
     if(buttonElement) buttonElement.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Detecting...';
     
-    // Fetch Geoapify API Key from Remote Config
     const geoapifyKey = await window.firebaseHelpers.getGeoapifyApiKey();
     if (!geoapifyKey) {
         if(statusElement) statusElement.textContent = 'Geoapify API Key is missing. Cannot use real geolocation.';
@@ -410,43 +285,33 @@ async function getCurrentLocationPincode() {
         return;
     }
     
-    // Function to perform Geoapify Reverse Geocoding
     const reverseGeocode = async (lat, lon) => {
         const url = `https://api.geoapify.com/v1/geocode/reverse?lat=${lat}&lon=${lon}&apiKey=${geoapifyKey}`;
         try {
             const response = await fetch(url);
             if (!response.ok) {
-                const errorBody = await response.json();
-                console.error('Geoapify Error:', errorBody);
                 return null;
             }
             const data = await response.json();
-            
-            // Geoapify results are in features array. We look for 'postcode' in properties.
             if (data.features && data.features.length > 0 && data.features[0].properties.postcode) {
                 return data.features[0].properties.postcode;
             }
             return null;
         } catch (error) {
-            console.error('Reverse Geocoding Network Error:', error);
             return null;
         }
     };
 
-
     navigator.geolocation.getCurrentPosition(async (position) => {
         const { latitude, longitude } = position.coords;
         if(statusElement) statusElement.textContent = `Location found. Determining Pincode...`;
-        
         const pincode = await reverseGeocode(latitude, longitude);
-
         if (pincode && window.firebaseHelpers.pincodeSystem.validatePincode(pincode)) {
             if(statusElement) statusElement.textContent = `Pincode found: ${pincode}. Applying filter...`;
             if(statusElement) statusElement.classList.remove('text-muted');
             if(statusElement) statusElement.classList.add('text-success');
             if(inputElement) inputElement.value = pincode;
             
-            // Automatically submit the form to save and filter
             setTimeout(async () => {
                 await savePincode(pincode);
                 const modal = bootstrap.Modal.getInstance(document.getElementById('pincodeModal'));
@@ -454,7 +319,6 @@ async function getCurrentLocationPincode() {
                 if(buttonElement) buttonElement.disabled = false;
                 if(buttonElement) buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
             }, 1000);
-
         } else {
             if(statusElement) statusElement.textContent = 'Could not determine a valid Indian Pincode. Please enter manually.';
             if(statusElement) statusElement.classList.remove('text-muted');
@@ -462,7 +326,6 @@ async function getCurrentLocationPincode() {
             if(buttonElement) buttonElement.disabled = false;
             if(buttonElement) buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
         }
-
     }, (error) => {
         let message = 'Location access denied or error occurred.';
         if (error.code === error.PERMISSION_DENIED) {
@@ -484,43 +347,27 @@ async function getCurrentLocationPincode() {
         maximumAge: 0
     });
 }
-// --- END LOCATION LOOKUP FUNCTIONS ---
+window.getCurrentLocationPincode = getCurrentLocationPincode;
 
-
-// --- PINCODE SYSTEM INTEGRATION FUNCTIONS ---
-
-/**
- * Checks for existing pincode and prompts user if not found (on homepage only).
- */
 async function checkAndPromptForPincode() {
-    // This relies on initializeAuth() having been awaited before this call in DOMContentLoaded
     const finalPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
     window.customerPincode = finalPincode;
-    
     updateHomepagePincodeDisplay();
     updateNavbarPincodeDisplay();
-
     const path = window.location.pathname.split('/').pop();
     if (!finalPincode && (path === 'index.html' || path === '')) {
-        // Show modal after a small delay for better UX
         setTimeout(() => showPincodeModal(), 500); 
     }
-    
-    // If pincode is set, ensure the data reloads with the filter
     if (finalPincode && (path === 'index.html' || path === '' || path === 'browse.html')) {
         loadFeaturedEquipment(); 
     }
 }
 
-// Function to display the Pincode prompt modal
 function showPincodeModal() {
     const modalElement = document.getElementById('pincodeModal');
     if (!modalElement) return;
-
-    // Reset status/input when showing the modal
     const pincodeInput = document.getElementById('pincode-input');
     if (pincodeInput) pincodeInput.value = window.customerPincode || '';
-    
     const statusElement = document.getElementById('location-status');
     if (statusElement) {
         statusElement.textContent = '';
@@ -531,29 +378,24 @@ function showPincodeModal() {
         buttonElement.disabled = false;
         buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
     }
-    
     const modal = new bootstrap.Modal(modalElement, {
         backdrop: 'static', 
         keyboard: false 
     });
     modal.show();
-
-    // Add form submission handler
     const form = document.getElementById('pincode-form');
     if (form && !form.dataset.listener) {
         form.addEventListener('submit', handlePincodeSubmit);
         form.dataset.listener = 'true';
     }
 }
+window.showPincodeModal = showPincodeModal;
 
-// Handle form submission inside the modal
 async function handlePincodeSubmit(e) {
     e.preventDefault();
-    
     const pincode = document.getElementById('pincode-input').value.trim();
     if (window.firebaseHelpers.pincodeSystem.validatePincode(pincode)) {
         await savePincode(pincode);
-        // Close modal
         const modal = bootstrap.Modal.getInstance(document.getElementById('pincodeModal'));
         if (modal) modal.hide();
     } else {
@@ -561,59 +403,41 @@ async function handlePincodeSubmit(e) {
     }
 }
 
-// Save the Pincode to system and trigger data reload (UPDATED)
 async function savePincode(pincode) {
-    // 1. Check compatibility BEFORE setting the new pincode globally
     const compatibilityResult = await window.firebaseHelpers.pincodeSystem.checkPincodeCompatibility();
-    
-    // 2. Save the new pincode
     await window.firebaseHelpers.pincodeSystem.setPincode(pincode);
-    
-    // 3. Check Post Office API for location info to display better success message
     const postOffices = await getPostOfficeData(pincode);
     let locationInfo = pincode;
     if (postOffices.length > 0) {
         locationInfo = `${postOffices[0].District}, ${postOffices[0].State} (${pincode})`;
     }
-
     window.firebaseHelpers.showAlert(`Location set to ${locationInfo}. Filtering results.`, 'success');
-    
-    // 4. Update the UI and reload content
     updateHomepagePincodeDisplay();
     updateNavbarPincodeDisplay();
-
     const path = window.location.pathname.split('/').pop();
     if (path === 'browse.html') {
         updatePincodeDisplay();
         loadAllEquipment();
     } else if (path === 'cart.html') {
-        // If on cart page, load the cart page logic which handles compatibility warnings
         loadCartPage();
     } else if (path === 'checkout.html') {
-        // If on checkout page, re-run checkout logic
         loadCheckoutPage();
     } else {
-        loadFeaturedEquipment(); // Reload data on the homepage
+        loadFeaturedEquipment();
     }
-    
-    // 5. Show warning if cart has incompatible items (compatibilityResult is based on PREVIOUS state)
     if (compatibilityResult.changed && !compatibilityResult.allItemsCompatible) {
         window.firebaseHelpers.pincodeSystem.showPincodeChangeWarning(compatibilityResult);
     }
 }
+window.savePincode = savePincode;
 
-// Function to skip Pincode entry
 function skipPincode() {
     window.firebaseHelpers.pincodeSystem.clearPincode();
-    
     const modal = bootstrap.Modal.getInstance(document.getElementById('pincodeModal'));
     if (modal) modal.hide();
-    
     window.firebaseHelpers.showAlert('Viewing all equipment (no location filter applied).', 'info');
     updateHomepagePincodeDisplay();
     updateNavbarPincodeDisplay();
-    
-    // Reload content to show all equipment
     const path = window.location.pathname.split('/').pop();
     if (path === 'browse.html') {
         updatePincodeDisplay();
@@ -622,14 +446,13 @@ function skipPincode() {
         loadFeaturedEquipment();
     }
 }
+window.skipPincode = skipPincode;
 
-// Update the Pincode UI in index.html (Hero section)
 function updateHomepagePincodeDisplay() {
     const pincodeValueElement = document.getElementById('current-pincode-value');
     if (pincodeValueElement) {
         pincodeValueElement.textContent = window.customerPincode ? window.customerPincode : 'All Locations';
     }
-    // Also update the full display container if it exists
     const homepageDisplay = document.getElementById('homepage-pincode-display');
     if (homepageDisplay) {
          const strongElement = homepageDisplay.querySelector('p strong');
@@ -639,20 +462,14 @@ function updateHomepagePincodeDisplay() {
     }
 }
 
-// Update the Pincode UI in the Navbar (all pages)
 function updateNavbarPincodeDisplay() {
     const navPincodeValueElement = document.getElementById('current-pincode-value-nav');
     if (navPincodeValueElement) {
         navPincodeValueElement.textContent = window.customerPincode ? window.customerPincode : 'All Locations';
     }
 }
-// --- END PINCODE SYSTEM INTEGRATION FUNCTIONS ---
 
-// --- NEW PINCODE WARNING RESOLUTION HELPERS (CALLED FROM FIREBASE-CONFIG.JS HTML) ---
-
-// Clear cart and shop in new location
 async function updateCartForNewPincode() {
-    // Note: Use custom modal instead of built-in confirm in production. Temporarily using custom modal setup.
     const modalHtml = `
         <div class="modal fade" id="confirm-clear-cart-modal" tabindex="-1">
             <div class="modal-dialog modal-dialog-centered">
@@ -672,7 +489,6 @@ async function updateCartForNewPincode() {
             </div>
         </div>
     `;
-    
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     const modalElement = document.getElementById('confirm-clear-cart-modal');
     const modalInstance = new bootstrap.Modal(modalElement);
@@ -680,32 +496,24 @@ async function updateCartForNewPincode() {
     
     document.getElementById('confirm-clear-cart-btn').onclick = async () => {
         modalInstance.hide();
-        
         await updateCartInFirestore([]);
         window.firebaseHelpers.showAlert('Cart cleared. Showing equipment for your new location.', 'success');
-        
-        // Reload appropriate page
         const path = window.location.pathname.split('/').pop();
         if (path === 'cart.html') {
             loadCartPage();
         } else if (path === 'browse.html') {
             loadAllEquipment();
         }
-        
-        // Remove the temporary modal element
         modalElement.remove();
     };
 }
+window.updateCartForNewPincode = updateCartForNewPincode;
 
-// Revert to previous pincode
 async function revertToPreviousPincode() {
     const oldPincode = localStorage.getItem('previousPincode');
     if (oldPincode) {
-        // Call savePincode to handle setting it and subsequent UI reloads/checks
         await savePincode(oldPincode); 
-        localStorage.removeItem('previousPincode'); // Clear after successful revert
-        
-        // Find and hide the custom warning modal if it's currently showing
+        localStorage.removeItem('previousPincode');
         const customWarningModal = document.getElementById('custom-warning-modal');
         if (customWarningModal) {
             const modalInstance = bootstrap.Modal.getInstance(customWarningModal);
@@ -713,32 +521,24 @@ async function revertToPreviousPincode() {
         }
     }
 }
+window.revertToPreviousPincode = revertToPreviousPincode;
 
-// Helper function to change pincode to match equipment (used in addToCartModal warning)
 async function changePincodeToMatchEquipment(equipmentPincode) {
     await savePincode(equipmentPincode);
-    
-    // Re-try adding to cart after pincode change
-    // Find and hide the custom warning modal first
     const modalElement = document.getElementById('custom-warning-modal');
     if (modalElement) {
         const modalInstance = bootstrap.Modal.getInstance(modalElement);
         if (modalInstance) modalInstance.hide();
     }
-    
-    // Delay slightly to ensure savePincode async operations complete before re-triggering modal
     setTimeout(() => {
-        // If coming from Add to Cart or item page, the item modal is likely closed. Let the user re-try.
         window.firebaseHelpers.showAlert('Location updated. Please click "Add to Cart" or "Rent Now" again.', 'info');
     }, 500);
 }
+window.changePincodeToMatchEquipment = changePincodeToMatchEquipment;
 
-// Show custom warning modal (used for item-level mismatch)
 function showCustomWarningModal(content) {
-    // Remove existing custom modals
     const existingModal = document.getElementById('custom-warning-modal');
     if (existingModal) existingModal.remove();
-    
     const modalHtml = `
         <div class="modal fade" id="custom-warning-modal" tabindex="-1">
             <div class="modal-dialog modal-dialog-centered">
@@ -754,9 +554,7 @@ function showCustomWarningModal(content) {
             </div>
         </div>
     `;
-    
     document.body.insertAdjacentHTML('beforeend', modalHtml);
-    // Use setTimeout to ensure the modal element is in the DOM before initializing Bootstrap
     setTimeout(() => {
         const modalElement = document.getElementById('custom-warning-modal');
         if (modalElement) {
@@ -765,39 +563,25 @@ function showCustomWarningModal(content) {
         }
     }, 0);
 }
+window.showCustomWarningModal = showCustomWarningModal;
 
-// --- END NEW PINCODE WARNING RESOLUTION HELPERS ---
-
-
-// --- EXISTING FUNCTIONS MODIFIED FOR PINCODE FILTERING ---
-
-// Initialize authentication (No changes needed, as it relies on updated firebase-config.js)
 function initializeAuth() {
-    // FIX: Simplified the initialization check to rely directly on FirebaseSDK presence, 
-    // which should be loaded by firebase-config.js. Removed the aggressive 10s timeout logic 
-    // to avoid prematurely throwing errors if SDK loading is slightly delayed.
     if (!window.firebaseHelpers || !window.FirebaseDB || !window.FirebaseAuth) {
-        console.log("Waiting for Firebase SDK initialization...");
         const checkFirebase = setInterval(() => {
             if (window.firebaseHelpers && window.FirebaseDB && window.FirebaseAuth) {
                 clearInterval(checkFirebase);
-                console.log("Firebase SDKs loaded, proceeding with auth setup");
                 initializeAuthInternal();
             }
         }, 100);
-        // Added a fallback for very slow loading environments to prevent infinite loop
         setTimeout(() => {
             if (!isAuthInitialized) {
-                console.error("Firebase failed to initialize after 10 seconds.");
-                isAuthInitialized = true; // Set to true to allow page load to continue
-                updateNavbarForLoggedOutUser(); // Ensure UI displays login options
+                isAuthInitialized = true;
+                updateNavbarForLoggedOutUser();
             }
         }, 10000);
     } else {
         initializeAuthInternal();
     }
-    
-    // Return a promise that resolves when auth is initialized
     return new Promise(resolve => {
         const check = setInterval(() => {
             if (isAuthInitialized) {
@@ -815,55 +599,29 @@ async function initializeAuthInternal() {
                 try {
                     const docRef = window.FirebaseDB.collection('users').doc(user.uid);
                     const doc = await docRef.get();
-
                     if (doc.exists) {
                         window.currentUser = { uid: user.uid, ...doc.data() };
-                        
-                        // NEW FEATURE ROLLOUT/MERGE: Ensure referral fields exist
                         const userData = window.currentUser;
                         let needsUpdate = false;
-                        
-                        if (userData.coins === undefined) {
-                            userData.coins = 0;
-                            needsUpdate = true;
-                        }
-                        if (userData.referralCode === undefined) {
-                            userData.referralCode = generateReferralCode();
-                            needsUpdate = true;
-                        }
-                        if (userData.firstOrderPlaced === undefined) {
-                             userData.firstOrderPlaced = false;
-                            needsUpdate = true;
-                        }
-
+                        if (userData.coins === undefined) { userData.coins = 0; needsUpdate = true; }
+                        if (userData.referralCode === undefined) { userData.referralCode = generateReferralCode(); needsUpdate = true; }
+                        if (userData.firstOrderPlaced === undefined) { userData.firstOrderPlaced = false; needsUpdate = true; }
                         if (needsUpdate) {
-                            // Only merge fields that were missing
                             await docRef.set({
                                 coins: userData.coins,
                                 referralCode: userData.referralCode,
                                 firstOrderPlaced: userData.firstOrderPlaced,
                             }, { merge: true });
-                            // After update, refresh local current user data
-                            window.currentUser = { uid: user.uid, ...doc.data(), ...userData }; // Merge old data with newly set defaults
+                            window.currentUser = { uid: user.uid, ...doc.data(), ...userData };
                         }
-                        
-                        // Set global coin balance (This is the crucial line for coin display)
                         availableCoins = window.currentUser.coins;
-
-                        // NEW PINCODE LOGIC: Set global pincode based on precedence
                         window.customerPincode = window.currentUser.pincode || localStorage.getItem('customerPincode') || null;
-                        
-                        // NEW: Load persisted notification clear time
                         await loadLastClearTime();
-                        
                         updateNavbarForLoggedInUser(window.currentUser);
                         updateCartCount(); 
-                        
-                        // NEW: Load chats after login
                         if (document.getElementById('chat-body')) {
                             loadUserConversations();
                         }
-                        
                         const path = window.location.pathname.split('/').pop();
                         if (path === 'browse.html') {
                             updatePincodeDisplay();
@@ -873,20 +631,12 @@ async function initializeAuthInternal() {
                             loadFeaturedEquipment(); 
                         }
                         updateNavbarPincodeDisplay();
-                        
-                        // NEW: Start listening for chat badge updates on login
                         listenForUnreadChatMessages();
-
                     } else {
-                        // FIX: Catch block for error getting user data
-                        console.error("Error getting user data: User document missing in Firestore.", user);
-                        // Force logout or handle gracefully if user document is missing
                         await window.firebaseHelpers.signOut();
                         window.location.reload(); 
                     }
                 } catch (error) {
-                    // FIX: Catch block for general errors
-                    console.error("Error during authentication internal step:", error);
                     await window.firebaseHelpers.signOut();
                     window.location.reload(); 
                 } finally {
@@ -894,15 +644,11 @@ async function initializeAuthInternal() {
                 }
             } else {
                 window.currentUser = null; 
-                // NEW PINCODE LOGIC: Set customerPincode from local storage only
                 window.customerPincode = localStorage.getItem('customerPincode') || null;
-                // NEW: Clear persisted notification clear time for logged out users
                 lastClearTime = 0;
-
                 updateNavbarForLoggedOutUser();
                 updateCartCount();
                 isAuthInitialized = true;
-                
                 const path = window.location.pathname.split('/').pop();
                 if (path === 'browse.html') {
                     updatePincodeDisplay();
@@ -912,61 +658,45 @@ async function initializeAuthInternal() {
                     loadFeaturedEquipment(); 
                 }
                 updateNavbarPincodeDisplay();
-                
-                // NEW: Clear coin balance and applied coins on logout
                 availableCoins = 0;
                 coinsToApply = 0; 
-                
-                // NEW: Stop listening for chat badge updates on logout
                 if (chatBadgeUnsubscribe) {
                      chatBadgeUnsubscribe();
                      chatBadgeUnsubscribe = null;
                 }
-                updateChatBadgeCount(0); // Clear badge display
+                updateChatBadgeCount(0);
             }
         });
     } catch (error) {
-        console.error('Critical Auth Initialization Error:', error);
         isAuthInitialized = true; 
     }
 }
 
-// Logout function (MODIFIED to use centralized clearPincode)
 async function logout() {
     try {
         window.firebaseHelpers.pincodeSystem.clearPincode(); 
         window.customerPincode = null; 
-        // Clear local notification state
         lastClearTime = 0; 
-        
-        // NEW: Clear coin balance and applied coins on logout
         availableCoins = 0;
         coinsToApply = 0; 
-        
-        // NEW: Stop listening for chat badge updates on logout
         if (chatBadgeUnsubscribe) {
              chatBadgeUnsubscribe();
              chatBadgeUnsubscribe = null;
         }
-        
         await window.firebaseHelpers.signOut();
         window.location.reload();
     } catch (error) {
-        console.error('Logout error:', error);
         window.firebaseHelpers.showAlert('Error logging out', 'danger');
     }
 }
+window.logout = logout;
 
-// Load data specifically for the Browse page (Modified to rely on firebaseHelpers.pincodeSystem)
 async function loadBrowsePageData() {
-    // Ensure window.customerPincode is set from precedence logic in initializeAuth
     window.customerPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode(); 
-    
     await updatePincodeDisplay(); 
     await loadAllEquipment();
     await loadCategoriesForFilter();
     await updateCartCount(); 
-    
     const hash = window.location.hash.substring(1);
     const itemIdMatch = hash.match(/item=([^&]+)/);
     if (itemIdMatch) {
@@ -976,16 +706,11 @@ async function loadBrowsePageData() {
     }
 }
 
-// Update the Pincode UI in browse.html (NEW FUNCTION)
 async function updatePincodeDisplay() {
     const container = document.getElementById('pincode-alert-container');
     if (!container) return;
-
-    // Get customer Pincode 
     const pincode = window.customerPincode;
-    
     if (!pincode) {
-        // Display warning/prompt to set pincode
         container.innerHTML = `
             <div class="alert alert-danger d-flex justify-content-between align-items-center mb-0">
                 <div>
@@ -996,7 +721,6 @@ async function updatePincodeDisplay() {
             </div>
         `;
     } else {
-        // Display current Pincode filter
         container.innerHTML = `
             <div class="alert alert-success d-flex justify-content-between align-items-center mb-0">
                 <div>
@@ -1009,81 +733,50 @@ async function updatePincodeDisplay() {
     }
 }
 
-// Load all approved equipment for the browse page (MODIFIED FOR PINCODE)
 async function loadAllEquipment() {
     try {
         const container = document.getElementById('equipment-grid');
         if (container) {
             container.innerHTML = '<div class="col-12 text-center py-5"><div class="spinner-border text-primary loading-spinner"></div><p class="mt-3">Loading equipment listings...</p></div>';
         }
-        
         let query = window.FirebaseDB.collection('equipment')
             .where('status', '==', 'approved');
-            
-        // NEW: Apply Pincode filtering if set
         const pincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
         if (pincode) {
              query = query.where('pincode', '==', pincode);
         }
-
         const snapshot = await query
             .orderBy('createdAt', 'desc')
             .get();
-
         allEquipmentData = [];
         snapshot.forEach(doc => {
             allEquipmentData.push({ id: doc.id, ...doc.data() });
         });
-
-        filterEquipment(); // Display initial list
-
+        filterEquipment();
     } catch (error) {
-        console.error('Error loading all equipment:', error);
         const grid = document.getElementById('equipment-grid');
         if (grid) grid.innerHTML = '<div class="col-12 text-center py-5 text-danger"><p>Error loading equipment listings. Please try again later.</p></div>';
     }
 }
 
-// Load featured equipment (MODIFIED FOR PINCODE)
 async function loadFeaturedEquipment() {
     try {
         const container = document.getElementById('featured-equipment');
         if (!container) return; 
-
         container.innerHTML = '<div class="col-12 text-center py-5"><div class="spinner-border text-primary loading-spinner"></div><p class="mt-3">Loading popular equipment...</p></div>';
-
-        let query = window.FirebaseDB.collection('equipment')
-            .where('status', '==', 'approved');
-
-        // NEW: Apply Pincode filtering if the customer Pincode is set
+        let query = window.FirebaseDB.collection('equipment').where('status', '==', 'approved');
         const pincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
         if (pincode) {
             query = query.where('pincode', '==', pincode);
         }
-
-        // 1. Try to load featured equipment that matches the query
-        let featuredQuery = query;
-        if (pincode) {
-             // If pincode is set, we must start with the filtered query
-             featuredQuery = featuredQuery.where('featured', '==', true);
-        } else {
-             // If no pincode, we might still show general featured items that don't have a pincode field (less likely here but safer)
-             // or just general approved items if the filter isn't applied yet.
-             // We'll prioritize the featured flag first.
-             featuredQuery = featuredQuery.where('featured', '==', true);
-        }
-
+        let featuredQuery = query.where('featured', '==', true);
         let featuredSnapshot = await featuredQuery.limit(6).get();
-        
         let equipmentToShow = [];
         featuredSnapshot.forEach(doc => {
             equipmentToShow.push({ id: doc.id, ...doc.data() });
         });
-        
-        // 2. Handle empty results or fill up to limit
         const limit = 6;
         if (equipmentToShow.length === 0 && pincode) {
-             // Show CTA if filter is active but no results found
              container.innerHTML = `
                 <div class="col-12 text-center py-5">
                     <i class="fas fa-map-marker-alt fa-3x text-muted mb-3"></i>
@@ -1099,80 +792,58 @@ async function loadFeaturedEquipment() {
             `;
             return;
         } else if (equipmentToShow.length < limit) {
-             // If less than 6 featured items, fill with other approved, localized items (if Pincode is set)
             const featuredIds = equipmentToShow.map(e => e.id);
             const fillCount = limit - equipmentToShow.length;
-
             let regularQuery = window.FirebaseDB.collection('equipment')
                 .where('status', '==', 'approved')
                 .orderBy('createdAt', 'desc')
                 .limit(fillCount * 2);
-
-            // Re-apply Pincode filter if set
             if (pincode) {
                 regularQuery = regularQuery.where('pincode', '==', pincode);
             }
-            
             let regularSnapshot = await regularQuery.get();
-            
             regularSnapshot.forEach(doc => {
                 const equipment = { id: doc.id, ...doc.data() };
                 if (!featuredIds.includes(equipment.id) && equipmentToShow.length < limit) {
                     equipmentToShow.push(equipment);
                 }
             });
-
-            equipmentToShow = equipmentToShow.slice(0, limit); // Enforce the final limit
+            equipmentToShow = equipmentToShow.slice(0, limit);
         }
-
         container.innerHTML = '';
-        
         if (equipmentToShow.length === 0) {
             const pincodeText = pincode ? ` for Pincode ${pincode}` : '';
             container.innerHTML = `<div class="col-12 text-center py-5"><p>No equipment available to display right now${pincodeText}. Try changing your location filter or checking back later.</p></div>`;
             return;
         }
-        
         equipmentToShow.forEach(equipment => {
             const col = document.createElement('div');
             col.className = 'col-lg-4 col-md-6 mb-4';
             col.innerHTML = createEquipmentCard(equipment, equipment.id);
             container.appendChild(col);
         });
-        
     } catch (error) {
-        console.error('Error loading featured equipment:', error);
         const featuredContainer = document.getElementById('featured-equipment');
         if (featuredContainer) featuredContainer.innerHTML = '<div class="col-12 text-center py-5 text-danger"><p>Error loading equipment. Please try again later.</p></div>';
     }
 }
 
-// Create equipment card HTML (UPDATED)
 function createEquipmentCard(equipment, id, isBrowsePage = false) {
     const imageUrl = equipment.images && equipment.images[0] ? equipment.images[0] : 'https://placehold.co/300x200/2B5C2B/FFFFFF?text=Equipment';
     const currentPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
     const equipmentPincode = equipment.pincode;
-    
-    // Check if equipment matches current pincode (only if currentPincode is set)
-    // If currentPincode is null, we show all, so pincodeMatches is effectively true.
     const pincodeMatches = currentPincode ? equipmentPincode === currentPincode : true; 
-    
     const pincodeWarning = !pincodeMatches && currentPincode ? `
         <div class="alert alert-warning p-2 mt-2 mb-2 small">
             <i class="fas fa-exclamation-triangle me-1"></i>
             <small>Located in ${equipmentPincode} (Your filter: ${currentPincode})</small>
         </div>
     ` : '';
-    
     const cardClass = `card equipment-card h-100 ${!pincodeMatches && currentPincode ? 'border-warning' : ''}`;
-    
     const actionButtonHtml = isBrowsePage 
         ? `<button class="btn btn-primary w-100" onclick="showEquipmentDetailsModal('${id}')">View Details</button>`
         : `<a href="item.html?id=${id}" class="btn btn-primary w-100">View Details</a>`;
-
-    // NEW: Generate Star Rating HTML
     const ratingHtml = getStarRatingHtml(equipment.rating || 0);
-
     return `
         <div class="${cardClass}">
             ${!pincodeMatches && currentPincode ? '<div class="card-header bg-warning text-dark small py-1"><i class="fas fa-map-marker-alt me-1"></i>Different Location</div>' : ''}
@@ -1198,11 +869,6 @@ function createEquipmentCard(equipment, id, isBrowsePage = false) {
     `;
 }
 
-/**
- * NEW: Fetches the full profile details for a seller.
- * @param {string} sellerId 
- * @returns {Promise<Object|null>} Seller data including full address fields.
- */
 async function getSellerInfo(sellerId) {
     try {
         const doc = await window.FirebaseDB.collection('users').doc(sellerId).get();
@@ -1211,119 +877,88 @@ async function getSellerInfo(sellerId) {
         }
         return null;
     } catch (error) {
-        console.error('Error fetching seller info:', error);
         return null;
     }
 }
 
-// Show equipment details in a modal (MODIFIED to include seller info and date/time inputs)
 async function showEquipmentDetailsModal(id) {
     try {
-        const equipment = allEquipmentData.find(e => e.id === id);
-        
+        let equipment = allEquipmentData.find(e => e.id === id);
         if (!equipment) {
             const doc = await window.FirebaseDB.collection('equipment').doc(id).get();
             if (doc.exists) {
-                selectedEquipment = { id: doc.id, ...doc.data() };
+                equipment = { id: doc.id, ...doc.data() };
             } else {
                 window.firebaseHelpers.showAlert('Equipment details not found.', 'danger');
                 return;
             }
-        } else {
-            selectedEquipment = equipment;
         }
-
-        // NEW: Fetch full seller information
+        selectedEquipment = equipment;
         const sellerInfo = await getSellerInfo(selectedEquipment.sellerId);
-        selectedEquipment.sellerDetails = sellerInfo; // Attach seller details to selectedEquipment
-
+        selectedEquipment.sellerDetails = sellerInfo;
         document.getElementById('equipmentModalTitle').textContent = selectedEquipment.name;
-        
-        // Pass seller info to content builder
         document.getElementById('modal-content-area').innerHTML = buildModalContent(selectedEquipment, sellerInfo);
-        
-        // Set up cart/rent buttons with item ID
         const addToCartBtn = document.getElementById('add-to-cart-btn');
         if (addToCartBtn) addToCartBtn.onclick = () => addToCartModal();
         const rentNowBtn = document.getElementById('rent-now-btn');
         if (rentNowBtn) rentNowBtn.onclick = () => rentNowModal();
-
-        // Calculate price dynamically in modal footer
         const durationType = document.getElementById('rental-duration-type');
         const durationValue = document.getElementById('rental-duration-value');
-        
         if(durationType && durationValue) {
              updateModalPrice(durationType.value, durationValue.value);
-
              durationType.onchange = () => updateModalPrice(durationType.value, durationValue.value);
              durationValue.oninput = () => updateModalPrice(durationType.value, durationValue.value);
         } else {
-             // Set default rental details if inputs are missing (e.g., if the modal structure is simplified)
             selectedEquipment.rentalDetails = {
                 durationType: 'acre',
                 durationValue: 1,
                 calculatedPrice: selectedEquipment.pricePerAcre || 0,
-                pickupDate: null, // NEW Default
-                pickupTime: null, // NEW Default
+                pickupDate: null,
+                pickupTime: null,
             };
         }
-
-        // Set min date for pickup date to today
         const pickupDateInput = document.getElementById('pickup-date');
         if (pickupDateInput) {
             const today = new Date().toISOString().split('T')[0];
             pickupDateInput.min = today;
-            // Also add change listeners to update rentalDetails object
             pickupDateInput.onchange = () => updateRentalDetails();
         }
         const pickupTimeInput = document.getElementById('pickup-time');
         if (pickupTimeInput) {
-             // Add change listeners to update rentalDetails object
              pickupTimeInput.onchange = () => updateRentalDetails();
         }
-        
-        // Initial call to ensure rentalDetails object has date/time (even if null)
         updateRentalDetails();
-
         const modal = new bootstrap.Modal(document.getElementById('equipmentDetailsModal'));
         modal.show();
-
     } catch (error) {
-        console.error('Error opening modal:', error);
         window.firebaseHelpers.showAlert('Could not load equipment details.', 'danger');
     }
 }
+window.showEquipmentDetailsModal = showEquipmentDetailsModal;
 
-// Helper to update selectedEquipment.rentalDetails with current modal inputs
 function updateRentalDetails() {
     const durationType = document.getElementById('rental-duration-type')?.value;
     const durationValue = parseInt(document.getElementById('rental-duration-value')?.value) || 0;
     const calculatedPrice = (durationType === 'acre' ? (selectedEquipment.pricePerAcre || 0) : (selectedEquipment.pricePerHour || 0)) * durationValue;
-    
     selectedEquipment.rentalDetails = {
         durationType: durationType,
         durationValue: durationValue,
         calculatedPrice: calculatedPrice,
-        pickupDate: document.getElementById('pickup-date')?.value || null, // NEW
-        pickupTime: document.getElementById('pickup-time')?.value || null, // NEW
+        pickupDate: document.getElementById('pickup-date')?.value || null,
+        pickupTime: document.getElementById('pickup-time')?.value || null,
     };
-    
     updateModalPrice(durationType, durationValue);
 }
 
-// Helper to build rich modal content (MODIFIED)
 function buildModalContent(equipment, sellerInfo) {
     const imageUrl = equipment.images && equipment.images[0] ? equipment.images[0] : 'https://placehold.co/500x300/2B5C2B/FFFFFF?text=Equipment';
     const statusText = equipment.availability ? 'Available Now' : 'Currently Rented';
     const statusClass = equipment.availability ? 'bg-success' : 'bg-danger';
-
-    // NEW: Detailed Seller Information
     const sellerName = sellerInfo?.name || equipment.sellerName || 'Seller User';
     const businessName = sellerInfo?.businessName || equipment.businessName || 'N/A';
     const pickupAddress = sellerInfo 
         ? `${sellerInfo.address || 'Seller Address Missing'}, ${sellerInfo.village || ''}, ${sellerInfo.city || ''}, ${sellerInfo.state || ''}`
         : 'Address details are missing. Contact Seller.';
-    
     return `
         <div class="row">
             <div class="col-md-6">
@@ -1335,14 +970,12 @@ function buildModalContent(equipment, sellerInfo) {
                         `).join('')}
                     </div>
                 ` : ''}
-                
                 <h5 class="mt-4 text-warning"><i class="fas fa-user-tie me-2"></i>Seller Information</h5>
                 <ul class="list-unstyled">
                     <li><strong>Business:</strong> ${businessName}</li>
                     <li><strong>Contact Person:</strong> ${sellerName}</li>
                     <li><i class="fas fa-map-marker-alt me-2 text-danger"></i> <strong>Pickup Pincode:</strong> ${equipment.pincode || 'N/A'}</li>
                 </ul>
-
                 <h5 class="mt-4 text-warning"><i class="fas fa-map-marked-alt me-2"></i>Clear Pickup Address</h5>
                 <div class="alert alert-light border small">
                     <strong>Full Address:</strong> ${pickupAddress}
@@ -1353,16 +986,12 @@ function buildModalContent(equipment, sellerInfo) {
                     <span class="badge ${statusClass} text-white p-2">${statusText}</span>
                     <span class="text-muted small">Listed by: <strong>${businessName}</strong></span>
                 </div>
-                
                 <h3 class="text-primary mb-3">${window.firebaseHelpers.formatCurrency(equipment.pricePerAcre)}/Acre | ${window.firebaseHelpers.formatCurrency(equipment.pricePerHour)}/Hour</h3>
-                
                 <p>${equipment.description}</p>
-                
                 <ul class="list-unstyled">
                     <li><i class="fas fa-tags me-2 text-warning"></i> <strong>Category:</strong> ${equipment.category}</li>
                     <li><i class="fas fa-list-ol me-2 text-warning"></i> <strong>Quantity:</strong> ${equipment.quantity}</li>
                 </ul>
-                
                 ${equipment.specifications && Object.keys(equipment.specifications).length > 0 ? `
                     <h5 class="mt-4">Specifications (Item Info)</h5>
                     <div class="row">
@@ -1376,75 +1005,52 @@ function buildModalContent(equipment, sellerInfo) {
     `;
 }
 
-// Update the total price displayed in the modal footer
 function updateModalPrice(type, value) {
     const duration = parseInt(value);
     const priceElement = document.getElementById('modal-total-price');
-    
     if (isNaN(duration) || duration <= 0) {
         if(priceElement) priceElement.textContent = '₹0';
-        // Ensure rentalDetails is updated (called via updateRentalDetails now)
         updateRentalDetails(); 
         return;
     }
-
     let price = 0;
     if (type === 'acre') {
         price = (selectedEquipment.pricePerAcre || 0) * duration;
-    } else { // 'hour'
+    } else {
         price = (selectedEquipment.pricePerHour || 0) * duration;
     }
-
-    // Ensure rentalDetails is updated (called via updateRentalDetails now)
-    // We only set the price here for immediate display logic.
     selectedEquipment.rentalDetails = {
         ...selectedEquipment.rentalDetails,
         calculatedPrice: price
     };
-    
     if(priceElement) priceElement.textContent = window.firebaseHelpers.formatCurrency(price);
 }
 
-// Add item to cart from modal (UPDATED for Date/Time capture)
 async function addToCartModal() {
-    // Ensure rental details are up to date
     updateRentalDetails();
     const item = selectedEquipment;
     const rentalDetails = item.rentalDetails;
-    
     if (!rentalDetails || rentalDetails.calculatedPrice <= 0 || !item.id || !rentalDetails.durationType) {
         window.firebaseHelpers.showAlert('Please select a valid rental duration.', 'warning');
         return;
     }
-    
-    // NEW VALIDATION: Check for required date/time
     if (!rentalDetails.pickupDate || !rentalDetails.pickupTime) {
         window.firebaseHelpers.showAlert('Please select the required **Pickup Date and Time**.', 'danger');
         return;
     }
-    // END NEW VALIDATION
-    
     const { durationType, durationValue, calculatedPrice, pickupDate, pickupTime } = rentalDetails;
-    
     let cart = await getCartFromFirestore(); 
-    
     const itemPincode = item.pincode;
     if (!itemPincode) {
         window.firebaseHelpers.showAlert('Equipment missing Pincode information. Cannot add to cart.', 'danger');
         return;
     }
-    
-    // Get current customer's preferred pincode
     const currentPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
-    
-    // Check if pincode is set
     if (!currentPincode) {
         window.firebaseHelpers.showAlert('Please set your location first to ensure equipment availability.', 'warning');
         showPincodeModal();
         return;
     }
-    
-    // Check for Pincode mismatch (Item Location vs Customer Location Filter)
     if (itemPincode !== currentPincode) {
         const warningHtml = `
             <div class="alert alert-warning">
@@ -1462,24 +1068,16 @@ async function addToCartModal() {
                 </div>
             </div>
         `;
-        
-        // Create and show a modal for this specific warning
         showCustomWarningModal(warningHtml);
         return;
     }
-    
-    // Check for Cart inconsistency (Item Location vs existing Cart Location)
     if (cart.length > 0) {
         const cartPincode = cart[0].pincode;
-        // Since we already ensured itemPincode === currentPincode, 
-        // we only need to check cartPincode against currentPincode (which is itemPincode)
         if (cartPincode && cartPincode !== currentPincode) { 
              window.firebaseHelpers.showAlert(`Cannot add equipment from Pincode ${itemPincode}. Your cart contains items from ${cartPincode}. Clear your cart to order from a different Pincode.`, 'danger');
              return;
         }
     }
-
-
     const cartItem = {
         id: item.id,
         name: item.name,
@@ -1492,69 +1090,49 @@ async function addToCartModal() {
         rentalValue: durationValue,
         imageUrl: item.images && item.images[0],
         pincode: itemPincode,
-        pickupDate: pickupDate, // NEW
-        pickupTime: pickupTime, // NEW
-        // NEW: Include seller address info for clarity in cart/checkout
+        pickupDate: pickupDate,
+        pickupTime: pickupTime,
         sellerAddress: item.sellerDetails ? `${item.sellerDetails.address}, ${item.sellerDetails.village}, ${item.sellerDetails.city}, ${item.sellerDetails.state}` : 'Address Unavailable',
     };
-    
-    // NOTE: For simplicity, when adding to cart, we replace any existing item with the same ID, 
-    // assuming the customer wants to update the rental terms (duration/date/time).
     const existingIndex = cart.findIndex(i => i.id === item.id);
     if (existingIndex > -1) {
         cart[existingIndex] = cartItem;
     } else {
         cart.push(cartItem);
     }
-
     await updateCartInFirestore(cart); 
-    
-    // Hide original equipment details modal
     const modal = bootstrap.Modal.getInstance(document.getElementById('equipmentDetailsModal'));
     if (modal) modal.hide();
-    
     window.firebaseHelpers.showAlert(`${item.name} added to cart!`, 'success');
 }
+window.addToCartModal = addToCartModal;
 
-// Direct rent/checkout from modal (MODIFIED for Date/Time capture)
 async function rentNowModal() {
-    // Ensure rental details are up to date
     updateRentalDetails();
     const item = selectedEquipment;
     const rentalDetails = item.rentalDetails;
-    
     if (!rentalDetails || rentalDetails.calculatedPrice <= 0 || !item.id) {
         window.firebaseHelpers.showAlert('Please select a valid rental duration.', 'warning');
         return;
     }
-
-    // NEW VALIDATION: Check for required date/time
     if (!rentalDetails.pickupDate || !rentalDetails.pickupTime) {
         window.firebaseHelpers.showAlert('Please select the required **Pickup Date and Time**.', 'danger');
         return;
     }
-    // END NEW VALIDATION
-    
     const { calculatedPrice, pickupDate, pickupTime } = rentalDetails;
-
     const itemPincode = item.pincode;
     if (!itemPincode) {
         window.firebaseHelpers.showAlert('Equipment missing Pincode information. Cannot proceed to checkout.', 'danger');
         return;
     }
-    
-    // Check if the current user has a pincode set in their profile
     const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
     if (!userPincode) {
         window.firebaseHelpers.showAlert('Please set your location Pincode before proceeding to rent.', 'danger');
         showPincodeModal();
         return;
     }
-    
-    // Enforce consistency between user's filter and item's location
     if (userPincode !== itemPincode) {
         window.firebaseHelpers.showAlert(`The selected equipment is in Pincode ${itemPincode}, but your current location filter is set to ${userPincode}. Please resolve the location mismatch.`, 'danger');
-        
         const warningHtml = `
             <div class="alert alert-danger">
                 <h6><i class="fas fa-map-marker-alt me-2"></i>Checkout Blocked: Location Mismatch</h6>
@@ -1571,12 +1149,9 @@ async function rentNowModal() {
                 </div>
             </div>
         `;
-        
         showCustomWarningModal(warningHtml);
         return;
     }
-
-
     const singleItemCart = [
         {
             id: item.id,
@@ -1590,22 +1165,18 @@ async function rentNowModal() {
             rentalValue: rentalDetails.durationValue,
             imageUrl: item.images && item.images[0],
             pincode: itemPincode,
-            pickupDate: pickupDate, // NEW
-            pickupTime: pickupTime, // NEW
-            // NEW: Include seller address info for clarity in cart/checkout
+            pickupDate: pickupDate,
+            pickupTime: pickupTime,
             sellerAddress: item.sellerDetails ? `${item.sellerDetails.address}, ${item.sellerDetails.village}, ${item.sellerDetails.city}, ${item.sellerDetails.state}` : 'Address Unavailable',
         }
     ];
-
     await updateCartInFirestore(singleItemCart); 
-    
     const modal = bootstrap.Modal.getInstance(document.getElementById('equipmentDetailsModal'));
     if (modal) modal.hide();
-    
     window.location.href = 'checkout.html';
 }
+window.rentNowModal = rentNowModal;
 
-// Load logic for Cart page (cart.html) (UPDATED)
 async function loadCartPage() {
     await new Promise(resolve => {
         const checkAuth = setInterval(() => {
@@ -1615,30 +1186,20 @@ async function loadCartPage() {
             }
         }, 100);
     });
-
     await getPlatformFeeRate(); 
     const cart = await getCartFromFirestore(); 
-    
-    // NEW: Check cart compatibility with current pincode
     await checkCartPincodeCompatibility(cart);
-    
     displayCartItems(cart); 
 }
 
-// NEW: Check cart compatibility on cart.html
 async function checkCartPincodeCompatibility(cart) {
     const warningContainer = document.getElementById('cart-pincode-warning');
     const checkoutBtn = document.getElementById('checkout-btn');
     if (!warningContainer || !checkoutBtn) return;
-    
     warningContainer.innerHTML = '';
-    checkoutBtn.disabled = false; // Enable by default
-    
+    checkoutBtn.disabled = false;
     if (cart.length === 0) return;
-    
     const currentPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
-    
-    // Group items by pincode
     const itemsByPincode = {};
     cart.forEach(item => {
         const pincode = item.pincode || 'Unknown';
@@ -1647,10 +1208,7 @@ async function checkCartPincodeCompatibility(cart) {
         }
         itemsByPincode[pincode].push(item);
     });
-    
     const pincodes = Object.keys(itemsByPincode).filter(p => p !== 'Unknown');
-    
-    // Case 1: Cart has items from multiple valid pincodes
     if (pincodes.length > 1) {
         warningContainer.innerHTML = `
             <div class="alert alert-danger">
@@ -1670,8 +1228,6 @@ async function checkCartPincodeCompatibility(cart) {
         checkoutBtn.disabled = true;
         return;
     }
-    
-    // Case 2: Cart items don't match current customer pincode
     const cartPincode = pincodes[0];
     if (cartPincode && currentPincode && cartPincode !== currentPincode) {
         warningContainer.innerHTML = `
@@ -1692,7 +1248,6 @@ async function checkCartPincodeCompatibility(cart) {
         checkoutBtn.disabled = true;
         return;
     } else if (cartPincode && !currentPincode) {
-        // Case 3: Cart has items from one location, but no filter is set
         warningContainer.innerHTML = `
             <div class="alert alert-info">
                 <h6><i class="fas fa-info-circle me-2"></i>Location Required</h6>
@@ -1705,7 +1260,6 @@ async function checkCartPincodeCompatibility(cart) {
         checkoutBtn.disabled = true;
         return;
     } else if (!cartPincode && cart.length > 0) {
-        // Case 4: Cart items are missing pincode data (System/Data error)
         warningContainer.innerHTML = `
             <div class="alert alert-danger">
                 <h6><i class="fas fa-exclamation-circle me-2"></i>Data Error</h6>
@@ -1715,17 +1269,10 @@ async function checkCartPincodeCompatibility(cart) {
         checkoutBtn.disabled = true;
         return;
     }
-    
-    // Case 5: All checks pass (Pincode is set AND matches cart Pincode, or cart is empty/non-location specific).
-    // Checkout button remains enabled.
 }
-
-// NEW: Helper functions for cart resolution on cart.html
 
 async function resolveMixedPincodeCart() {
     const cart = await getCartFromFirestore();
-    
-    // Build the content for the custom warning modal
     const itemsByPincode = {};
     cart.forEach(item => {
         const pincode = item.pincode || 'Unknown';
@@ -1734,7 +1281,6 @@ async function resolveMixedPincodeCart() {
         }
         itemsByPincode[pincode].push(item);
     });
-    
     const optionsHtml = Object.entries(itemsByPincode).map(([pincode, items]) => `
         <div class="form-check mb-2">
             <input class="form-check-input" type="radio" name="selectedPincode" 
@@ -1745,20 +1291,16 @@ async function resolveMixedPincodeCart() {
             </label>
         </div>
     `).join('');
-    
     const modalContent = `
         <h5>Resolve Location Conflict</h5>
         <p>Your cart contains items from multiple locations. Please choose which location to keep:</p>
-        
         <div id="pincode-options" class="my-3">
             ${optionsHtml}
         </div>
-        
         <div class="alert alert-info">
             <i class="fas fa-info-circle me-2"></i>
             Items from other locations will be removed from your cart. Your current location filter will be updated to match your choice.
         </div>
-        
         <div class="modal-footer justify-content-between">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
             <button type="button" class="btn btn-primary" id="confirm-pincode-choice">
@@ -1766,11 +1308,7 @@ async function resolveMixedPincodeCart() {
             </button>
         </div>
     `;
-    
-    // Use raw modal structure to insert footer logic correctly
     showCustomWarningModal(modalContent);
-    
-    // Add logic to the dynamic confirm button after the modal is shown
     setTimeout(() => {
         const confirmBtn = document.getElementById('confirm-pincode-choice');
         if (confirmBtn) {
@@ -1778,16 +1316,10 @@ async function resolveMixedPincodeCart() {
                 const selected = document.querySelector('input[name="selectedPincode"]:checked');
                 if (selected) {
                     const selectedPincode = selected.value;
-                    // 1. Keep only items from selected pincode
                     const newCart = cart.filter(item => item.pincode === selectedPincode);
                     await updateCartInFirestore(newCart);
-                    
-                    // 2. Update customer location filter
                     await savePincode(selectedPincode); 
-                    
-                    // 3. Reload the cart page
                     loadCartPage();
-                    
                     const modal = bootstrap.Modal.getInstance(document.getElementById('custom-warning-modal'));
                     if (modal) modal.hide();
                 } else {
@@ -1797,66 +1329,53 @@ async function resolveMixedPincodeCart() {
         }
     }, 100);
 }
+window.resolveMixedPincodeCart = resolveMixedPincodeCart;
 
 async function changePincodeToMatchCart(cartPincode) {
-    // Save pincode automatically handles the check and update/reload
     await savePincode(cartPincode);
     loadCartPage();
 }
+window.changePincodeToMatchCart = changePincodeToMatchCart;
 
 async function clearCartForCurrentLocation() {
-    // Use custom modal for confirmation
     await updateCartForNewPincode();
     loadCartPage();
 }
-// --- END NEW CART RESOLUTION HELPERS ---
+window.clearCartForCurrentLocation = clearCartForCurrentLocation;
 
-// Start checkout (MODIFIED for mandatory Pincode check)
 async function startCheckout() {
     if (!window.currentUser) {
         window.firebaseHelpers.showAlert('Please log in before proceeding to checkout.', 'warning');
         setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 1500);
         return;
     }
-    
     const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
     const cart = await getCartFromFirestore();
-
     if (cart.length === 0) {
         window.firebaseHelpers.showAlert('Your cart is empty. Please add items to proceed.', 'warning');
         setTimeout(() => { window.location.href = 'browse.html'; }, 2000);
         return;
     }
-    
-    // NEW VALIDATION: Check if all items have pickup date/time set
     const missingDetails = cart.some(item => !item.pickupDate || !item.pickupTime);
     if (missingDetails) {
         window.firebaseHelpers.showAlert('Please set the required **Pickup Date and Time** for all items in your cart.', 'danger');
         return;
     }
-    // END NEW VALIDATION
-
-    // Check 1: Is user pincode set?
     if (!userPincode) {
         window.firebaseHelpers.showAlert('Location required! Please set your Pincode to finalize the rental location.', 'danger');
         showPincodeModal();
         return;
     }
-    
-    // Check 2: Does cart match user pincode? (Assumes cart is consistent due to checkCartPincodeCompatibility on load)
     const cartPincode = cart[0]?.pincode; 
-    
     if (cartPincode !== userPincode) {
-        // This should ideally not happen if cart.html was loaded correctly, but acts as a final safety check
         window.firebaseHelpers.showAlert(`Your cart items are from Pincode ${cartPincode}, but your current Pincode is ${userPincode}. Please resolve the location mismatch in your cart.`, 'danger');
         setTimeout(() => { window.location.href = 'cart.html'; }, 1500);
         return;
     }
-    
     window.location.href = 'checkout.html';
 }
+window.startCheckout = startCheckout;
 
-// Load logic for Checkout page (UPDATED for coin application UI and logic)
 async function loadCheckoutPage() {
     await new Promise(resolve => {
         const checkAuth = setInterval(() => {
@@ -1866,12 +1385,9 @@ async function loadCheckoutPage() {
             }
         }, 100);
     });
-
     await getPlatformFeeRate(); 
-    
     const user = await window.firebaseHelpers.getCurrentUser();
     const cart = await getCartFromFirestore(); 
-
     if (!user || cart.length === 0) {
         if (!user) {
             window.firebaseHelpers.showAlert('You must be logged in to checkout.', 'danger');
@@ -1882,32 +1398,18 @@ async function loadCheckoutPage() {
         }
         return;
     }
-    
-    // **FIX: Properly fetch and update user data including coins**
     try {
         const userDoc = await window.FirebaseDB.collection('users').doc(user.uid).get();
         if (userDoc.exists) {
             const userData = userDoc.data();
-            // Update global currentUser object
-            window.currentUser = { 
-                uid: user.uid, 
-                email: user.email, // Preserve auth email
-                ...userData 
-            };
-            // Update global available coins state
+            window.currentUser = { uid: user.uid, email: user.email, ...userData };
             availableCoins = userData.coins || 0;
         }
     } catch (e) {
-        console.error("Failed to refresh user data on checkout:", e);
-        // Fallback to existing user data if fetch fails
         availableCoins = window.currentUser?.coins || 0;
     }
-    // **END FIX**
-
     const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
     const checkoutSummaryElement = document.querySelector('.checkout-summary');
-
-    // Final Pincode Validation
     if (!userPincode || cart[0].pincode !== userPincode) {
         let message = 'Location Mismatch: ';
         if (!userPincode) {
@@ -1915,7 +1417,6 @@ async function loadCheckoutPage() {
         } else {
             message += `Cart items (${cart[0].pincode}) don't match your location (${userPincode}).`;
         }
-        
         const warningHtml = `
             <div class="alert alert-danger p-4">
                 <h6><i class="fas fa-exclamation-triangle me-2"></i>Checkout Blocked</h6>
@@ -1936,74 +1437,48 @@ async function loadCheckoutPage() {
                 </div>
             </div>
         `;
-        
-        // Replace the checkout summary content with the warning
         if (checkoutSummaryElement) {
             checkoutSummaryElement.innerHTML = warningHtml;
         }
-        
         const payBtn = document.getElementById('pay-now-btn');
         if (payBtn) payBtn.disabled = true;
         const payAmount = document.getElementById('pay-button-amount');
         if (payAmount) payAmount.textContent = 'Error';
         return;
     }
-    
-    // Update customer form fields
     const customerNameInput = document.getElementById('customer-name');
     if (customerNameInput) customerNameInput.value = window.currentUser?.name || '';
     const customerEmailInput = document.getElementById('customer-email');
     if (customerEmailInput) customerEmailInput.value = window.currentUser?.email || '';
     const customerPhoneInput = document.getElementById('customer-phone');
     if (customerPhoneInput) customerPhoneInput.value = window.currentUser?.mobile || '';
-
-    // **FIX: Update coin display with the freshly fetched value**
     const coinBalanceDisplay = document.getElementById('coin-balance-display');
     if (coinBalanceDisplay) coinBalanceDisplay.textContent = `${availableCoins || 0} Coins`;
-    
-    // Initialize razorpayContext with cart data FIRST
     window.razorpayContext = {
         items: cart,
         orderPickupDate: cart[0]?.pickupDate,
         orderPickupTime: cart[0]?.pickupTime,
         orderPincode: cart[0]?.pincode || 'N/A'
     };
-    
-    // Automatic First Order Discount Logic: Apply max 50 coins automatically on first order
     if (window.currentUser && !window.currentUser.firstOrderPlaced && coinsToApply === 0) {
-        // Calculate subtotal first to cap discount
         let subtotalCalc = 0;
         cart.forEach(item => {
             subtotalCalc += item.price;
         });
-        const maxFirstOrderDiscount = Math.floor(subtotalCalc * 0.5); // 50% max discount
-        
-        // Make sure we don't apply more coins than the user has
+        const maxFirstOrderDiscount = Math.floor(subtotalCalc * 0.5);
         const userAvailableCoins = availableCoins || 0;
-        coinsToApply = Math.min(50, userAvailableCoins, maxFirstOrderDiscount); // Cap at 50, available, and 50% subtotal
-        
+        coinsToApply = Math.min(50, userAvailableCoins, maxFirstOrderDiscount);
         const coinsInput = document.getElementById('coins-to-apply');
         if (coinsInput) coinsInput.value = coinsToApply;
     }
-    
-    // Apply discount logic runs inside displayCheckoutSummary
     displayCheckoutSummary(cart);
 }
 
-
-// --- REST OF EXISTING FUNCTIONS ---
-
-// Update navbar for logged in user
 function updateNavbarForLoggedInUser(userData) {
     const navbarAuth = document.getElementById('navbar-auth');
-    
-    // FIX: Add null check for navbarAuth as it might not exist on all pages (e.g., seller.html)
     if (!navbarAuth) {
-         // This is expected on pages like seller.html
          return; 
     }
-    
-    // NEW: Customer Notification icon/dropdown container
     let notificationsHtml = '';
     if (userData.role === 'customer') {
         notificationsHtml = `
@@ -2016,18 +1491,14 @@ function updateNavbarForLoggedInUser(userData) {
                     <li><h6 class="dropdown-header">Alerts & Updates</h6></li>
                     <li><a class="dropdown-item text-center text-muted" href="#" onclick="showSection('orders')">Loading...</a></li>
                     <li><hr class="dropdown-divider"></li>
-                    <!-- NEW: Clear Button added to Customer Notification Dropdown -->
                     <li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()">
                         <i class="fas fa-check-double me-1"></i> Clear Alerts
                     </a></li>
                 </ul>
             </li>
         `;
-        // Load notifications upon login/navbar update
         checkCustomerNotifications();
     }
-
-
     let dropdownHtml = `
         ${notificationsHtml}
         <li class="nav-item dropdown">
@@ -2038,102 +1509,69 @@ function updateNavbarForLoggedInUser(userData) {
                 <li><a class="dropdown-item" href="profile.html"><i class="fas fa-user me-2"></i>Profile</a></li>
                 <li><a class="dropdown-item" href="orders.html"><i class="fas fa-clipboard-list me-2"></i>My Orders</a></li>
     `;
-    
     if (userData.role === 'seller') {
         dropdownHtml += '<li><a class="dropdown-item" href="seller.html"><i class="fas fa-store me-2"></i>Seller Dashboard</a></li>';
     }
-    
     if (userData.role === 'admin') {
         dropdownHtml += '<li><a class="dropdown-item" href="admin.html"><i class="fas fa-user-shield me-2"></i>Admin Panel</a></li>';
     }
-    
     dropdownHtml += `
                 <li><hr class="dropdown-divider"></li>
                 <li><a class="dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
             </ul>
         </li>
     `;
-    
-    // We modify the cart li element's content, so we just update navbarAuth with the dropdown
     navbarAuth.insertAdjacentHTML('afterbegin', dropdownHtml);
 }
 
-// NEW: Function to mark customer notifications as read (UPDATED to use Firestore)
 async function markCustomerNotificationsAsRead() {
     if (!window.currentUser || !window.FirebaseDB || window.currentUser.role !== 'customer') return;
-    
     try {
         const docRef = getCustomerNotificationRef(window.currentUser.uid);
-        
-        // 1. Write the current server timestamp to Firestore
         await docRef.set({
             lastClearTime: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
-        
-        // 2. Optimistically update local state and UI
-        lastClearTime = Date.now(); // Update local time immediately for the session
-        
+        lastClearTime = Date.now();
         const countElement = document.getElementById('customer-notification-count');
         if (countElement) {
-            countElement.textContent = ''; // Clear the badge
+            countElement.textContent = '';
         }
-        
         const listElement = document.getElementById('customer-notifications-list');
         if (listElement) {
-            // Update the list content to show it's cleared/read
-            listElement.innerHTML = '<li><h6 class="dropdown-header">Alerts & Updates</h6></li><li><a class="dropdown-item text-center text-muted" href="#">All caught up! (Database Updated)</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center" href="orders.html">View All Orders</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()"><i class="fas fa-check-double me-1"></i> Clear Alerts</a></li>';
+             listElement.innerHTML = '<li><h6 class="dropdown-header">Alerts & Updates</h6></li><li><a class="dropdown-item text-center text-muted" href="#">All caught up! (Database Updated)</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center" href="orders.html">View All Orders</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()"><i class="fas fa-check-double me-1"></i> Clear Alerts</a></li>';
         }
-
-        // Hide the dropdown menu instance if it exists
         const dropdownToggle = document.getElementById('notificationDropdown');
         const dropdown = bootstrap.Dropdown.getInstance(dropdownToggle);
         if (dropdown) {
             dropdown.hide();
         }
-        
         window.firebaseHelpers.showAlert('Notifications cleared and status saved to database.', 'success');
-        
     } catch (error) {
-        console.error('Error marking notifications as read in Firestore:', error);
         window.firebaseHelpers.showAlert('Failed to save read status. Please try again.', 'danger');
     }
 }
 window.markCustomerNotificationsAsRead = markCustomerNotificationsAsRead;
 
-
-// NEW: Check Customer Notifications (Pending orders/status updates) (UPDATED to use Firestore time)
 async function checkCustomerNotifications() {
     if (!window.currentUser || window.currentUser.role !== 'customer' || !window.FirebaseDB) return;
-
     try {
-        // Ensure lastClearTime is loaded before checking orders
         await loadLastClearTime(); 
-        
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
-
-        // Fetch all recent orders for the customer, sorting by UPDATED AT time 
-        // to catch recent status changes.
         const ordersSnapshot = await ordersCollectionRef
             .where('userId', '==', window.currentUser.uid)
-            .orderBy('updatedAt', 'desc') // **FIX 1: Use updatedAt for real-time relevance**
-            .limit(10) // Limit to 10 most recent orders
+            .orderBy('updatedAt', 'desc')
+            .limit(10)
             .get();
-
         const notifications = [];
         let orderUnreadCount = 0; 
-        let chatUnreadCount = 0; // **FIX 2: Initialize chat count**
-        
-        // Get the minimum timestamp to be considered 'unread' (which is the last clear time)
+        let chatUnreadCount = 0;
         const unreadThreshold = lastClearTime;
-
         ordersSnapshot.forEach(doc => {
             const order = doc.data();
             let message = '';
             let icon = 'fas fa-info-circle';
             let badgeClass = 'bg-warning';
-            
-            // Critical statuses for notification
             if (order.status === 'pending') {
                 message = `Order #${doc.id.substring(0, 8)} is pending seller confirmation.`;
                 icon = 'fas fa-clock';
@@ -2143,54 +1581,38 @@ async function checkCustomerNotifications() {
                 icon = 'fas fa-check-circle';
                 badgeClass = 'bg-success';
             } else if (order.status === 'cancelled' || order.status === 'rejected') {
-                 // Notify if order was cancelled by seller/admin
                 message = `Order #${doc.id.substring(0, 8)} has been cancelled/rejected.`;
                 icon = 'fas fa-ban';
                 badgeClass = 'bg-danger';
             } else if (order.status === 'returned') {
-                 // Notify if order was returned (final payment/check pending)
                 message = `Order #${doc.id.substring(0, 8)} equipment returned. Final review pending.`;
                 icon = 'fas fa-undo-alt';
                 badgeClass = 'bg-info';
             } else {
-                 // Ignore completed/pickedup/less critical statuses for the quick list
                 return;
             }
-            
-            // Determine unread status: Any new critical status updated *after* the last clear time
-            // **FIX 1: Use updatedAt for comparison**
             const orderTimestamp = order.updatedAt?.toMillis() || order.createdAt?.toMillis() || 0; 
-            
-            // Only count if it's a critical status and updated after last clear time
             const isAlert = orderTimestamp > unreadThreshold;
-            
             if (isAlert) {
                  orderUnreadCount++;
             }
-            
             notifications.push({
                 id: doc.id,
                 message,
                 icon,
                 badgeClass,
-                date: order.updatedAt || order.createdAt, // Use updatedAt for sorting relevance
+                date: order.updatedAt || order.createdAt,
                 status: order.status,
                 isUnread: isAlert
             });
         });
-
-        // **FIX 2: Add Chat Notifications**
         const conversationsSnapshot = await window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations')
             .where('customerId', '==', window.currentUser.uid)
             .get();
-            
         conversationsSnapshot.forEach(doc => {
             const chat = doc.data();
             chatUnreadCount += chat.unreadCountCustomer || 0;
-            
-            // Also add chat message to dropdown notifications list (if space permits)
-            if (chat.unreadCountCustomer > 0) { // Check chat count directly, not notification list length
-                 // Add chat notification to the list
+            if (chat.unreadCountCustomer > 0) {
                  notifications.push({
                     id: doc.id,
                     type: 'new_chat_message',
@@ -2203,46 +1625,27 @@ async function checkCustomerNotifications() {
                  });
             }
         });
-        
-        // Sort all notifications (orders + chat) by date
         notifications.sort((a, b) => (b.date?.toMillis() || 0) - (a.date?.toMillis() || 0));
-
-        // Final unread count includes both Order Alerts and Chat Messages
         const totalUnreadCount = orderUnreadCount + chatUnreadCount;
-        // End of FIX 2
-
-        // Update UI
         const countElement = document.getElementById('customer-notification-count');
         const listElement = document.getElementById('customer-notifications-list');
-
-        // Only display the *last 5 most critical* notifications in the dropdown
         const criticalNotifications = notifications.slice(0, 5); 
-
         if (countElement) {
-             // Only show count if greater than 0 and the user is logged in
              countElement.textContent = window.currentUser && totalUnreadCount > 0 ? totalUnreadCount : '';
         }
         if (listElement) listElement.innerHTML = '<li><h6 class="dropdown-header">Alerts & Updates</h6></li>';
-
         if (criticalNotifications.length === 0) {
              if (listElement) listElement.innerHTML += '<li><a class="dropdown-item text-center text-muted" href="#">No recent alerts.</a></li>';
         } else {
             criticalNotifications.forEach(notif => {
                 const timeAgo = notif.date ? window.firebaseHelpers.formatTimeAgo(notif.date) : 'N/A';
-                // Chat messages or truly unread orders are bolded
                 const unreadClass = notif.isUnread ? 'fw-bold' : 'text-muted'; 
-                
-                // Determine the correct URL for the notification
-                let linkUrl = 'orders.html';
                 if (notif.status === 'chat_unread') {
-                    // Chat notifications open the chat widget.
-                    // The chat ID is orderId_sellerId_customerId. We need orderId and sellerId.
                     const parts = notif.id.split('_');
                     const orderId = parts[0];
                     const sellerId = parts[1];
                     const sellerName = notif.message.split(':')[0].replace('New message from ', '').trim();
                     const chatAction = `openOrderChat('${orderId}', '${sellerId}', '${sellerName}')`;
-                    
                     if (listElement) listElement.innerHTML += `
                         <li>
                             <a class="dropdown-item d-flex justify-content-between align-items-center ${unreadClass}" href="#" onclick="${chatAction}" title="${notif.message}">
@@ -2254,12 +1657,11 @@ async function checkCustomerNotifications() {
                             </a>
                         </li>
                     `;
-                    return; // Skip the default link structure below
+                    return;
                 }
-                
                 if (listElement) listElement.innerHTML += `
                     <li>
-                        <a class="dropdown-item d-flex justify-content-between align-items-center ${unreadClass}" href="${linkUrl}" title="${notif.message}">
+                        <a class="dropdown-item d-flex justify-content-between align-items-center ${unreadClass}" href="orders.html" title="${notif.message}">
                             <div>
                                 <span class="badge ${notif.badgeClass} me-2"><i class="${notif.icon}"></i></span>
                                 ${notif.message.substring(0, 30)}...
@@ -2270,8 +1672,6 @@ async function checkCustomerNotifications() {
                 `;
             });
         }
-        
-        // Re-add the divider and Clear Alerts button regardless of notification content
         if (listElement) {
              listElement.innerHTML += `
                 <li><hr class="dropdown-divider"></li>
@@ -2282,11 +1682,7 @@ async function checkCustomerNotifications() {
                 </a></li>
             `;
         }
-
-
     } catch (error) {
-        console.error("Error fetching customer notifications:", error);
-        // Ensure UI is stable even on error
         const countElement = document.getElementById('customer-notification-count');
         if (countElement) countElement.textContent = '';
         const listElement = document.getElementById('customer-notifications-list');
@@ -2295,17 +1691,12 @@ async function checkCustomerNotifications() {
         }
     }
 }
-// END NEW CUSTOMER NOTIFICATIONS
 
-// Update navbar for logged out user
 function updateNavbarForLoggedOutUser() {
     const navbarAuth = document.getElementById('navbar-auth');
-    
-    // FIX: Add null check for navbarAuth
     if (!navbarAuth) {
          return; 
     }
-    
     navbarAuth.innerHTML = `
         <li class="nav-item dropdown" id="role-dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="roleDropdown" role="button" data-bs-toggle="dropdown">
@@ -2325,7 +1716,6 @@ function updateNavbarForLoggedOutUser() {
     `;
 }
 
-// Load homepage data
 async function loadHomepageData() {
     try {
         await loadCategories();
@@ -2335,22 +1725,15 @@ async function loadHomepageData() {
         await loadTestimonials();
         await loadPopularEquipmentFooter();
         updateHomepagePincodeDisplay();
-        
-    } catch (error) {
-        console.error('Error loading homepage data:', error);
-    }
+    } catch (error) {}
 }
 
-// Load categories for navbar dropdown
 async function loadNavbarCategories() {
     try {
-        // 1. Fetch all unique categories from approved equipment
         const equipmentSnapshot = await window.FirebaseDB.collection('equipment')
             .where('status', '==', 'approved')
             .get();
-        
         const categoryMap = {};
-        
         equipmentSnapshot.forEach(doc => {
             const equipment = doc.data();
             if (equipment.category) {
@@ -2365,23 +1748,15 @@ async function loadNavbarCategories() {
                 categoryMap[categoryName].count++;
             }
         });
-        
         const categories = Object.values(categoryMap);
-        
-        // Sort alphabetically by name
         categories.sort((a, b) => a.name.localeCompare(b.name));
-        
         const navbarMenu = document.getElementById('navbar-categories-menu');
         if (!navbarMenu) return; 
-
         navbarMenu.innerHTML = '';
-        
         if (categories.length === 0) {
             navbarMenu.innerHTML = '<li><a class="dropdown-item disabled">No categories found</a></li>';
             return;
         }
-        
-        // Limit to 8 categories for navbar dropdown
         categories.slice(0, 8).forEach(category => {
             const listItem = document.createElement('li');
             listItem.innerHTML = `
@@ -2393,8 +1768,6 @@ async function loadNavbarCategories() {
             `;
             navbarMenu.appendChild(listItem);
         });
-        
-        // Add "View All" link at the bottom
         const viewAllItem = document.createElement('li');
         viewAllItem.innerHTML = `
             <li><hr class="dropdown-divider"></li>
@@ -2403,9 +1776,7 @@ async function loadNavbarCategories() {
             </a></li>
         `;
         navbarMenu.appendChild(viewAllItem);
-        
     } catch (error) {
-        console.error('Error loading navbar categories:', error);
         const navbarMenu = document.getElementById('navbar-categories-menu');
         if (navbarMenu) {
             navbarMenu.innerHTML = '<li><a class="dropdown-item disabled text-danger">Error loading categories</a></li>';
@@ -2413,16 +1784,12 @@ async function loadNavbarCategories() {
     }
 }
 
-// Load categories (MODIFIED TO FETCH UNIQUE CATEGORIES FROM EQUIPMENT COLLECTION)
 async function loadCategories() {
     try {
-        // 1. Fetch all unique categories from approved equipment
         const equipmentSnapshot = await window.FirebaseDB.collection('equipment')
             .where('status', '==', 'approved')
             .get();
-        
         const categoryMap = {};
-        
         equipmentSnapshot.forEach(doc => {
             const equipment = doc.data();
             if (equipment.category) {
@@ -2437,23 +1804,15 @@ async function loadCategories() {
                 categoryMap[categoryName].count++;
             }
         });
-        
         const categories = Object.values(categoryMap);
-        
-        // Sort alphabetically by name
         categories.sort((a, b) => a.name.localeCompare(b.name));
-        
         const container = document.getElementById('categories-container');
         if (!container) return; 
-
         container.innerHTML = '';
-        
         if (categories.length === 0) {
             container.innerHTML = '<div class="col-12 text-center"><p>No equipment or categories found.</p></div>';
             return;
         }
-        
-        // Limit to 6 categories for the homepage display
         categories.slice(0, 6).forEach(category => {
             const col = document.createElement('div');
             col.className = 'col-md-4 col-sm-6 mb-4';
@@ -2469,19 +1828,13 @@ async function loadCategories() {
             `;
             container.appendChild(col);
         });
-        
-    } catch (error) {
-        console.error('Error loading categories:', error);
-    }
+    } catch (error) {}
 }
 
-
-// Load stats
 async function loadStats() {
     try {
         const container = document.getElementById('stats-container');
         if (!container) return; 
-
         const statsSnapshot = await window.FirebaseDB.collection('stats').doc('platform').get();
         const stats = statsSnapshot.exists ? statsSnapshot.data() : {
             happyFarmers: 500,
@@ -2489,8 +1842,6 @@ async function loadStats() {
             acresServed: 50000,
             supportHours: '24/7'
         };
-        
-        
         container.innerHTML = `
             <div class="col-md-3 col-6">
                 <div class="stat-item">
@@ -2517,17 +1868,12 @@ async function loadStats() {
                 </div>
             </div>
         `;
-        
-    } catch (error) {
-        console.error('Error loading stats:', error);
-    }
+    } catch (error) {}
 }
 
-// Load how-it-works steps - UPDATED to reflect PICKUP only
 function loadHowItWorks() {
     const container = document.getElementById('how-it-works-container');
-    if (!container) return; // Guard for pages without this container
-
+    if (!container) return;
     const steps = [
         {
             icon: 'fas fa-search',
@@ -2536,16 +1882,15 @@ function loadHowItWorks() {
         },
         {
             icon: 'fas fa-calendar-check',
-            title: 'Book Date & Confirm', // UPDATED TITLE
-            description: 'Select rental acres/hours, **set your required pickup date/time**, add to cart, and confirm your booking with easy payment options.' // Updated text
+            title: 'Book Date & Confirm',
+            description: 'Select rental acres/hours, **set your required pickup date/time**, add to cart, and confirm your booking with easy payment options.'
         },
         {
-            icon: 'fas fa-hand-paper', // Changed icon from truck to hand-paper for pickup
-            title: 'Pickup & Use', // Changed title
-            description: 'Self-pickup the equipment from the seller\'s location on your selected date/time. Fully serviced and ready for your farming needs.' // Changed description
+            icon: 'fas fa-hand-paper',
+            title: 'Pickup & Use',
+            description: 'Self-pickup the equipment from the seller\'s location on your selected date/time. Fully serviced and ready for your farming needs.'
         }
     ];
-    
     container.innerHTML = steps.map(step => `
         <div class="col-md-4">
             <div class="process-step">
@@ -2557,7 +1902,6 @@ function loadHowItWorks() {
             </div>
         </div>
     `).join('');
-    
     const processSteps = container.querySelectorAll('.process-step');
     if (processSteps.length >= 3) {
         const thirdStepIcon = processSteps[2].querySelector('.step-icon');
@@ -2567,22 +1911,18 @@ function loadHowItWorks() {
     }
 }
 
-// Load testimonials
 async function loadTestimonials() {
     try {
         const container = document.getElementById('testimonials-container');
         if (!container) return; 
-
         const snapshot = await window.FirebaseDB.collection('testimonials')
             .where('approved', '==', true)
             .limit(3)
             .get();
-        
         if (snapshot.empty) {
             container.innerHTML = getDefaultTestimonials();
             return;
         }
-        
         container.innerHTML = '';
         snapshot.forEach(doc => {
             const testimonial = doc.data();
@@ -2591,9 +1931,7 @@ async function loadTestimonials() {
             col.innerHTML = createTestimonialCard(testimonial);
             container.appendChild(col);
         });
-        
     } catch (error) {
-        console.error('Error loading testimonials:', error);
         const container = document.getElementById('testimonials-container');
         if (container) {
             container.innerHTML = getDefaultTestimonials();
@@ -2601,10 +1939,8 @@ async function loadTestimonials() {
     }
 }
 
-// Create testimonial card
 function createTestimonialCard(testimonial) {
     const initials = testimonial.customerName ? testimonial.customerName.split(' ').map(n => n[0]).join('').toUpperCase() : 'CU';
-    
     return `
         <div class="testimonial-card h-100">
             <div class="testimonial-text">
@@ -2621,7 +1957,6 @@ function createTestimonialCard(testimonial) {
     `;
 }
 
-// Get default testimonials
 function getDefaultTestimonials() {
     return `
         <div class="col-md-4">
@@ -2669,18 +2004,15 @@ function getDefaultTestimonials() {
     `;
 }
 
-// Load popular equipment for footer
 async function loadPopularEquipmentFooter() {
     try {
         const container = document.getElementById('popular-equipment-footer');
         if (!container) return; 
-
         const snapshot = await window.FirebaseDB.collection('equipment')
             .where('status', '==', 'approved')
             .orderBy('rentalCount', 'desc')
             .limit(4)
             .get();
-        
         if (snapshot.empty) {
             container.innerHTML = `
                 <li><a href="browse.html?category=tractor" class="text-decoration-none text-light">Tractors</a></li>
@@ -2690,66 +2022,50 @@ async function loadPopularEquipmentFooter() {
             `;
             return;
         }
-        
         let html = '';
         snapshot.forEach(doc => {
             const equipment = doc.data();
             html += `<li><a href="item.html?id=${doc.id}" class="text-decoration-none text-light">${equipment.name}</a></li>`;
         });
         container.innerHTML = html;
-        
-    } catch (error) {
-        console.error('Error loading popular equipment:', error);
-    }
+    } catch (error) {}
 }
 
-// Subscribe to newsletter
 async function subscribeNewsletter() {
     const emailInput = document.getElementById('newsletter-email');
     const email = emailInput.value.trim();
-    
     if (!email || !validateEmail(email)) {
         window.firebaseHelpers.showAlert('Please enter a valid email address', 'warning');
         return;
     }
-    
     try {
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const newsletterRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('newsletterSubscriptions');
-
         await newsletterRef.add({
             email: email,
             subscribedAt: firebase.firestore.FieldValue.serverTimestamp(),
             active: true
         });
-        
         window.firebaseHelpers.showAlert('Successfully subscribed to newsletter!', 'success');
         emailInput.value = '';
-        
     } catch (error) {
-        console.error('Error subscribing to newsletter:', error);
         window.firebaseHelpers.showAlert('Error subscribing. Please try again.', 'danger');
     }
 }
+window.subscribeNewsletter = subscribeNewsletter;
 
-// Validate email
 function validateEmail(email) {
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return re.test(email);
 }
 
-// Initialize event listeners
 function initializeEventListeners() {
-    // Load navbar categories on all pages
     loadNavbarCategories();
-    
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', function (e) {
             const href = this.getAttribute('href');
             if (href === "#") return;
-            
             e.preventDefault();
-            
             const target = document.querySelector(href);
             if (target) {
                 target.scrollIntoView({
@@ -2759,8 +2075,6 @@ function initializeEventListeners() {
             }
         });
     });
-
-    // Pincode validation event listener for Auth and Profile pages
     const path = window.location.pathname.split('/').pop();
     if (path === 'auth.html') {
         const pincodeInput = document.getElementById('pincode');
@@ -2773,7 +2087,6 @@ function initializeEventListeners() {
                     villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
                     villageSelect.disabled = true;
                 }
-
                 if (pincodeInput.value.length === 6) {
                     window.populateLocationFields('pincode', 'signupVillage', 'signupCity', 'signupState', 'location-lookup-status');
                 }
@@ -2783,11 +2096,9 @@ function initializeEventListeners() {
         const pincodeInput = document.getElementById('profile-pincode');
         if (pincodeInput) {
             pincodeInput.addEventListener('input', () => {
-                // If the user is a seller and already has a pincode, they cannot edit it
                 if (window.currentUser && window.currentUser.role === 'seller' && window.currentUser.pincode) {
                     return;
                 }
-
                 document.getElementById('profile-city').value = '';
                 document.getElementById('profile-state').value = '';
                 const villageSelect = document.getElementById('profile-village');
@@ -2795,7 +2106,6 @@ function initializeEventListeners() {
                     villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
                     villageSelect.disabled = true;
                 }
-                
                 if (pincodeInput.value.length === 6) {
                     window.populateLocationFields('profile-pincode', 'profile-village', 'profile-city', 'profile-state', 'pincode-status-message');
                 }
@@ -2804,45 +2114,32 @@ function initializeEventListeners() {
     } 
 }
 
-// Load categories for the filter dropdown (MODIFIED TO FETCH UNIQUE CATEGORIES FROM EQUIPMENT COLLECTION)
 async function loadCategoriesForFilter() {
     try {
-        // 1. Fetch all unique categories from approved equipment
         const equipmentSnapshot = await window.FirebaseDB.collection('equipment')
             .where('status', '==', 'approved')
             .get();
-        
         const categorySet = new Set();
-        
         equipmentSnapshot.forEach(doc => {
             const equipment = doc.data();
             if (equipment.category) {
                 categorySet.add(equipment.category.toLowerCase());
             }
         });
-
         const filterSelect = document.getElementById('category-filter');
         if (filterSelect) {
             filterSelect.innerHTML = '<option value="all">All Categories</option>';
-            
-            // Convert Set to Array, sort, and populate dropdown
             const sortedCategories = Array.from(categorySet).sort();
-            
             sortedCategories.forEach(category => {
                 const option = document.createElement('option');
                 option.value = category;
-                // Capitalize first letter for display
                 option.textContent = category.charAt(0).toUpperCase() + category.slice(1); 
                 filterSelect.appendChild(option);
             });
         }
-
-    } catch (error) {
-        console.error('Error loading categories for filter:', error);
-    }
+    } catch (error) {}
 }
 
-// Get category icon based on name (Helper function)
 function getCategoryIcon(categoryName) {
     const icons = {
         'tractor': 'fas fa-tractor',
@@ -2857,27 +2154,20 @@ function getCategoryIcon(categoryName) {
         'water-tanker': 'fas fa-truck-water',
         'default': 'fas fa-tools'
     };
-    
     return icons[categoryName.toLowerCase()] || icons.default;
 }
 
-// Filter and sort equipment based on user input (for browse.html)
 function filterEquipment() {
     const searchTerm = document.getElementById('search-input')?.value?.toLowerCase() || '';
     const categoryFilter = document.getElementById('category-filter')?.value || 'all';
     const sortBy = document.getElementById('sort-by')?.value || 'latest';
-
     let filteredList = allEquipmentData.filter(equipment => {
         const matchesSearch = equipment.name.toLowerCase().includes(searchTerm) || 
                               equipment.location.toLowerCase().includes(searchTerm) ||
                               equipment.description.toLowerCase().includes(searchTerm);
-        
         const matchesCategory = categoryFilter === 'all' || equipment.category.toLowerCase() === categoryFilter;
-
         return matchesSearch && matchesCategory;
     });
-
-    // Sort logic
     switch (sortBy) {
         case 'price_asc':
             filteredList.sort((a, b) => (a.pricePerAcre || 0) - (b.pricePerAcre || 0));
@@ -2890,19 +2180,15 @@ function filterEquipment() {
             filteredList.sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
             break;
     }
-
     displayEquipmentGrid(filteredList);
 }
+window.filterEquipment = filterEquipment;
 
-// Display the filtered equipment list on the browse page
 function displayEquipmentGrid(equipmentList) {
     const container = document.getElementById('equipment-grid');
     if (!container) return;
-    
     container.innerHTML = '';
-
     const pincode = window.customerPincode || 'N/A';
-
     if (equipmentList.length === 0) {
         const pincodeText = pincode !== 'N/A' ? ` in your Pincode area (${pincode})` : ' without a location filter applied';
         container.innerHTML = `
@@ -2915,28 +2201,22 @@ function displayEquipmentGrid(equipmentList) {
         `;
         return;
     }
-
     equipmentList.forEach(equipment => {
         const col = document.createElement('div');
         col.className = 'col-lg-4 col-md-6 mb-4';
-        // Note: The createEquipmentCard function now handles its own internal Pincode warning logic
         col.innerHTML = createEquipmentCard(equipment, equipment.id, true); 
         container.appendChild(col);
     });
 }
 
-// Display items currently in the cart
 async function displayCartItems(cart) { 
     if (!window.currentUser && cart.length > 0) {
         window.firebaseHelpers.showAlert('You are viewing a non-persistent cart. Log in to save your cart items.', 'info');
     }
-
     const container = document.getElementById('cart-items-container');
     const loadingElement = document.getElementById('cart-loading');
     if (loadingElement) loadingElement.style.display = 'none';
-
     if(container) container.innerHTML = '';
-    
     if (cart.length === 0) {
         if(container) container.innerHTML = `
             <div class="text-center py-5">
@@ -2949,14 +2229,9 @@ async function displayCartItems(cart) {
         updateCartSummary(0, 0, 0, true); 
         return;
     }
-
     let subtotal = 0;
-    
-    // Check if checkout should be disabled (based on checkCartPincodeCompatibility result)
     const checkoutBtn = document.getElementById('checkout-btn');
     const isDisabled = checkoutBtn && checkoutBtn.disabled;
-
-
     cart.forEach((item, index) => {
         subtotal += item.price;
         if(container) container.innerHTML += `
@@ -2969,11 +2244,9 @@ async function displayCartItems(cart) {
                         ${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'}
                         (@ ${window.firebaseHelpers.formatCurrency(item.rentalType === 'acre' ? item.pricePerAcre : item.pricePerHour)}/${item.rentalType})
                     </p>
-                    <!-- NEW: Display pickup date/time -->
                     <p class="mb-0 small text-danger">
                         <i class="fas fa-calendar-check me-1"></i> Pickup: ${item.pickupDate} at ${item.pickupTime}
                     </p>
-                    <!-- END NEW -->
                 </div>
                 <div class="text-end">
                     <strong class="text-success h5">${window.firebaseHelpers.formatCurrency(item.price)}</strong>
@@ -2984,25 +2257,20 @@ async function displayCartItems(cart) {
             </div>
         `;
     });
-
     const fees = subtotal * platformFeeRate; 
     const total = subtotal + fees;
-
     updateCartSummary(subtotal, fees, total, isDisabled);
 }
 
-// Remove item from cart
 async function removeItemFromCart(index) {
     let cart = await getCartFromFirestore(); 
     cart.splice(index, 1);
-    
     await updateCartInFirestore(cart); 
-    
     window.firebaseHelpers.showAlert('Item removed from cart.', 'info');
-    loadCartPage(); // Reload the cart page completely to re-run compatibility checks
+    loadCartPage();
 }
+window.removeItemFromCart = removeItemFromCart;
 
-// Update the summary section on the cart page
 function updateCartSummary(subtotal, fees, total, isDisabled) {
     const subtotalEl = document.getElementById('cart-subtotal');
     if (subtotalEl) subtotalEl.textContent = window.firebaseHelpers.formatCurrency(subtotal);
@@ -3012,56 +2280,38 @@ function updateCartSummary(subtotal, fees, total, isDisabled) {
     if (feesEl) feesEl.textContent = window.firebaseHelpers.formatCurrency(fees);
     const totalEl = document.getElementById('cart-total');
     if (totalEl) totalEl.textContent = window.firebaseHelpers.formatCurrency(total);
-
     const checkoutEl = document.getElementById('checkout-btn');
     if (checkoutEl) checkoutEl.disabled = isDisabled || total === 0;
 }
 
-// Display items and calculate total on the checkout page (FIXED for zero total issue)
 function displayCheckoutSummary(cart) {
-    console.log("displayCheckoutSummary called with cart:", cart);
-    
     const listContainer = document.getElementById('checkout-item-list');
     if (!listContainer) return;
-
     listContainer.innerHTML = '';
-    
     let subtotal = 0;
-    
-    // Calculate subtotal from cart
     cart.forEach(item => {
         subtotal += Number(item.price) || 0;
     });
-    
-    console.log("Subtotal calculated:", subtotal);
-    
-    // Pre-fill the rental details field
     const pickupDateInput = document.getElementById('rental-details');
     const firstItem = cart[0];
-
     if (pickupDateInput && firstItem) {
         pickupDateInput.value = `${firstItem.rentalValue} ${firstItem.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'} | Pickup: ${firstItem.pickupDate} @ ${firstItem.pickupTime}`;
     }
-    
-    // Update razorpayContext with current data
     window.razorpayContext = {
         ...window.razorpayContext,
         orderPickupDate: firstItem?.pickupDate,
         orderPickupTime: firstItem?.pickupTime,
         items: cart,
-        subtotal: subtotal // Ensure subtotal is in context
+        subtotal: subtotal
     };
-
     const orderPincode = cart.length > 0 ? cart[0].pincode : 'N/A';
-
-    // Display cart items
     cart.forEach(item => {
         listContainer.innerHTML += `
             <div class="order-item-card d-flex justify-content-between align-items-center">
                 <div>
                     <strong>${item.name}</strong>
                     <div class="small text-muted">
-                        ${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'} | By: ${item.businessName} (Pincode: ${item.pincode})
+                        ${item.rentalValue} ${item.rentalType} | By: ${item.businessName} (Pincode: ${item.pincode})
                         <br><i class="fas fa-calendar-check me-1"></i> Pickup: ${item.pickupDate} @ ${item.pickupTime}
                         <br><i class="fas fa-map-marked-alt me-1"></i> Address: ${item.sellerAddress}
                     </div>
@@ -3070,58 +2320,20 @@ function displayCheckoutSummary(cart) {
             </div>
         `;
     });
-    
-    // --- COIN & DISCOUNT CALCULATION ---
-    // 1. Calculate the maximum possible discount (50% of subtotal)
     const maxDiscountAllowed = Math.floor(subtotal * 0.5);
-    
-    // 2. Determine how many coins can actually be applied
     let requestedCoins = coinsToApply;
-    const effectiveCoinsUsed = Math.min(requestedCoins, availableCoins, maxDiscountAllowed);
-    
-    // 3. The total discount amount (1 coin = 1 rupee discount)
+    let effectiveCoinsUsed = Math.min(requestedCoins, availableCoins, maxDiscountAllowed);
     const totalDiscount = effectiveCoinsUsed;
-    
-    // 4. Update the global state
-    coinsToApply = effectiveCoinsUsed;
-    
-    // 5. Calculate fees and final total
     const fees = subtotal * platformFeeRate;
     let total = subtotal - totalDiscount + fees;
-    
-    console.log("Calculation:", {
-        subtotal,
-        availableCoins,
-        requestedCoins,
-        effectiveCoinsUsed,
-        totalDiscount,
-        fees,
-        initialTotal: total
-    });
-    
-    // IMPORTANT FIX: Ensure total is never less than 1
     if (total < 1) {
-        // If total would be less than ₹1, reduce the coins used
         const excessDiscount = Math.abs(total - 1);
-        coinsToApply = Math.max(0, effectiveCoinsUsed - Math.ceil(excessDiscount));
-        
-        // Recalculate with adjusted coins
-        const adjustedDiscount = coinsToApply;
+        effectiveCoinsUsed = Math.max(0, effectiveCoinsUsed - Math.ceil(excessDiscount));
+        const adjustedDiscount = effectiveCoinsUsed;
         total = subtotal - adjustedDiscount + fees;
-        
-        console.log("Adjusted calculation:", {
-            adjustedCoins: coinsToApply,
-            adjustedDiscount,
-            finalTotal: total
-        });
     }
-    
-    // Ensure total is at least ₹1
     total = Math.max(1, total);
-    
-    console.log("Final total:", total);
-    
-    // 6. Update razorpay context
+    coinsToApply = effectiveCoinsUsed;
     window.razorpayContext = { 
         ...window.razorpayContext,
         subtotal, 
@@ -3131,31 +2343,23 @@ function displayCheckoutSummary(cart) {
         discount: totalDiscount, 
         coinsUsed: coinsToApply
     }; 
-    
-    // 7. Update UI elements
     const feeLabelElement = document.getElementById('checkout-fees-label');
     if (feeLabelElement) {
         feeLabelElement.textContent = `Platform Fee (${(platformFeeRate * 100).toFixed(0)}%):`;
     }
-
     const coinInput = document.getElementById('coins-to-apply');
     if (coinInput) coinInput.value = coinsToApply;
-    
     const discountEl = document.getElementById('checkout-discount');
     if (discountEl) discountEl.textContent = `-${window.firebaseHelpers.formatCurrency(totalDiscount)}`;
-
     const subtotalEl = document.getElementById('checkout-subtotal');
     if (subtotalEl) subtotalEl.textContent = window.firebaseHelpers.formatCurrency(subtotal);
     const feesEl = document.getElementById('checkout-fees');
     if (feesEl) feesEl.textContent = window.firebaseHelpers.formatCurrency(fees);
     const totalEl = document.getElementById('checkout-total');
     if (totalEl) totalEl.textContent = window.firebaseHelpers.formatCurrency(total);
-    
-    // FIX: Use the new dedicated function to update the payment button UI correctly
     window.updatePaymentButtonUI(total);
 }
 
-// Process payment using Razorpay (Simulated Escrow/Route) (MODIFIED FOR TEST PAYMENT & COINS FIX)
 async function processPayment() {
     const form = document.getElementById('checkout-form');
     if (!form.checkValidity()) {
@@ -3163,9 +2367,7 @@ async function processPayment() {
         window.firebaseHelpers.showAlert('Please fill all required customer details.', 'warning');
         return;
     }
-    
     const paymentMethod = document.getElementById('payment-method-select').value;
-    
     const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
     if (!userPincode) {
         window.firebaseHelpers.showAlert('Critical Error: Customer Pincode is not set. Cannot proceed.', 'danger');
@@ -3173,13 +2375,9 @@ async function processPayment() {
         if (payBtn) payBtn.disabled = true;
         return;
     }
-    
     const isPickup = true; 
-
-    // FIX: Retrieve final discounted total, discount, and coins used directly from razorpayContext
     const { total, orderPickupDate, orderPickupTime, discount, coinsUsed } = window.razorpayContext; 
     const totalInPaise = Math.round(total * 100);
-
     const customerData = {
         name: document.getElementById('customer-name').value,
         email: document.getElementById('customer-email').value,
@@ -3187,41 +2385,29 @@ async function processPayment() {
         address: 'Self-Pickup Confirmed',
         notes: document.getElementById('additional-notes').value,
         isPickup: isPickup,
-        
         pickupDate: orderPickupDate,
         pickupTime: orderPickupTime,
     };
-    
     const orderId = window.firebaseHelpers.generateId(); 
-
-    // *** MODIFIED LOGIC START ***
     if (paymentMethod === 'test_cop') {
-        // Option 1: Cash On Pickup (Test/Simulation ONLY) - Skip payment, place order immediately
         const payBtn = document.getElementById('pay-now-btn');
         const originalText = payBtn.innerHTML;
         payBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Confirming...';
         payBtn.disabled = true;
-
         try {
-            // Pass the discounted total (total) to placeOrderInFirestore
             await placeOrderInFirestore(orderId, customerData, 'TEST_COP_TXN', total, 'pending', 'Cash On Pickup (Test)', discount, coinsUsed);
-            // The function placeOrderInFirestore will handle success alerts and redirects
         } catch (error) {
-            console.error('Test Order Placement Failed:', error);
             window.firebaseHelpers.showAlert('Test order placement failed. See console for details.', 'danger');
         } finally {
             payBtn.innerHTML = originalText;
             payBtn.disabled = false;
         }
-
     } else { 
-        // Option 2: Razorpay (Real Payment) - Proceed with Razorpay flow
         const keyId = await window.firebaseHelpers.getRazorpayKeyId();
         if (!keyId) {
             window.firebaseHelpers.showAlert('Payment gateway key missing. Cannot proceed.', 'danger');
             return;
         }
-
         const options = {
             key: keyId, 
             amount: totalInPaise, 
@@ -3229,10 +2415,7 @@ async function processPayment() {
             name: "FarmRent",
             description: "Rental Equipment Booking",
             handler: async function (response) {
-                // On successful payment, place order with 'paid' status
-                // Pass the discounted total (total) to placeOrderInFirestore
                 await placeOrderInFirestore(orderId, customerData, response.razorpay_payment_id, total, 'paid', 'Razorpay', discount, coinsUsed);
-                
             },
             prefill: {
                 name: customerData.name,
@@ -3243,32 +2426,25 @@ async function processPayment() {
                 color: "#2B5C2B" 
             }
         };
-
         const rzp = new window.Razorpay(options);
         rzp.on('payment.failed', function (response) {
-            console.error('Payment Failed:', response.error);
             window.firebaseHelpers.showAlert('Payment failed: ' + response.error.description, 'danger');
         });
-
         rzp.open();
     }
-    // *** MODIFIED LOGIC END ***
 }
+window.processPayment = processPayment;
 
-// Final step: Save order to Firestore after (simulated) successful payment (MODIFIED to reward referrer AND handle coins)
 async function placeOrderInFirestore(orderId, customerData, transactionId, discountedTotalAmount, paymentStatus, paymentMethod, totalDiscount, coinsUsed) {
     const cart = await getCartFromFirestore();
-    
     if (cart.length === 0) {
         window.firebaseHelpers.showAlert('Cart is empty, cannot place order.', 'danger');
         return;
     }
-    
     const itemNames = cart.map(item => item.name).join(', ');
     const sellerIds = [...new Set(cart.map(item => item.sellerId))].join(', ');
     const businessNames = [...new Set(cart.map(item => item.businessName))].join(', ');
     const orderPincode = window.razorpayContext.orderPincode; 
-    
     try {
         const orderData = {
             userId: window.currentUser.uid,
@@ -3278,51 +2454,35 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, disco
             deliveryAddress: customerData.address, 
             notes: customerData.notes,
             isPickup: true, 
-            
-            // NEW: Add pickup date and time to the order summary
             pickupDate: customerData.pickupDate, 
             pickupTime: customerData.pickupTime,
-
             equipmentNames: itemNames,
-            sellerIds: sellerIds.split(',').map(id => id.trim()).filter(id => id), // Ensure this is an array of seller IDs
+            sellerIds: sellerIds.split(',').map(id => id.trim()).filter(id => id),
             sellerBusinessNames: businessNames,
             orderPincode: orderPincode, 
-
             items: cart, 
-
-            totalAmount: discountedTotalAmount, // This is the amount actually paid (discounted)
+            totalAmount: discountedTotalAmount,
             platformFee: window.razorpayContext.fees,
-            discount: totalDiscount, // Correct total discount amount
-            coinsUsed: coinsUsed, // Correct coins used
-            status: 'pending', // All orders start as pending for seller review
-            paymentStatus: paymentStatus, // Use dynamic status ('paid' or 'pending')
-            paymentMethod: paymentMethod, // Use dynamic method
+            discount: totalDiscount,
+            coinsUsed: coinsUsed,
+            status: 'pending',
+            paymentStatus: paymentStatus,
+            paymentMethod: paymentMethod,
             transactionId: transactionId,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp() // Ensure updatedAt is set on creation
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
-
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
-
         await ordersCollectionRef.doc(orderId).set(orderData);
-        
         await updateCartInFirestore([]); 
-        
-        // --- REFERRAL & COINS LOGIC START (MODIFIED) ---
-        
         let customerUpdates = {};
         let referrerRewardMessage = '';
-        
-        // 1. Check if this is the customer's very first order
         if (!window.currentUser.firstOrderPlaced) {
             customerUpdates.firstOrderPlaced = true;
             window.currentUser.firstOrderPlaced = true;
-            
-            // 1a. Check if customer was referred by someone (referrer is the one to be rewarded)
             const referrerId = window.currentUser.referredBy;
             if (referrerId) {
-                // Reward the REFERRER (the person who referred the friend) with 100 coins
                 const referrerRef = window.FirebaseDB.collection('users').doc(referrerId);
                 await referrerRef.update({
                     coins: firebase.firestore.FieldValue.increment(100),
@@ -3331,47 +2491,29 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, disco
                 referrerRewardMessage = `<br>Your referrer (UID: ${referrerId.substring(0, 8)}...) has received **100 Coins**!`;
             }
         }
-
-        // 2. Decrement coins used by the referred customer (the one who placed the order)
         if (coinsUsed > 0) {
-             // Only apply coin decrement if coins were used as a discount
              customerUpdates.coins = firebase.firestore.FieldValue.increment(-coinsUsed);
              window.currentUser.coins = (window.currentUser.coins || 0) - coinsUsed;
         }
-        
-        // 3. Apply customer updates (if any, like setting firstOrderPlaced or decrementing coins)
         if (Object.keys(customerUpdates).length > 0) {
             await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(customerUpdates);
-            availableCoins = window.currentUser.coins; // Update global state
+            availableCoins = window.currentUser.coins;
         }
-        
-        coinsToApply = 0; // Reset applied coins state
-        
-        // --- REFERRAL & COINS LOGIC END ---
-
-        // Show context-specific alert
+        coinsToApply = 0;
         let successMessage = paymentStatus === 'paid' 
             ? `Order #${orderId.substring(0, 8)} placed successfully! Payment confirmed.`
             : `Test Order #${orderId.substring(0, 8)} placed successfully! Payment is **Pending**.`;
-            
-        successMessage += referrerRewardMessage; // Add referrer reward message
-
+        successMessage += referrerRewardMessage;
         window.firebaseHelpers.showAlert(successMessage + ' You will be redirected to My Orders.', 'success');
-        
-        // Manually trigger a notification check right after order placement to update the navbar badge instantly
         checkCustomerNotifications();
-        
         setTimeout(() => {
             window.location.href = 'orders.html'; 
         }, 3000);
-
     } catch (error) {
-        console.error('Error placing order:', error);
         window.firebaseHelpers.showAlert('Order placement failed in database. Please contact support.', 'danger');
     }
 }
 
-// Load Profile Page (profile.html) (MODIFIED)
 async function loadProfilePage() {
     const user = await window.firebaseHelpers.getCurrentUser();
     if (!user) {
@@ -3379,20 +2521,14 @@ async function loadProfilePage() {
         setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 2000);
         return;
     }
-
-    // NEW: Load/Check Referral/Coins Data
     const userDocRef = window.FirebaseDB.collection('users').doc(user.uid);
     const userDoc = await userDocRef.get();
-    
-    // Ensure data is up to date (for feature rollout/merge on a user document)
     if (userDoc.exists) {
         const userData = userDoc.data();
         let needsUpdate = false;
-        
         if (userData.coins === undefined) { userData.coins = 0; needsUpdate = true; }
         if (userData.referralCode === undefined) { userData.referralCode = generateReferralCode(); needsUpdate = true; }
         if (userData.firstOrderPlaced === undefined) { userData.firstOrderPlaced = false; needsUpdate = true; }
-        
         if (needsUpdate) {
             await userDocRef.set({
                 coins: userData.coins,
@@ -3400,11 +2536,9 @@ async function loadProfilePage() {
                 firstOrderPlaced: userData.firstOrderPlaced,
             }, { merge: true });
         }
-        window.currentUser = { ...user, ...userData }; // Update current user object
-        availableCoins = window.currentUser.coins; // Update global state
+        window.currentUser = { ...user, ...userData };
+        availableCoins = window.currentUser.coins;
     }
-    // END NEW
-
     const profileNameEl = document.getElementById('profile-name');
     if (profileNameEl) profileNameEl.value = user.name || '';
     const profileEmailEl = document.getElementById('profile-email');
@@ -3419,36 +2553,25 @@ async function loadProfilePage() {
     if (profileStateEl) profileStateEl.value = user.state || '';
     const profilePincodeEl = document.getElementById('profile-pincode');
     if (profilePincodeEl) profilePincodeEl.value = user.pincode || '';
-    
     const profileUserNameEl = document.getElementById('profile-user-name');
     if (profileUserNameEl) profileUserNameEl.textContent = user.name || 'User';
-    
-    // NEW: Update Coin Display
     const profileCoinBalanceEl = document.getElementById('profile-coin-balance');
     if (profileCoinBalanceEl) profileCoinBalanceEl.textContent = `${availableCoins || 0} Coins`;
-    
-    // NEW: Update Referral Info
     const referralCodeDisplayEl = document.getElementById('referral-code-display');
     const referralLinkDisplayEl = document.getElementById('referral-link-display');
     const referralCode = window.currentUser.referralCode || generateReferralCode();
-
     if (referralCodeDisplayEl) referralCodeDisplayEl.value = referralCode;
     if (referralLinkDisplayEl) referralLinkDisplayEl.value = window.getReferralLink(referralCode);
-    // END NEW
-
-    // Check if user is a seller and has a pincode set
     const isSeller = user.role === 'seller';
     const hasPincode = !!user.pincode;
-
     if (isSeller && hasPincode) {
         const pincodeInput = document.getElementById('profile-pincode');
         if (pincodeInput) {
             pincodeInput.readOnly = true;
-            pincodeInput.classList.add('bg-light', 'text-muted'); // Visual cue for non-editable
+            pincodeInput.classList.add('bg-light', 'text-muted');
         }
         const pincodeGroup = document.getElementById('pincode-input-group');
         if (pincodeGroup) {
-            // Check if warning already exists to prevent duplication
             if (!pincodeGroup.querySelector('.alert')) {
                 pincodeGroup.innerHTML += `
                     <div class="alert alert-warning p-2 mt-2 small">
@@ -3458,22 +2581,17 @@ async function loadProfilePage() {
             }
         }
     }
-
-    // Load villages if pincode and saved village exist
     if (user.pincode) {
         (async () => {
              await populateLocationFields('profile-pincode', 'profile-village', 'profile-city', 'profile-state', 'pincode-status-message');
              const villageSelect = document.getElementById('profile-village');
              if (villageSelect && user.village) {
-                 // Delay slightly to ensure options are loaded by populateLocationFields
                  setTimeout(() => {
                     villageSelect.value = user.village; 
                  }, 500);
              }
         })();
     }
-    
-    // Display joined date
     const joinDateEl = document.getElementById('join-date');
     if (joinDateEl) {
         if (user.createdAt && user.createdAt.toDate) {
@@ -3482,21 +2600,15 @@ async function loadProfilePage() {
             joinDateEl.textContent = new Date(user.createdAt).toLocaleDateString();
         }
     }
-    
-    // Handle form submission
     const profileForm = document.getElementById('profile-form');
     if (profileForm) profileForm.addEventListener('submit', handleProfileUpdate);
 }
 
-// Handle profile form submission
 async function handleProfileUpdate(e) {
     e.preventDefault();
     if (!window.currentUser) return;
-    
     const pincodeInput = document.getElementById('profile-pincode').value.trim();
     const villageSelect = document.getElementById('profile-village');
-    
-    // Mandatory check even if readOnly, in case of client-side bypass
     if (!pincodeInput || !window.firebaseHelpers.pincodeSystem.validatePincode(pincodeInput)) {
         window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
         return;
@@ -3509,7 +2621,6 @@ async function handleProfileUpdate(e) {
         window.firebaseHelpers.showAlert('Pincode lookup failed. Please try again or verify your Pincode.', 'danger');
         return;
     }
-
     const updates = {
         name: document.getElementById('profile-name').value,
         mobile: document.getElementById('profile-phone').value,
@@ -3517,39 +2628,27 @@ async function handleProfileUpdate(e) {
         city: document.getElementById('profile-city').value,
         state: document.getElementById('profile-state').value, 
         village: villageSelect ? villageSelect.value : '', 
-        pincode: pincodeInput, // Seller Pincode is non-editable here but still saved
+        pincode: pincodeInput,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
-    
-    // Seller Pincode enforcement: If they are a seller and already had a pincode, ensure we don't try to change it if they cleared the field (though it's readonly)
     if (window.currentUser.role === 'seller' && window.currentUser.pincode) {
-        updates.pincode = window.currentUser.pincode; // Revert to original pincode if somehow modified
+        updates.pincode = window.currentUser.pincode;
     }
-
-
     try {
         await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(updates);
         window.firebaseHelpers.showAlert('Profile updated successfully!', 'success');
-        
         window.currentUser = { ...window.currentUser, ...updates };
-        
-        // Use the centralized helper to save the new pincode everywhere
         await window.firebaseHelpers.pincodeSystem.setPincode(updates.pincode); 
-
-        // Reload data on relevant pages
         const path = window.location.pathname.split('/').pop();
         if (path === 'browse.html') {
              updatePincodeDisplay();
              loadAllEquipment();
         }
-
     } catch (error) {
-        console.error('Error updating profile:', error);
         window.firebaseHelpers.showAlert('Error updating profile. Please try again.', 'danger');
     }
 }
 
-// Load Orders Page (orders.html)
 async function loadOrdersPage() {
     const user = await window.firebaseHelpers.getCurrentUser();
     if (!user) {
@@ -3557,22 +2656,17 @@ async function loadOrdersPage() {
         setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 2000);
         return;
     }
-    
     const loadingEl = document.getElementById('loading');
     if(loadingEl) loadingEl.style.display = 'block';
-
     try {
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
-
         const ordersSnapshot = await ordersCollectionRef
             .where('userId', '==', user.uid)
             .orderBy('createdAt', 'desc')
             .get();
-        
         const container = document.getElementById('orders-list');
         if (container) container.innerHTML = '';
-        
         if (ordersSnapshot.empty) {
             if (container) container.innerHTML = `
                 <div class="col-12 text-center py-5">
@@ -3584,14 +2678,11 @@ async function loadOrdersPage() {
             `;
             return;
         }
-        
         ordersSnapshot.forEach(doc => {
             const order = { id: doc.id, ...doc.data() };
             if (container) container.innerHTML += createOrderCard(order);
         });
-        
     } catch (error) {
-        console.error('Error loading orders:', error);
         const container = document.getElementById('orders-list');
         if (container) container.innerHTML = `
             <div class="col-12 text-center py-5 text-danger">
@@ -3605,19 +2696,14 @@ async function loadOrdersPage() {
     }
 }
 
-// Create HTML card for an order (MODIFIED to include Review Button)
 function createOrderCard(order) {
     const statusClass = `order-status-${order.status || 'pending'}`;
     const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
     const date = window.firebaseHelpers.formatDate(order.createdAt);
     const deliveryType = '<span class="badge bg-warning text-dark me-2"><i class="fas fa-hand-paper me-1"></i>Self-Pickup</span>';
-    
     const pickupDate = order.pickupDate || 'N/A';
     const pickupTime = order.pickupTime || 'N/A';
-    
     const discountCoins = order.coinsUsed > 0 ? `<div class="text-danger small">Coins Used: ${order.coinsUsed} (${window.firebaseHelpers.formatCurrency(order.discount)})</div>` : '';
-
-    // Logic for Review Button
     let reviewButton = '';
     if (order.status === 'completed' && !order.isReviewed) {
         reviewButton = `
@@ -3632,12 +2718,8 @@ function createOrderCard(order) {
             </button>
         `;
     }
-
-    // NEW: Chat Button Logic
-    // Allow chat if order is pending, active, pickedup, returned, or completed
     let chatButton = '';
     if (['pending', 'active', 'pickedup', 'returned', 'completed'].includes(order.status)) {
-        // Assume first seller for simplicity if multiple, otherwise use sellerIds[0]
         const sellerId = order.sellerIds ? order.sellerIds[0] : '';
         const sellerName = order.sellerBusinessNames ? order.sellerBusinessNames.split(',')[0] : 'Seller';
         if (sellerId) {
@@ -3648,7 +2730,6 @@ function createOrderCard(order) {
             `;
         }
     }
-
     return `
         <div class="col-lg-12 mb-4">
             <div class="card order-card shadow-sm">
@@ -3688,9 +2769,7 @@ function createOrderCard(order) {
                             <strong>${pickupDate} at ${pickupTime}</strong>
                         </div>
                     </div>
-                    
                     ${createOrderTrackerHtml(order.status, true)} 
-                    
                 </div>
                 <div class="card-footer text-end">
                     ${order.status === 'pending' ? `
@@ -3705,9 +2784,7 @@ function createOrderCard(order) {
     `;
 }
 
-// NEW FUNCTION: Generate the dynamic order tracker HTML based on status
 function createOrderTrackerHtml(status, isMini = false) {
-    // Define the sequence of steps
     const steps = [
         { key: 'pending', text: 'Order Placed', icon: 'fas fa-clipboard-list' },
         { key: 'active', text: 'Seller Confirmed', icon: 'fas fa-check-circle' },
@@ -3715,8 +2792,6 @@ function createOrderTrackerHtml(status, isMini = false) {
         { key: 'returned', text: 'Equipment Returned', icon: 'fas fa-undo-alt' },
         { key: 'completed', text: 'Rental Completed', icon: 'fas fa-flag-checkered' }
     ];
-
-    // Map status to progress (percentage and active index)
     const statusMap = {
         'pending': { progress: 0, index: 0, showCancel: true },
         'active': { progress: 25, index: 1, showCancel: true },
@@ -3726,17 +2801,13 @@ function createOrderTrackerHtml(status, isMini = false) {
         'cancelled': { progress: 0, index: -1, showCancel: false },
         'rejected': { progress: 0, index: -1, showCancel: false }
     };
-
     const currentStep = statusMap[status] || statusMap['pending'];
     const isTerminal = status === 'completed' || status === 'cancelled' || status === 'rejected';
-
     if (isTerminal && status !== 'completed') {
         const message = status === 'cancelled' 
             ? 'Order Cancelled' 
             : 'Order Rejected by Seller';
-            
         const icon = status === 'cancelled' ? 'fas fa-ban' : 'fas fa-times-circle';
-        
         return `
             <div class="alert alert-danger text-center mt-3 mb-0 p-3">
                 <i class="${icon} me-2"></i> <strong>${message}</strong>. 
@@ -3744,11 +2815,7 @@ function createOrderTrackerHtml(status, isMini = false) {
             </div>
         `;
     }
-    
-    // Calculate final progress bar width (if not terminal)
     const progressBarWidth = currentStep.progress; 
-    
-    // Build the tracker HTML
     const trackerHtml = steps.map((step, index) => {
         let stepClass = '';
         if (index < currentStep.index) {
@@ -3758,7 +2825,6 @@ function createOrderTrackerHtml(status, isMini = false) {
         } else if (index === currentStep.index && status === 'completed') {
              stepClass = 'completed';
         }
-
         return `
             <div class="tracker-step ${stepClass}">
                 <div class="step-icon-container">
@@ -3768,7 +2834,6 @@ function createOrderTrackerHtml(status, isMini = false) {
             </div>
         `;
     }).join('');
-
     return `
         <div class="order-tracker ${isMini ? 'p-2 mt-2 mb-0' : 'p-4'}">
             <div class="tracker-line">
@@ -3778,53 +2843,37 @@ function createOrderTrackerHtml(status, isMini = false) {
         </div>
     `;
 }
-// Make function globally accessible for easy use in modals/views
 window.createOrderTrackerHtml = createOrderTrackerHtml;
 
-
-// Function to view order details in a modal (MODIFIED to include Tracker)
 async function viewOrderDetailsModal(orderId) {
     try {
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
-
-        // *** Use an onSnapshot listener for real-time updates while the modal is open ***
         const modalElement = document.getElementById('orderDetailsModal');
-        // Ensure modal instance is fetched/created before the listener
         const modalInstance = new bootstrap.Modal(modalElement);
-        
-        // Show modal immediately with loading content
         modalInstance.show();
-        
         const unsubscribe = ordersCollectionRef.doc(orderId).onSnapshot(docSnapshot => {
             if (!docSnapshot.exists) {
-                // If order is deleted, close modal
                 modalInstance.hide();
                 window.firebaseHelpers.showAlert('Order not found or deleted.', 'danger');
                 unsubscribe();
                 loadOrdersPage();
                 return;
             }
-
             const order = docSnapshot.data();
-            
             const statusClass = `order-status-${order.status || 'pending'}`;
             const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
-            
             const coinsUsed = order.coinsUsed || 0;
             const discountApplied = order.discount || 0;
             const discountHtml = coinsUsed > 0 
                 ? `<tr><th>Coin Discount:</th><td><strong class="text-danger">-${window.firebaseHelpers.formatCurrency(discountApplied)} (${coinsUsed} Coins)</strong></td></tr>`
                 : '';
-
-
             const detailsHtml = `
                 <h5 class="mb-3">Order # ${orderId.substring(0, 8)} Details</h5>
                 <div class="alert alert-info d-flex justify-content-between">
                     <div><strong>Current Status:</strong> <span class="status-badge ${statusClass}">${statusText}</span></div>
                     <div><strong>Date Placed:</strong> ${window.firebaseHelpers.formatDateTime(order.createdAt)}</div>
                 </div>
-                
                 <h6 class="mt-4 text-primary">Customer & Pickup Information</h6>
                 <table class="table table-sm table-borderless">
                     <tr><th>Customer Name:</th><td>${order.customerName || 'N/A'}</td></tr>
@@ -3834,7 +2883,6 @@ async function viewOrderDetailsModal(orderId) {
                     <tr><th>Pickup Pincode:</th><td>${order.orderPincode || 'N/A'}</td></tr>
                     <tr><th>Notes:</th><td>${order.notes || 'None'}</td></tr>
                 </table>
-
                 <h6 class="mt-4 text-success">Equipment Details</h6>
                 <ul class="list-group mb-4">
                     ${order.items.map(item => `
@@ -3848,7 +2896,6 @@ async function viewOrderDetailsModal(orderId) {
                         </li>
                     `).join('')}
                 </ul>
-
                 <h6 class="mt-4 text-warning">Payment Summary</h6>
                 <table class="table table-sm table-borderless">
                     <tr><th>Subtotal:</th><td>${window.firebaseHelpers.formatCurrency(order.totalAmount + (order.discount || 0) - (order.platformFee || 0))}</td></tr>
@@ -3860,55 +2907,36 @@ async function viewOrderDetailsModal(orderId) {
                     <tr><th>Transaction ID:</th><td><small>${order.transactionId || 'N/A'}</small></td></tr>
                 </table>
             `;
-
-            // Update modal tracker and content area
             const trackerContainer = document.getElementById('order-tracker-container');
             if (trackerContainer) {
                 trackerContainer.innerHTML = createOrderTrackerHtml(order.status, false);
             }
-            
             const modalBodyContent = document.getElementById('order-details-content');
             if (modalBodyContent) modalBodyContent.innerHTML = detailsHtml;
-
-            // Update modal footer with dynamic button
             const modalFooter = modalElement.querySelector('.modal-footer');
             modalFooter.innerHTML = `<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>`;
-
-            // Only allow cancellation if order is pending
             if (order.status === 'pending') {
                 modalFooter.innerHTML += `
                     <button class="btn btn-danger" onclick="cancelOrder('${order.id}')">Cancel Order</button>
                 `;
             }
-            
-            // Ensure the main orders page list also reloads if status has changed
             loadOrdersPage();
-            // Also update the customer navbar count
             checkCustomerNotifications();
-
-
         }, error => {
-            console.error("Error listening to order document:", error);
             modalInstance.hide();
             window.firebaseHelpers.showAlert('Error listening for order updates.', 'danger');
         });
-        
-        // Stop listening when the modal is closed
         modalElement.addEventListener('hidden.bs.modal', function onModalHidden() {
             unsubscribe();
             modalElement.removeEventListener('hidden.bs.modal', onModalHidden);
         });
-
-
     } catch (error) {
-        console.error('Error viewing order details:', error);
         window.firebaseHelpers.showAlert('Error loading order details.', 'danger');
     }
 }
+window.viewOrderDetailsModal = viewOrderDetailsModal;
 
-// Function to cancel an order
 async function cancelOrder(orderId) {
-    // NOTE: Use custom modal instead of built-in confirm in production. Temporarily using custom modal setup.
     const modalHtml = `
         <div class="modal fade" id="confirm-cancel-modal" tabindex="-1">
             <div class="modal-dialog modal-dialog-centered">
@@ -3928,83 +2956,61 @@ async function cancelOrder(orderId) {
             </div>
         </div>
     `;
-    
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     const modalElement = document.getElementById('confirm-cancel-modal');
     const modalInstance = new bootstrap.Modal(modalElement);
     modalInstance.show();
-
     document.getElementById('confirm-cancellation-btn').onclick = async () => {
         modalInstance.hide();
         try {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             const orderRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders').doc(orderId);
-            
-            // Fetch current status to ensure only PENDING orders can be cancelled
             const orderDoc = await orderRef.get();
             if (!orderDoc.exists || orderDoc.data().status !== 'pending') {
                  window.firebaseHelpers.showAlert('Order cannot be cancelled. It is no longer pending.', 'danger');
                  return;
             }
-
             await orderRef.update({
                 status: 'cancelled',
                 cancellationRequestedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp() // Update timestamp to trigger seller notification
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             window.firebaseHelpers.showAlert('Cancellation requested. Status will be updated shortly.', 'success');
-            
-            // Close the details modal if it's open
             const detailsModal = bootstrap.Modal.getInstance(document.getElementById('orderDetailsModal'));
             if (detailsModal) detailsModal.hide();
-            
             loadOrdersPage();
         } catch (error) {
-            console.error('Error cancelling order:', error);
             window.firebaseHelpers.showAlert('Failed to cancel order. Please contact support.', 'danger');
         } finally {
-            // Remove the temporary modal element
             modalElement.remove();
         }
     };
 }
+window.cancelOrder = cancelOrder;
 
-// --- REVIEW SYSTEM FUNCTIONS (NEW) ---
-
-// Open Review Modal
 function openReviewModal(orderId, sellerIdString) {
     document.getElementById('review-order-id').value = orderId;
-    // sellerIds is a string in the order data (e.g., "uid1, uid2"). For simplicity, we rate the primary seller.
     const primarySellerId = sellerIdString.split(',')[0].trim();
     document.getElementById('review-seller-id').value = primarySellerId;
-    
-    // Reset form
     document.getElementById('review-form').reset();
-    
     const modal = new bootstrap.Modal(document.getElementById('reviewModal'));
     modal.show();
 }
+window.openReviewModal = openReviewModal;
 
-// Submit Review
 async function submitReview() {
     const orderId = document.getElementById('review-order-id').value;
     const sellerId = document.getElementById('review-seller-id').value;
-    
-    // Get ratings
     const sellerRating = document.querySelector('input[name="sellerRating"]:checked')?.value;
     const equipmentRating = document.querySelector('input[name="equipmentRating"]:checked')?.value;
     const experienceRating = document.querySelector('input[name="experienceRating"]:checked')?.value;
     const comment = document.getElementById('review-comment').value;
-
     if (!sellerRating || !equipmentRating || !experienceRating) {
         window.firebaseHelpers.showAlert('Please provide ratings for all categories.', 'warning');
         return;
     }
-
     try {
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        
-        // 1. Save Review
         const reviewData = {
             orderId: orderId,
             sellerId: sellerId,
@@ -4013,40 +3019,28 @@ async function submitReview() {
             sellerRating: parseInt(sellerRating),
             equipmentRating: parseInt(equipmentRating),
             experienceRating: parseInt(experienceRating),
-            // Calculate an average for general display purposes
             rating: Math.round((parseInt(sellerRating) + parseInt(equipmentRating) + parseInt(experienceRating)) / 3),
             comment: comment,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
-        
         await window.FirebaseDB.collection('reviews').add(reviewData);
-
-        // 2. Mark Order as Reviewed
         const orderRef = window.FirebaseDB.collection('artifacts').doc(appId)
             .collection('public').doc('data').collection('orders').doc(orderId);
-        
         await orderRef.update({
             isReviewed: true,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp() // Update timestamp
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-
-        // 3. Update Equipment Ratings (Iterate through items in the order)
         const orderDoc = await orderRef.get();
         const orderItems = orderDoc.data().items || [];
-        
         for (const item of orderItems) {
             if (item.id) {
                 const equipmentRef = window.FirebaseDB.collection('equipment').doc(item.id);
-                // We use a transaction or simple read-update for simplicity here
                 const equipDoc = await equipmentRef.get();
                 if (equipDoc.exists) {
-                    const currentRating = equipDoc.data().rating || 0; // Default 0
+                    const currentRating = equipDoc.data().rating || 0;
                     const reviewCount = equipDoc.data().reviewCount || 0;
-                    
                     const newCount = reviewCount + 1;
-                    // Calculate new running average
                     const newRating = ((currentRating * reviewCount) + parseInt(equipmentRating)) / newCount;
-                    
                     await equipmentRef.update({
                         rating: newRating,
                         reviewCount: newCount
@@ -4054,57 +3048,35 @@ async function submitReview() {
                 }
             }
         }
-
         window.firebaseHelpers.showAlert('Review submitted successfully!', 'success');
-        
-        // Close modal
         const modal = bootstrap.Modal.getInstance(document.getElementById('reviewModal'));
         if (modal) modal.hide();
-        
-        // Reload orders to update button state
         loadOrdersPage();
-
     } catch (error) {
-        console.error('Error submitting review:', error);
         window.firebaseHelpers.showAlert('Error submitting review. Please try again.', 'danger');
     }
 }
-
-// Make globally available
 window.submitReview = submitReview;
 
-// Helper function to create star rating HTML (Improved version)
 function getStarRatingHtml(rating) {
     const r = parseFloat(rating) || 0;
     const fullStars = Math.floor(r);
     const hasHalfStar = r % 1 >= 0.5;
-    
     let html = '<div class="star-display mb-2">';
-    
     for (let i = 1; i <= 5; i++) {
         if (i <= fullStars) {
             html += '<i class="fas fa-star filled"></i>';
         } else if (i === fullStars + 1 && hasHalfStar) {
             html += '<i class="fas fa-star-half-alt filled"></i>';
         } else {
-            // Empty star
             html += '<i class="fas fa-star empty"></i>'; 
         }
     }
-    
-    // Display text: shows actual rating if > 0, otherwise 'New'
     const text = r > 0 ? r.toFixed(1) : 'New';
     html += `<span class="text-muted ms-1 small">(${text})</span></div>`;
     return html;
 }
-// --- END REVIEW SYSTEM FUNCTIONS ---
 
-// --- CUSTOMER CHAT SYSTEM ---
-
-/**
- * NEW FUNCTION: Updates the visibility and count of the floating chat badge.
- * @param {number} count 
- */
 function updateChatBadgeCount(count) {
     const badge = document.getElementById('floating-chat-badge');
     if (badge) {
@@ -4117,51 +3089,33 @@ function updateChatBadgeCount(count) {
     }
 }
 
-/**
- * NEW FUNCTION: Sets up a real-time listener for ALL customer chats to track unread count.
- * This listener runs whenever the user is logged in.
- */
 function listenForUnreadChatMessages() {
     if (!window.currentUser || window.currentUser.role !== 'customer' || !window.FirebaseDB) {
         if (chatBadgeUnsubscribe) chatBadgeUnsubscribe();
         return;
     }
-    
-    // Stop any existing listener
     if (chatBadgeUnsubscribe) chatBadgeUnsubscribe();
-
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     const conversationsRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations');
-
-    const query = conversationsRef
-        .where('customerId', '==', window.currentUser.uid);
-
+    const query = conversationsRef.where('customerId', '==', window.currentUser.uid);
     chatBadgeUnsubscribe = query.onSnapshot(snapshot => {
         let totalUnread = 0;
         snapshot.forEach(doc => {
             const chat = doc.data();
             totalUnread += chat.unreadCountCustomer || 0;
         });
-        
-        // Update the floating badge
         updateChatBadgeCount(totalUnread);
-        
     }, error => {
-        console.error("Error listening for unread chat count:", error);
-        updateChatBadgeCount(0); // Clear badge on error
+        updateChatBadgeCount(0);
     });
 }
 
-
-// 1. Render Chat Widget HTML (Updated Layout)
 function renderChatWidget() {
     const container = document.getElementById('chat-widget-container');
     if (!container) return;
-
     container.innerHTML = `
         <div class="chat-btn-floating" onclick="toggleChatWindow()">
             <i class="fas fa-comments"></i>
-            <!-- NEW: Unread message badge -->
             <div id="floating-chat-badge" class="chat-badge" style="display:none;">0</div> 
         </div>
         <div class="chat-window hidden" id="customer-chat-window">
@@ -4176,27 +3130,21 @@ function renderChatWidget() {
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            
             <div class="chat-body" id="chat-body">
                 <div class="text-center text-muted mt-5">
                     <p>Login to view your chats</p>
                 </div>
             </div>
-
-            <!-- Quick Replies Container -->
             <div id="quick-replies-container" class="quick-replies" style="display:none;">
                 <span class="reply-chip" onclick="sendQuickReply('Is this available?')">Is this available?</span>
                 <span class="reply-chip" onclick="sendQuickReply('What is the final price?')">Price?</span>
                 <span class="reply-chip" onclick="sendQuickReply('Can I inspect it?')">Inspection?</span>
                 <span class="reply-chip" onclick="sendQuickReply('Please call me.')">Call me</span>
             </div>
-
             <div class="chat-footer hidden" id="chat-input-container">
-                <!-- Typing Indicator -->
                 <div id="customer-typing-indicator" class="typing-indicator" style="display:none; background:transparent; box-shadow:none; padding:0 0 5px 10px;">
                     <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>
                 </div>
-                
                 <div class="input-group">
                     <input type="text" class="form-control" id="chat-message-input" placeholder="Type a message...">
                     <button class="btn btn-primary" onclick="sendChatMessage()">
@@ -4206,13 +3154,11 @@ function renderChatWidget() {
             </div>
         </div>
     `;
-    
     if (window.currentUser) {
         loadUserConversations();
     }
 }
 
-// 2. Toggle Chat Window
 function toggleChatWindow() {
     const windowEl = document.getElementById('customer-chat-window');
     if (windowEl) {
@@ -4220,61 +3166,47 @@ function toggleChatWindow() {
         if (!windowEl.classList.contains('hidden') && window.currentUser && !activeChatId) {
             loadUserConversations();
         }
-        
-        // Hide the floating badge when the full window is opened
         if (!windowEl.classList.contains('hidden')) {
-             updateChatBadgeCount(0); // Optimistically hide, actual unread count is handled inside loadChatMessages
+             updateChatBadgeCount(0);
         }
     }
 }
+window.toggleChatWindow = toggleChatWindow;
 
-// 3. Load User Conversations (List View)
 async function loadUserConversations() {
     const body = document.getElementById('chat-body');
     const inputContainer = document.getElementById('chat-input-container');
     const quickReplies = document.getElementById('quick-replies-container');
     const title = document.getElementById('chat-header-title');
     const statusDiv = document.getElementById('chat-header-status');
-    
     if (!body) return;
-    
     activeChatId = null;
     if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
-    
     inputContainer.classList.add('hidden');
     if (quickReplies) quickReplies.style.display = 'none';
     if (statusDiv) statusDiv.style.display = 'none';
     title.textContent = 'My Chats';
-    
     if (!window.currentUser) {
         body.innerHTML = '<div class="text-center text-muted mt-5"><p>Please login to chat.</p></div>';
         return;
     }
-
     body.innerHTML = '<div class="text-center mt-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
-
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     const conversationsRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations');
-    
     try {
         const snapshot = await conversationsRef
             .where('customerId', '==', window.currentUser.uid)
             .orderBy('updatedAt', 'desc')
             .get();
-
         body.innerHTML = '';
-
         if (snapshot.empty) {
             body.innerHTML = '<div class="text-center text-muted mt-5"><p>No active chats.<br>Go to Orders to start one.</p></div>';
             return;
         }
-
         snapshot.forEach(doc => {
             const chat = doc.data();
             const time = chat.updatedAt ? window.firebaseHelpers.formatTimeAgo(chat.updatedAt) : '';
             const unread = chat.unreadCountCustomer > 0 ? `<span class="badge bg-danger rounded-pill">${chat.unreadCountCustomer}</span>` : '';
-            
-            // Professional List Item
             body.innerHTML += `
                 <div class="p-3 border-bottom bg-white hover-bg-light cursor-pointer" onclick="loadChatMessages('${doc.id}', '${chat.sellerBusinessName}', '${chat.sellerId}')" style="cursor:pointer;">
                     <div class="d-flex justify-content-between align-items-center mb-1">
@@ -4289,15 +3221,13 @@ async function loadUserConversations() {
             `;
         });
     } catch (error) {
-        console.error("Error loading chats:", error);
         body.innerHTML = '<div class="text-center text-danger mt-3">Error loading chats.</div>';
     }
 }
+window.loadUserConversations = loadUserConversations;
 
-// 4. Load Messages for a Chat ID (Updated with status indicators)
 async function loadChatMessages(chatId, titleName, sellerId) {
     activeChatId = chatId;
-    
     const body = document.getElementById('chat-body');
     const inputContainer = document.getElementById('chat-input-container');
     const quickReplies = document.getElementById('quick-replies-container');
@@ -4305,27 +3235,19 @@ async function loadChatMessages(chatId, titleName, sellerId) {
     const statusDiv = document.getElementById('chat-header-status');
     const statusText = document.getElementById('status-text');
     const statusDot = statusDiv.querySelector('.status-dot');
-
-    // Setup Header
     title.innerHTML = `<button class="btn btn-sm text-white p-0 me-2" onclick="loadUserConversations()"><i class="fas fa-arrow-left"></i></button> ${titleName}`;
     inputContainer.classList.remove('hidden');
     if (quickReplies) quickReplies.style.display = 'flex';
     if (statusDiv) statusDiv.style.display = 'flex';
-    
     body.innerHTML = '<div class="text-center mt-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
-
-    // 1. Fetch Seller Status (Online/Offline)
     if (sellerId) {
         window.FirebaseDB.collection('users').doc(sellerId).onSnapshot(doc => {
             const seller = doc.data();
             const isOnline = seller && seller.isOnline;
             if (statusText) statusText.textContent = isOnline ? 'Online' : 'Offline';
             if (statusDot) statusDot.className = `status-dot ${isOnline ? 'online' : 'offline'}`;
-            
-            // Show Custom Status Message if Offline
             const customMsgId = 'custom-status-msg';
             const existingMsg = document.getElementById(customMsgId);
-            
             if (!isOnline && !existingMsg && body) {
                 const msg = document.createElement('div');
                 msg.id = customMsgId;
@@ -4337,19 +3259,13 @@ async function loadChatMessages(chatId, titleName, sellerId) {
             }
         });
     }
-
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     const chatDocRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations').doc(chatId);
     const messagesRef = chatDocRef.collection('messages');
-
     if (chatUnsubscribe) chatUnsubscribe();
-
     chatUnsubscribe = messagesRef.orderBy('timestamp', 'asc').onSnapshot(snapshot => {
         if (!body) return;
-        
         body.innerHTML = '';
-        
-        // Welcome Message if empty
         if (snapshot.empty) {
             body.innerHTML = `
                 <div class="system-message mt-4">
@@ -4361,7 +3277,6 @@ async function loadChatMessages(chatId, titleName, sellerId) {
                 const msg = doc.data();
                 const isMe = msg.senderId === window.currentUser.uid;
                 const date = msg.timestamp ? msg.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
-                
                 body.innerHTML += `
                     <div style="display: flex; justify-content: ${isMe ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
                         <div class="message-bubble ${isMe ? 'message-sent' : 'message-received'}">
@@ -4373,14 +3288,9 @@ async function loadChatMessages(chatId, titleName, sellerId) {
             });
             body.scrollTop = body.scrollHeight;
         }
-        
-        // Mark read
         chatDocRef.update({ unreadCountCustomer: 0 });
-        // After reading messages, manually trigger notification check to clear badge
         checkCustomerNotifications();
     });
-
-    // Listen for Typing
     chatDocRef.onSnapshot(doc => {
         const data = doc.data();
         const indicator = document.getElementById('customer-typing-indicator');
@@ -4391,8 +3301,6 @@ async function loadChatMessages(chatId, titleName, sellerId) {
             indicator.style.display = 'none';
         }
     });
-
-    // Handle Typing Input
     const input = document.getElementById('chat-message-input');
     if (input) {
         input.oninput = () => {
@@ -4402,30 +3310,23 @@ async function loadChatMessages(chatId, titleName, sellerId) {
                 chatDocRef.set({ typing: { customer: false } }, { merge: true });
             }, 2000);
         };
-        
         input.onkeypress = (e) => { 
             if (e.key === 'Enter') sendChatMessage(); 
         };
     }
 }
+window.loadChatMessages = loadChatMessages;
 
-// 5. Open Chat for a specific Order (Called from Orders Page - Updated)
 async function openOrderChat(orderId, sellerId, businessName) {
     if (!window.currentUser) {
         window.firebaseHelpers.showAlert('Please login to chat.', 'warning');
         return;
     }
-
-    // Toggle chat window open
     const windowEl = document.getElementById('customer-chat-window');
     if (windowEl) windowEl.classList.remove('hidden');
-
     const chatId = `${orderId}_${sellerId}_${window.currentUser.uid}`;
-    
-    // Check if chat exists, if not create it
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     const chatRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations').doc(chatId);
-    
     const doc = await chatRef.get();
     if (!doc.exists) {
         await chatRef.set({
@@ -4437,16 +3338,13 @@ async function openOrderChat(orderId, sellerId, businessName) {
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             unreadCountCustomer: 0,
-            unreadCountSeller: 1 // New chat alert for seller
+            unreadCountSeller: 1
         });
     }
-
     loadChatMessages(chatId, businessName, sellerId);
 }
-// Make globally available
 window.openOrderChat = openOrderChat;
 
-// 6. Send Quick Reply
 function sendQuickReply(text) {
     const input = document.getElementById('chat-message-input');
     if (input) {
@@ -4454,57 +3352,33 @@ function sendQuickReply(text) {
         sendChatMessage();
     }
 }
+window.sendQuickReply = sendQuickReply;
 
-// 7. Send Message (Updated)
 async function sendChatMessage() {
     const input = document.getElementById('chat-message-input');
     if (!input) return;
-    
     const text = input.value.trim();
     if (!text || !activeChatId || !window.currentUser) return;
-    
     input.value = '';
-    
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     const chatRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations').doc(activeChatId);
-    
     try {
         clearTimeout(typingTimeout);
         await chatRef.set({ typing: { customer: false } }, { merge: true });
-
         await chatRef.collection('messages').add({
             senderId: window.currentUser.uid,
             text: text,
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
-        
         await chatRef.update({
             lastMessage: text,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             unreadCountSeller: firebase.firestore.FieldValue.increment(1)
         });
-    } catch (error) {
-        console.error("Error sending message:", error);
-    }
+    } catch (error) {}
 }
-
-// Make chat functions globally available
-window.toggleChatWindow = toggleChatWindow;
-window.sendQuickReply = sendQuickReply;
 window.sendChatMessage = sendChatMessage;
-window.loadUserConversations = loadUserConversations;
-window.loadChatMessages = loadChatMessages;
 
-// Add enter key listener for chat input
-document.addEventListener('keypress', function (e) {
-    if (e.key === 'Enter' && document.getElementById('chat-message-input') === document.activeElement) {
-        sendChatMessage();
-    }
-});
-
-// --- END CUSTOMER CHAT SYSTEM ---
-
-// Update cart count when script loads
 async function updateCartCount() { 
     const cart = await getCartFromFirestore(); 
     const cartCountElement = document.getElementById('cart-count');
@@ -4512,76 +3386,48 @@ async function updateCartCount() {
         cartCountElement.textContent = cart.length;
     }
 }
-// Load Razorpay SDK dynamically if not already present
+window.updateCartCount = updateCartCount;
+
 if (typeof Razorpay === 'undefined') {
     const script = document.createElement('script');
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
     document.head.appendChild(script);
 }
 
-// *******************************************************************
-// ************ START: PAYMENT BUTTON UI FIX ***************************
-// *******************************************************************
-
-/**
- * NEW GLOBAL FUNCTION: Updates the Pay Now button text and styling based on the selected
- * payment method and the final calculated total.
- * * This resolves the conflict where direct manipulation of innerHTML inside 
- * displayCheckoutSummary conflicted with the HTML structure and local scripts.
- * * @param {number} totalAmount - The final discounted total amount to be paid.
- */
 window.updatePaymentButtonUI = function(totalAmount) {
     const paymentSelect = document.getElementById('payment-method-select');
     const payBtn = document.getElementById('pay-now-btn');
     const paymentWarning = document.getElementById('payment-warning');
-    
     if (!paymentSelect || !payBtn) return;
-
     const method = paymentSelect.value;
     const formattedAmount = window.firebaseHelpers.formatCurrency(totalAmount);
-
     if (method === 'test_cop') {
-        // Option 1: Cash On Pickup (Test/Simulation ONLY)
         payBtn.innerHTML = `<i class="fas fa-truck-loading me-2"></i> Confirm Rental (No Upfront Payment)`;
         payBtn.classList.remove('btn-primary');
         payBtn.classList.add('btn-warning');
-        
         if(paymentWarning) {
             paymentWarning.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i> **TEST MODE:** This option simulates order placement with **No Upfront Payment**. Order status will be **Pending** for seller review.';
             paymentWarning.classList.remove('alert-info');
             paymentWarning.classList.add('alert-danger');
         }
-    } else { // razorpay
-        // Option 2: Razorpay (Recommended)
-        // Ensure the original HTML structure is restored with the CORRECT amount
+    } else {
         payBtn.innerHTML = `<i class="fas fa-money-check-alt me-2"></i>Pay <span id="pay-button-amount">${formattedAmount}</span> Now`;
-
         payBtn.classList.remove('btn-warning');
         payBtn.classList.add('btn-primary');
-        
         if(paymentWarning) {
             paymentWarning.innerHTML = '<i class="fas fa-lock me-1"></i> Secure payments via Razorpay. Full payment confirms the rental booking.';
             paymentWarning.classList.remove('alert-danger');
             paymentWarning.classList.add('alert-info');
         }
     }
-    
-    // Disable button if total is 0 or less (though Math.max(1, total) should prevent this)
     payBtn.disabled = totalAmount < 1; 
 }
 
-
-// NEW: Function to handle coin application/calculation (FIXED LOGIC)
 window.applyCoinDiscount = function() {
     const coinInput = document.getElementById('coins-to-apply');
     const warningText = document.getElementById('coin-warning-text');
-    
     if (!coinInput) return;
-    
-    // Get requested coins
     let requestedCoins = parseInt(coinInput.value) || 0;
-    
-    // Get cart from context or global state
     const cart = window.razorpayContext?.items || [];
     if (cart.length === 0) {
         warningText.textContent = "Cart is empty. Please add items first.";
@@ -4589,17 +3435,12 @@ window.applyCoinDiscount = function() {
         warningText.classList.add('text-danger');
         return;
     }
-    
-    // Calculate subtotal
     let subtotal = 0;
     cart.forEach(item => {
         subtotal += Number(item.price) || 0;
     });
-    
-    // Calculate limits
     const maxDiscountAllowed = Math.floor(subtotal * 0.5);
     let appliedCoins = 0;
-    
     if (requestedCoins < 0) {
         appliedCoins = 0;
         warningText.textContent = `Coins cannot be negative.`;
@@ -4621,22 +3462,13 @@ window.applyCoinDiscount = function() {
         warningText.classList.remove('text-muted', 'text-danger', 'text-warning');
         warningText.classList.add('text-success');
     }
-    
-    // Update global state
     coinsToApply = appliedCoins; 
     coinInput.value = appliedCoins; 
-
-    // Re-run checkout summary calculation
     displayCheckoutSummary(cart);
 }
-// *******************************************************************
-// ************ END: PAYMENT BUTTON UI FIX *****************************
-// *******************************************************************
 
-// NEW: Function to generate referral link
 window.getReferralLink = function(code) {
     if (!code) return "Code not available.";
     const baseUrl = window.location.origin;
-    // Base URL is index.html. We link to signup with the code.
     return `${baseUrl}/farmrent/auth.html?role=customer&ref=${code}`;
 }
