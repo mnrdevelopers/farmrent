@@ -77,7 +77,7 @@ window.loadSellerDashboard = async () => {
         return;
     }
     
-    // Update UI
+   // Update UI
     updateSellerInfo();
     setupOnlineStatusToggle(); // NEW: Online status toggle
     
@@ -544,7 +544,7 @@ async function calculateSellerStats() {
         
         const totalEquipment = equipmentSnapshot.size;
         
-        // Orders
+         // Orders
         const ordersCollectionRef = getPublicCollectionRef('orders');
         const ordersSnapshot = await ordersCollectionRef.get(); 
         
@@ -560,7 +560,7 @@ async function calculateSellerStats() {
         relevantOrders.forEach(orderDoc => {
             const order = orderDoc.data();
             if ((order.status === 'completed' || order.status === 'returned')) {
-                totalEarnings += order.totalAmount || 0;
+                totalEarnings += order.sellerNetEarnings || 0; // Use net earnings for seller's total
             }
         });
         
@@ -1629,7 +1629,8 @@ async function loadEarningsData() {
             const year = orderDate.getFullYear();
             
             if (order.sellerIds && order.sellerIds.includes(window.currentUser.uid) && (order.status === 'completed' || order.status === 'returned')) {
-                 const amount = order.totalAmount || 0; 
+                 // Use NET PAYOUT DUE (sellerNetEarnings) for charts and monthly summary
+                 const amount = order.sellerNetEarnings || 0; 
                 
                 if (year === currentYear) {
                     const month = orderDate.getMonth();
@@ -1651,7 +1652,7 @@ async function loadEarningsData() {
 
                 // Use subtotalAmount, platformCommissionAmount, and sellerNetEarnings
                 const rentalValue = order.subtotalAmount || 0;
-                const platformCut = order.platformCommissionAmount || 0;
+                const platformCut = order.platformCommissionAmount || 0; // This should be 0 based on new logic
                 const netPayout = order.sellerNetEarnings || 0;
 
                 settlementRows.push(`
