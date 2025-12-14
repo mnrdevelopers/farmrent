@@ -461,3 +461,27 @@ body {
         overflow-x: auto;
     }
 }
+
+/* Only settlement tabs */
+.settlement-tabs .nav-link {
+    background-color: #0d2b5b;
+    color: #ffffff;
+    border: none;
+    margin-right: 6px;
+}
+
+.settlement-tabs .nav-link.active {
+    background-color: #123a7a;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.settlement-tabs .nav-link:hover {
+    background-color: #174a9c;
+    color: #ffffff;
+}
+
+.settlement-tabs .nav-link i {
+    color: #ffffff;
+}
+
