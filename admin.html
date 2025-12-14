@@ -521,7 +521,7 @@
             </div>
         </div>
 
-         <!-- Settlements Management Section -->
+        <!-- Settlements Management Section -->
         <div class="section" id="settlements-section" style="display: none;">
             <div class="page-header">
                 <h1>Payment Settlements</h1>
@@ -561,29 +561,76 @@
             <div class="row">
                 <div class="col-12">
                     <div class="table-container">
-                        <h5 class="mb-3">Unsettled Completed Orders (Seller Payout)</h5>
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Order ID</th>
-                                        <th>Seller</th>
-                                        <th>Rental Amount</th>
-                                        <th>Platform Cut</th>
-                                        <th>Seller Payout Due</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="settlements-table">
-                                    <tr>
-                                        <td colspan="7" class="text-center py-4">
-                                            <div class="spinner-border spinner-border-sm text-primary"></div>
-                                            <p class="mt-2 mb-0">Loading settlements...</p>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                        <!-- Settlement Tabs -->
+                        <ul class="nav nav-tabs mb-3">
+                            <li class="nav-item">
+                                <a class="nav-link active" id="unsettled-tab" data-bs-toggle="tab" href="#unsettled-content" role="tab" onclick="displaySettlementData('unsettled')">
+                                    <i class="fas fa-clock me-1"></i> Pending Payments
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" id="settled-tab" data-bs-toggle="tab" href="#settled-content" role="tab" onclick="displaySettlementData('settled')">
+                                    <i class="fas fa-history me-1"></i> Settled History
+                                </a>
+                            </li>
+                        </ul>
+                        
+                        <div class="tab-content">
+                            <!-- Pending Settlements Table (Default View) -->
+                            <div class="tab-pane fade show active" id="unsettled-content" role="tabpanel">
+                                <h5 class="mb-3">Unsettled Completed Orders (Action Required)</h5>
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Order ID</th>
+                                                <th>Seller</th>
+                                                <th>Rental Amount</th>
+                                                <th>Platform Cut</th>
+                                                <th>Seller Payout Due</th>
+                                                <th>Status</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="settlements-table">
+                                            <tr>
+                                                <td colspan="7" class="text-center py-4">
+                                                    <div class="spinner-border spinner-border-sm text-primary"></div>
+                                                    <p class="mt-2 mb-0">Loading pending settlements...</p>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <!-- Settled History Table (New View) -->
+                            <div class="tab-pane fade" id="settled-content" role="tabpanel">
+                                <h5 class="mb-3">Completed and Settled Orders (For Tracking)</h5>
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Order ID</th>
+                                                <th>Seller</th>
+                                                <th>Net Payout</th>
+                                                <th>Settled On</th>
+                                                <th>Transaction ID</th>
+                                                <th>Status</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="settled-history-table">
+                                            <tr>
+                                                <td colspan="7" class="text-center py-4">
+                                                    <div class="spinner-border spinner-border-sm text-primary"></div>
+                                                    <p class="mt-2 mb-0">Loading settled history...</p>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
