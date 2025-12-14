@@ -3,7 +3,7 @@ let allEquipmentData = [];
 let selectedEquipment = {};
 let isAuthInitialized = false;
 let platformFeeRate = 0.05; 
-let sellerCommissionRate = 0.0; 
+const SELLER_COMMISSION_RATE = 0.00; // Hardcoded to 0% based on customer pick up
 let customerPincode = null;
 let availableCoins = 0;
 let coinsToApply = 0; 
@@ -150,7 +150,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// UPDATED: Renamed function to reflect that it gets all platform financial settings
+// UPDATED: Function to reflect that it only gets the Platform Fee Rate now.
 async function getPlatformFinancialSettings() {
     try {
         if (!window.FirebaseDB) {
@@ -169,7 +169,6 @@ async function getPlatformFinancialSettings() {
         }
         if (!window.FirebaseDB) {
             platformFeeRate = 0.05;
-            sellerCommissionRate = 0.15; // NEW Default
             return;
         }
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -179,16 +178,13 @@ async function getPlatformFinancialSettings() {
         if (doc.exists) {
             const data = doc.data();
             // platformFee is charged to the customer (already in use)
-            platformFeeRate = (data.platformFee / 100) || 0.05;
-            // NEW: sellerCommission is the platform's cut from the rental subtotal.
-            sellerCommissionRate = (data.sellerCommission / 100) || 0.15;
+            // Seller commission is intentionally excluded/set to 0% as per user request.
+            platformFeeRate = (data.platformFee / 100) || 0.05; 
         } else {
             platformFeeRate = 0.05;
-            sellerCommissionRate = 0.15;
         }
     } catch (error) {
         platformFeeRate = 0.05;
-        sellerCommissionRate = 0.15;
     }
 }
 
@@ -491,7 +487,7 @@ async function updateCartForNewPincode() {
                         <p>Are you sure you want to clear your cart? This action is permanent and will allow you to shop in your new location.</p>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                         <button type="button" class="btn btn-danger" id="confirm-clear-cart-btn">Clear Cart</button>
                     </div>
                 </div>
@@ -2463,7 +2459,7 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, disco
     });
 
     // Settlement Calculations
-    const platformCutRate = sellerCommissionRate; // Seller commission rate from settings (e.g., 0.15)
+    const platformCutRate = SELLER_COMMISSION_RATE; // Hardcoded to 0% as per user request
     const platformCommissionAmount = subtotal * platformCutRate;
     const sellerNetEarnings = subtotal - platformCommissionAmount; // Amount seller is DUE from platform
 
@@ -2487,8 +2483,8 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, disco
             // Financial Breakdown for Settlement
             subtotalAmount: subtotal, // Total rental cost (100%)
             platformCommissionRate: platformCutRate,
-            platformCommissionAmount: platformCommissionAmount, // Platform's cut
-            sellerNetEarnings: sellerNetEarnings, // Amount seller is DUE from platform
+            platformCommissionAmount: platformCommissionAmount, // Platform's cut (Should be 0)
+            sellerNetEarnings: sellerNetEarnings, // Amount seller is DUE from platform (Should equal subtotal)
             
             // Settlement Status (Initial)
             settlementStatus: 'unsettled', // 'unsettled', 'settled'
