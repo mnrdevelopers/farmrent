@@ -44,6 +44,9 @@
             <a class="nav-link" href="#" onclick="showSection('orders')">
                 <i class="fas fa-shopping-cart"></i> Orders
             </a>
+            <a class="nav-link" href="#" onclick="showSection('settlements')">
+                <i class="fas fa-handshake"></i> Settlements
+            </a>
             <a class="nav-link" href="#" onclick="showSection('reports')">
                 <i class="fas fa-chart-bar"></i> Reports & Analytics
             </a>
@@ -505,6 +508,75 @@
                                         <td colspan="8" class="text-center py-4">
                                             <div class="spinner-border spinner-border-sm text-primary"></div>
                                             <p class="mt-2 mb-0">Loading orders...</p>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+         <!-- Settlements Management Section -->
+        <div class="section" id="settlements-section" style="display: none;">
+            <div class="page-header">
+                <h1>Payment Settlements</h1>
+                <p class="text-muted">Manage payments due to sellers for completed orders</p>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-xl-4 col-md-6 mb-4">
+                    <div class="dashboard-card card-earnings">
+                        <div class="card-icon">
+                            <i class="fas fa-hourglass-half"></i>
+                        </div>
+                        <h3 class="card-value" id="pending-settlements-amount">₹0</h3>
+                        <p class="card-label">Total Pending Settlement</p>
+                    </div>
+                </div>
+                <div class="col-xl-4 col-md-6 mb-4">
+                    <div class="dashboard-card card-orders">
+                        <div class="card-icon">
+                            <i class="fas fa-check-double"></i>
+                        </div>
+                        <h3 class="card-value" id="settled-count">0</h3>
+                        <p class="card-label">Orders Settled (Total)</p>
+                    </div>
+                </div>
+                <div class="col-xl-4 col-md-6 mb-4">
+                    <div class="dashboard-card card-equipment">
+                        <div class="card-icon">
+                            <i class="fas fa-clipboard-list"></i>
+                        </div>
+                        <h3 class="card-value" id="unsettled-count">0</h3>
+                        <p class="card-label">Orders Pending Settlement</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-12">
+                    <div class="table-container">
+                        <h5 class="mb-3">Unsettled Completed Orders (Seller Payout)</h5>
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Order ID</th>
+                                        <th>Seller</th>
+                                        <th>Rental Amount</th>
+                                        <th>Platform Cut</th>
+                                        <th>Seller Payout Due</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="settlements-table">
+                                    <tr>
+                                        <td colspan="7" class="text-center py-4">
+                                            <div class="spinner-border spinner-border-sm text-primary"></div>
+                                            <p class="mt-2 mb-0">Loading settlements...</p>
                                         </td>
                                     </tr>
                                 </tbody>
