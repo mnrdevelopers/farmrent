@@ -68,33 +68,35 @@ window.loadSellerDashboard = async () => {
         window.location.href = 'seller-pending.html';
         return;
     }
+    
+    // Load static UI components and check profile completion
+    updateSellerInfo();
+    setupOnlineStatusToggle(); 
+    loadLibraryImages(); 
 
-    // Check profile completion
+    // Check profile completion (blocking if necessary)
     if (!sellerData.pincode || !sellerData.businessName || !sellerData.address) {
         window.firebaseHelpers.showAlert('Please complete your profile (Pincode, Business Name, Address) before listing equipment.', 'warning');
+        // Show profile section, but ensure other steps run
         showSection('profile');
         if (loadingEl) loadingEl.classList.remove('active');
         return;
     }
     
-   // Update UI
-    updateSellerInfo();
-    setupOnlineStatusToggle(); // NEW: Online status toggle
-    
-    // Load data
+    // Load required data
     await loadDismissedAlerts();
-    loadDashboardData();
-    loadProfileData();
-    
+    // loadDashboardData is called implicitly by showSection('dashboard') if no hash is present
+
     if (loadingEl) loadingEl.classList.remove('active');
     
     // FIX: Read URL hash on load and show the correct section, defaulting to 'dashboard'
+    // This logic ensures page reloads maintain the current tab.
     const hash = window.location.hash.substring(1);
     const validSections = ['dashboard', 'equipment', 'orders', 'add-equipment', 'earnings', 'notifications', 'reviews', 'profile'];
     const initialSection = validSections.includes(hash) ? hash : 'dashboard';
 
+    // Show the initial section, which triggers the corresponding data load function
     showSection(initialSection);
-    loadLibraryImages(); // Load image library
 }
 
 // --- ONLINE STATUS MANAGEMENT ---
