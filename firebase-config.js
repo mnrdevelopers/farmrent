@@ -33,7 +33,10 @@ try {
             "razorpay_key_id": "", 
             "post_office_api_url": "",
             "fast2sms_api_key": "",
-            "geoapify_api_key": "" // NEW: Geoapify API Key
+            "geoapify_api_key": "", // NEW: Geoapify API Key
+            // NEW ADMIN CONFIG KEYS: Set a known login for the admin role
+            "admin_login_email": "admin@farmrent.com", 
+            "admin_login_password": "AdminPassword123" 
         };
         
         // Fetch and activate the configuration values
@@ -242,6 +245,34 @@ window.firebaseHelpers = {
         } catch (error) {
             console.error("Error retrieving Fast2SMS API Key:", error);
             return ""; 
+        }
+    },
+
+    /**
+     * NEW: Fetches the Admin Login Credentials from Firebase Remote Config.
+     * @returns {Promise<{email: string, password: string}>} The Admin credentials.
+     */
+    getAdminCredentials: async () => {
+        if (!remoteConfig) {
+            console.warn('Remote Config not available for Admin key.');
+            return { 
+                email: firebase.remoteConfig().defaultConfig.admin_login_email, 
+                password: firebase.remoteConfig().defaultConfig.admin_login_password 
+            }; 
+        }
+        try {
+            // Fetch and activate to ensure the latest values are available before reading
+            await remoteConfig.fetchAndActivate(); 
+            const email = remoteConfig.getString('admin_login_email');
+            const password = remoteConfig.getString('admin_login_password');
+            return { email, password };
+        } catch (error) {
+            console.error("Error retrieving Admin Credentials:", error);
+            // Fallback to default if RC fails
+            return { 
+                email: remoteConfig.defaultConfig.admin_login_email, 
+                password: remoteConfig.defaultConfig.admin_login_password 
+            };
         }
     },
     
