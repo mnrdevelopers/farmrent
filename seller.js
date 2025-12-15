@@ -6,6 +6,11 @@ let earningsChart = null;
 let detailedEarningsChart = null;
 let sellerNotifications = [];
 
+// NEW: Earnings specific global variables
+let allCompletedOrders = []; // Full list of completed/returned orders for the seller
+let totalSettledAmount = 0;
+let totalWalletBalance = 0;
+
 // Chat Globals
 let sellerActiveChatId = null;
 let sellerChatUnsubscribe = null;
@@ -285,6 +290,9 @@ async function loadDashboardData() {
     try {
         if (!window.currentUser) return;
         
+        // NEW: Load all relevant order data once for earnings and wallet calculations
+        await loadAllSellerOrders(); 
+
         const [stats, notificationData] = await Promise.all([
             calculateSellerStats(),
             calculateSellerNotifications()
@@ -595,25 +603,28 @@ async function calculateSellerStats() {
         
         const totalEquipment = equipmentSnapshot.size;
         
-         // Orders
-        const ordersCollectionRef = getPublicCollectionRef('orders');
-        const ordersSnapshot = await ordersCollectionRef.get(); 
+        // Orders (Use the globally loaded completed orders)
+        const totalOrders = allCompletedOrders.length;
         
-        const relevantOrders = ordersSnapshot.docs.filter(doc => {
-             const order = doc.data();
-             return order.sellerIds && order.sellerIds.includes(window.currentUser.uid); 
-        });
-        
-        const totalOrders = relevantOrders.length;
-        
-        // Earnings
+        // Earnings (Calculated from pre-loaded data)
         let totalEarnings = 0;
-        relevantOrders.forEach(orderDoc => {
-            const order = orderDoc.data();
-            if ((order.status === 'completed' || order.status === 'returned')) {
-                totalEarnings += order.sellerNetEarnings || 0; // Use net earnings for seller's total
+        let totalSettled = 0;
+        let walletBalance = 0;
+
+        allCompletedOrders.forEach(order => {
+            const amount = order.sellerNetEarnings || 0; 
+            totalEarnings += amount; // Lifetime payout due
+            
+            if (order.settlementStatus === 'settled') {
+                totalSettled += order.settledAmount || amount;
+            } else {
+                walletBalance += amount;
             }
         });
+
+        // Update global variables
+        totalSettledAmount = totalSettled;
+        totalWalletBalance = walletBalance;
         
         // Rating
         const reviewsSnapshot = await window.FirebaseDB.collection('reviews')
@@ -640,6 +651,25 @@ async function calculateSellerStats() {
     }
 }
 
+// --- ALL SELLER ORDERS (Completed/Returned) ---
+async function loadAllSellerOrders() {
+    if (!window.currentUser) return;
+    
+    try {
+        const ordersCollectionRef = getPublicCollectionRef('orders');
+        const ordersSnapshot = await ordersCollectionRef
+            .where('sellerIds', 'array-contains', window.currentUser.uid)
+            .where('status', 'in', ['completed', 'returned'])
+            .get();
+        
+        allCompletedOrders = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    } catch (error) {
+        console.error('Error loading all seller orders:', error);
+        allCompletedOrders = []; // Ensure it's empty on failure
+    }
+}
+
 // --- RECENT ORDERS ---
 async function loadRecentOrders() {
     if (!window.currentUser) return;
@@ -648,8 +678,9 @@ async function loadRecentOrders() {
         const ordersCollectionRef = getPublicCollectionRef('orders');
         
         const ordersSnapshot = await ordersCollectionRef
+            .where('sellerIds', 'array-contains', window.currentUser.uid)
             .orderBy('createdAt', 'desc')
-            .limit(10)
+            .limit(10) // Limit to recent 10 overall for efficiency
             .get();
         
         const ordersTable = document.getElementById('recent-orders-table');
@@ -661,13 +692,14 @@ async function loadRecentOrders() {
         
         ordersSnapshot.forEach(doc => {
             const order = { id: doc.id, ...doc.data() };
+            // Filter to include ALL relevant statuses for the dashboard recent list
             if (order.sellerIds && order.sellerIds.includes(window.currentUser.uid)) {
                 ordersData.push(order);
                 recentOrders.push(order);
             }
         });
 
-        recentOrders = recentOrders.slice(0, 5);
+        recentOrders = recentOrders.slice(0, 5); // Display top 5 in dashboard
         
         if (recentOrders.length === 0) {
             ordersTable.innerHTML = `
@@ -772,7 +804,7 @@ function initializeEarningsChart() {
                     }
                 }
             }
-        }  // <-- This was the missing closing brace for the 'options' object
+        }
     });
 }
 
@@ -1739,20 +1771,17 @@ async function loadEarningsData() {
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
         
-        const ordersCollectionRef = getPublicCollectionRef('orders');
-        const ordersSnapshot = await ordersCollectionRef.get(); 
+        // Ensure all relevant orders are loaded for calculation
+        await loadAllSellerOrders(); 
+        
+        // Calculate stats again to update globals (totalWalletBalance, totalSettledAmount)
+        await calculateSellerStats(); 
         
         let thisMonthEarnings = 0;
         let lastMonthEarnings = 0;
         const monthlyEarnings = new Array(12).fill(0);
         
-        const settlementTable = document.getElementById('settlement-history-table');
-        if (settlementTable) settlementTable.innerHTML = '';
-        
-        let settlementRows = []; // NEW: Array to hold settlement rows
-
-        ordersSnapshot.forEach(doc => {
-            const order = doc.data();
+        allCompletedOrders.forEach(order => {
             const orderDate = order.createdAt ? order.createdAt.toDate() : new Date();
             const year = orderDate.getFullYear();
             
@@ -1771,34 +1800,14 @@ async function loadEarningsData() {
                     }
                 }
             }
-            
-            // NEW: Populate Settlement History (includes unsettled for tracking)
-            if (order.sellerIds && order.sellerIds.includes(window.currentUser.uid) && (order.status === 'completed' || order.status === 'returned')) {
-                const settlementStatus = order.settlementStatus || 'unsettled';
-                const settledAtDate = order.settledAt ? window.firebaseHelpers.formatDate(order.settledAt) : 'N/A';
-                // Adjust Status Text for tracking history
-                const statusText = settlementStatus === 'settled' ? 'Settled (Paid)' : 'Unsettled (Due)';
-                const statusClass = settlementStatus === 'settled' ? 'status-completed' : 'status-pending';
-
-                // Use subtotalAmount, platformCommissionAmount, and sellerNetEarnings
-                const rentalValue = order.subtotalAmount || 0;
-                const platformCut = order.platformCommissionAmount || 0;
-                const netPayout = order.sellerNetEarnings || 0;
-
-                settlementRows.push(`
-                    <tr>
-                        <td>#${doc.id.substring(0, 8)}</td>
-                        <td>${window.firebaseHelpers.formatCurrency(rentalValue)}</td>
-                        <td>-${window.firebaseHelpers.formatCurrency(platformCut)}</td>
-                        <td><strong>${window.firebaseHelpers.formatCurrency(netPayout)}</strong></td>
-                        <td>${settledAtDate}</td>
-                        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                    </tr>
-                `);
-            }
         });
         
-        // Update UI
+        // Update Wallet UI
+        document.getElementById('wallet-balance').textContent = window.firebaseHelpers.formatCurrency(totalWalletBalance);
+        document.getElementById('settled-amount').textContent = window.firebaseHelpers.formatCurrency(totalSettledAmount);
+        document.getElementById('total-payout-due').textContent = window.firebaseHelpers.formatCurrency(totalSettledAmount + totalWalletBalance);
+
+        // Update Monthly Summary UI
         const monthEarningsEl = document.getElementById('month-earnings');
         if (monthEarningsEl) monthEarningsEl.textContent = window.firebaseHelpers.formatCurrency(thisMonthEarnings);
         
@@ -1816,21 +1825,13 @@ async function loadEarningsData() {
         updateDetailedEarningsChart(monthlyEarnings);
         await loadTopEquipment();
         
-        // NEW: Display Settlement History
-         if (settlementTable) {
-            if (settlementRows.length > 0) {
-                settlementTable.innerHTML = settlementRows.join('');
-            } else {
-                 settlementTable.innerHTML = `
-                    <tr>
-                        <td colspan="6" class="text-center py-4">
-                            <i class="fas fa-handshake-slash fa-2x text-muted mb-3"></i>
-                            <p>No settlement records found yet.</p>
-                        </td>
-                    </tr>
-                `;
-            }
+        // NEW: Load Detailed Earnings Table (Default: All, No Date Filter)
+        const dateInput = document.getElementById('daily-earnings-date-filter');
+        if (dateInput && !dateInput.value) {
+            // Set date filter to today's date initially for clear daily breakdown
+            dateInput.value = now.toISOString().split('T')[0];
         }
+        filterDetailedEarnings(); // Initial load of the detailed table
         
     } catch (error) {
         console.error('Error loading earnings data:', error);
@@ -1877,6 +1878,75 @@ function updateDetailedEarningsChart(monthlyEarnings) {
     });
 }
 
+/**
+ * NEW: Filters and displays detailed daily earnings data.
+ */
+window.filterDetailedEarnings = function() {
+    const tableBody = document.getElementById('detailed-earnings-table');
+    const statusFilter = document.getElementById('daily-earnings-status-filter')?.value || 'all';
+    const dateFilter = document.getElementById('daily-earnings-date-filter')?.value;
+    
+    if (!tableBody) return;
+    tableBody.innerHTML = '';
+    
+    let filteredOrders = allCompletedOrders;
+
+    if (dateFilter) {
+        // Filter by specific date (day only)
+        filteredOrders = filteredOrders.filter(order => {
+            const orderDateStr = order.createdAt ? order.createdAt.toDate().toISOString().split('T')[0] : '';
+            return orderDateStr === dateFilter;
+        });
+    }
+
+    if (statusFilter !== 'all') {
+        filteredOrders = filteredOrders.filter(order => order.settlementStatus === statusFilter);
+    }
+
+    if (filteredOrders.length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center py-4">
+                    <i class="fas fa-search-minus fa-2x text-muted mb-3"></i>
+                    <p>No earnings records found for the selected filters.</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    filteredOrders.forEach(order => {
+        tableBody.innerHTML += createDetailedEarningsRow(order);
+    });
+}
+
+function createDetailedEarningsRow(order) {
+    const date = window.firebaseHelpers.formatDate(order.createdAt);
+    const orderId = order.id.substring(0, 8);
+    const rentalValue = order.subtotalAmount || 0;
+    const netPayout = order.sellerNetEarnings || 0;
+    const settlementStatus = order.settlementStatus || 'unsettled';
+    
+    const statusText = settlementStatus === 'settled' ? 'Settled (Paid)' : 'Unsettled (In Wallet)';
+    const statusClass = settlementStatus === 'settled' ? 'status-completed' : 'status-pending';
+    
+    return `
+        <tr>
+            <td>${date}</td>
+            <td>#${orderId}</td>
+            <td>${order.customerName || 'N/A'}</td>
+            <td>${window.firebaseHelpers.formatCurrency(rentalValue)}</td>
+            <td><strong>${window.firebaseHelpers.formatCurrency(netPayout)}</strong></td>
+            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="viewOrderDetails('${order.id}')">
+                    <i class="fas fa-eye"></i> View Order
+                </button>
+            </td>
+        </tr>
+    `;
+}
+
 async function loadTopEquipment() {
     if (!window.currentUser) return;
     
@@ -1884,6 +1954,7 @@ async function loadTopEquipment() {
         const topEquipmentList = document.getElementById('top-equipment-list');
         if (!topEquipmentList) return;
         
+        // Map equipment names
         const equipmentSnapshot = await window.FirebaseDB.collection('equipment')
             .where('sellerId', '==', window.currentUser.uid)
             .get();
@@ -1896,19 +1967,15 @@ async function loadTopEquipment() {
             equipmentNames[doc.id] = doc.data().name;
         });
 
-        const ordersCollectionRef = getPublicCollectionRef('orders');
-        const ordersSnapshot = await ordersCollectionRef.get();
-
-        ordersSnapshot.forEach(orderDoc => {
-            const order = orderDoc.data();
-             if (order.sellerIds && order.sellerIds.includes(window.currentUser.uid) && (order.status === 'completed' || order.status === 'returned')) {
-                order.items.forEach(item => {
-                    if (item.sellerId === window.currentUser.uid && equipmentEarnings[item.id] !== undefined) {
-                        item.price = item.price || 0;
-                        equipmentEarnings[item.id] += item.price;
-                    }
-                });
-            }
+        // Calculate earnings from the pre-loaded list
+        allCompletedOrders.forEach(order => {
+            order.items.forEach(item => {
+                if (item.sellerId === window.currentUser.uid && equipmentEarnings[item.id] !== undefined) {
+                    // Use the original item price, not the net payout, for the *equipment* earnings metric
+                    item.price = item.price || 0;
+                    equipmentEarnings[item.id] += item.price;
+                }
+            });
         });
         
         const topEquipment = Object.entries(equipmentEarnings)
