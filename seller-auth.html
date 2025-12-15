@@ -515,6 +515,9 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            // Check for Google Redirect Result first
+            window.handleGoogleRedirectResult(CURRENT_ROLE);
+
             // Pre-fill referral code if available in URL
             const referralCodeInput = document.getElementById('referralCode');
             if (referralCodeInput && urlReferralCode) {
