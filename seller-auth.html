@@ -514,23 +514,36 @@
             }
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            // Check for Google Redirect Result first
-            window.handleGoogleRedirectResult(CURRENT_ROLE);
+       document.addEventListener('DOMContentLoaded', () => {
+    // Check for existing session first
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    
+    // If user is already logged in and on correct page, redirect immediately
+    if (currentUser && currentUser.role === CURRENT_ROLE) {
+        // Small delay to ensure Firebase is initialized
+        setTimeout(() => {
+            window.redirectUser();
+        }, 500);
+        return;
+    }
+    
+    // Check for Google redirect result (for backward compatibility)
+    window.handleGoogleRedirectResult(CURRENT_ROLE);
 
-            // Pre-fill referral code if available in URL
-            const referralCodeInput = document.getElementById('referralCode');
-            if (referralCodeInput && urlReferralCode) {
-                 referralCodeInput.value = urlReferralCode.toUpperCase();
-            }
+    // Pre-fill referral code if available in URL
+    const referralCodeInput = document.getElementById('referralCode');
+    if (referralCodeInput && urlReferralCode) {
+        referralCodeInput.value = urlReferralCode.toUpperCase();
+    }
 
-            // Initial view setup
-            switchTab('login'); 
-            setupPincodeListener();
-            
-            // Check session status
-            window.checkSessionAndRedirect(CURRENT_ROLE);
-        });
+    // Initial view setup
+    switchTab('login');
+    
+    // Setup additional listeners
+    if (typeof setupPincodeListener === 'function') {
+        setupPincodeListener();
+    }
+});
         
         // Handle login form submission
         document.getElementById('loginForm').addEventListener('submit', function(e) {
