@@ -87,16 +87,19 @@ window.loadSellerDashboard = async () => {
     await loadDismissedAlerts();
     // loadDashboardData is called implicitly by showSection('dashboard') if no hash is present
 
-    if (loadingEl) loadingEl.classList.remove('active');
-    
     // FIX: Read URL hash on load and show the correct section, defaulting to 'dashboard'
     // This logic ensures page reloads maintain the current tab.
     const hash = window.location.hash.substring(1);
     const validSections = ['dashboard', 'equipment', 'orders', 'add-equipment', 'earnings', 'notifications', 'reviews', 'profile'];
+    
+    // Set the initial section, defaulting to 'dashboard' if no valid hash is found
     const initialSection = validSections.includes(hash) ? hash : 'dashboard';
 
     // Show the initial section, which triggers the corresponding data load function
     showSection(initialSection);
+
+    // Hide the loading spinner once the initial section data starts loading
+    if (loadingEl) loadingEl.classList.remove('active');
 }
 
 // --- ONLINE STATUS MANAGEMENT ---
@@ -196,9 +199,8 @@ function showSection(sectionId) {
     if (targetSection) targetSection.style.display = 'block';
     
     // Update active nav link
-    const navLink = Array.from(document.querySelectorAll('.nav-link')).find(link => 
-        link.getAttribute('onclick')?.includes(sectionId)
-    );
+    // Use the href attribute containing the hash fragment for matching (for both desktop and mobile navs)
+    const navLink = document.querySelector(`.nav-link[href="#${sectionId}"]`);
     if (navLink) {
         navLink.classList.add('active');
     }
@@ -239,6 +241,7 @@ function showSection(sectionId) {
             break;
     }
 }
+window.showSection = showSection; // Expose globally for HTML
 
 // --- DASHBOARD DATA ---
 async function loadDashboardData() {
@@ -1413,9 +1416,9 @@ async function viewOrderDetails(orderId) {
         if (doc.exists) {
             const order = doc.data();
             const createdAt = window.firebaseHelpers.formatDateTime(order.createdAt);
-            const rentalPeriod = order.items.map(item => 
-                `${item.rentalValue} ${item.rentalType === 'acre' ? 'Acres' : 'Hours'}`
-            ).join(', ');
+            const rentalPeriod = order.items && order.items.length > 0 
+                ? order.items.map(item => `${item.rentalValue} ${item.rentalType === 'acre' ? 'Acres' : 'Hours'}`).join(', ')
+                : 'N/A';
 
             const modalBody = `
                 <div class="row">
@@ -2195,7 +2198,7 @@ document.getElementById('profile-form')?.addEventListener('submit', async functi
     }
     
     if (!cityInput || !stateInput) {
-        window.firebaseHelpers.showAlert('Pincode lookup failed. Please try again.', 'danger');
+        window.firebaseHelpers.showAlert('Pincode lookup failed. Please try again or verify your Pincode.', 'danger');
         return;
     }
     
@@ -2436,6 +2439,7 @@ async function logout() {
         window.firebaseHelpers.showAlert('Error logging out', 'danger');
     }
 }
+window.logout = logout; // Expose globally for HTML
 
 // Initialize if not called by script.js
 if (!window.loadSellerDashboard) {
