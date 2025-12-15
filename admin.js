@@ -835,6 +835,36 @@ async function viewUserDetails(userId) {
         if (doc.exists) {
             const user = doc.data();
             
+            // Format bank details if available
+            const bankDetails = user.bankDetails;
+            let bankDetailsHtml = '';
+            
+            if (user.role === 'seller') {
+                if (bankDetails && bankDetails.accountNumber) {
+                    const accountNumberDisplay = bankDetails.accountNumber.slice(-4);
+                    bankDetailsHtml = `
+                        <h6 class="mt-4 text-success"><i class="fas fa-university me-2"></i>Bank Account Details</h6>
+                        <table class="table table-sm">
+                            <tr><th>Account Holder:</th><td>${bankDetails.accountHolderName || 'N/A'}</td></tr>
+                            <tr><th>Bank Name:</th><td>${bankDetails.bankName || 'N/A'}</td></tr>
+                            <tr><th>IFSC Code:</th><td>${bankDetails.ifsc || 'N/A'}</td></tr>
+                            <tr><th>Account No:</th><td>******${accountNumberDisplay} (Full details available in settlement)</td></tr>
+                            <tr><th>Branch:</th><td>${bankDetails.branchName || 'N/A'}</td></tr>
+                        </table>
+                        <div class="alert alert-success p-2 small">
+                            <i class="fas fa-check-circle me-1"></i> Bank details available for payout.
+                        </div>
+                    `;
+                } else {
+                    bankDetailsHtml = `
+                        <h6 class="mt-4 text-danger"><i class="fas fa-university me-2"></i>Bank Account Details</h6>
+                        <div class="alert alert-danger p-2 small">
+                            <i class="fas fa-exclamation-triangle me-1"></i> **MISSING:** Bank details are required for seller payout.
+                        </div>
+                    `;
+                }
+            }
+
             // Create modal content
             const modalBody = `
                 <div class="row">
@@ -852,10 +882,11 @@ async function viewUserDetails(userId) {
                             <tr><th>Role:</th><td><span class="status-badge role-${user.role || 'customer'}">${user.role || 'customer'}</span></td></tr>
                             <tr><th>Joined:</th><td>${window.firebaseHelpers.formatDateTime(user.createdAt)}</td></tr>
                             ${user.businessName ? `<tr><th>Business:</th><td>${user.businessName}</td></tr>` : ''}
-                            ${user.address ? `<tr><th>Address:</th><td>${user.address}</td></tr>` : ''}
+                            ${user.address ? `<tr><th>Address:</th><td>${user.address} (${user.pincode})</td></tr>` : ''}
                             ${user.gstNumber ? `<tr><th>GST Number:</th><td>${user.gstNumber}</td></tr>` : ''}
-                            ${user.city ? `<tr><th>City:</th><td>${user.city}</td></tr>` : ''}
+                            ${user.city ? `<tr><th>City/State:</th><td>${user.city}, ${user.state}</td></tr>` : ''}
                         </table>
+                        ${bankDetailsHtml} <!-- NEW BANK DETAILS SECTION -->
                     </div>
                 </div>
             `;
