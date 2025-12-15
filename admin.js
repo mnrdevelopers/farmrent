@@ -841,14 +841,15 @@ async function viewUserDetails(userId) {
             
             if (user.role === 'seller') {
                 if (bankDetails && bankDetails.accountNumber) {
-                    const accountNumberDisplay = bankDetails.accountNumber.slice(-4);
+                    // MODIFIED: Display the full account number for admin review
+                    const accountNumberDisplay = bankDetails.accountNumber; 
                     bankDetailsHtml = `
                         <h6 class="mt-4 text-success"><i class="fas fa-university me-2"></i>Bank Account Details</h6>
                         <table class="table table-sm">
                             <tr><th>Account Holder:</th><td>${bankDetails.accountHolderName || 'N/A'}</td></tr>
                             <tr><th>Bank Name:</th><td>${bankDetails.bankName || 'N/A'}</td></tr>
                             <tr><th>IFSC Code:</th><td>${bankDetails.ifsc || 'N/A'}</td></tr>
-                            <tr><th>Account No:</th><td>******${accountNumberDisplay} (Full details available in settlement)</td></tr>
+                            <tr><th>Account No:</th><td>${accountNumberDisplay}</td></tr>
                             <tr><th>Branch:</th><td>${bankDetails.branchName || 'N/A'}</td></tr>
                         </table>
                         <div class="alert alert-success p-2 small">
