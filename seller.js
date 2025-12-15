@@ -1036,8 +1036,81 @@ function filterByDate() {
 }
 
 function exportOrders() {
-    window.firebaseHelpers.showAlert('Export feature coming soon!', 'info');
+    // 1. Define CSV headers and data fields
+    const headers = [
+        "Order ID", "Status", "Customer Name", "Customer Phone", 
+        "Equipment Names", "Rental Value (Acre/Hour)", "Total Amount (Rupees)", 
+        "Seller Payout (Net Rupees)", "Pincode", "Pickup Date", "Created At"
+    ];
+
+    // 2. Map data to rows
+    const csvRows = [headers.join(',')]; // Start with headers
+
+    if (!ordersData || ordersData.length === 0) {
+        window.firebaseHelpers.showAlert('No orders available to export.', 'warning');
+        return;
+    }
+
+    ordersData.forEach(order => {
+        // Prepare data fields, replacing internal commas with a semicolon for better CSV compatibility
+        
+        const statusText = (order.status || 'pending').toUpperCase();
+        // Replace quotes with double quotes for CSV escaping
+        const customerName = (order.customerName || 'N/A').replace(/"/g, '""');
+        const equipmentNames = (order.equipmentNames || 'N/A').replace(/,/g, '; ').replace(/"/g, '""');
+        
+        // Calculate total rental value/period, using semicolon as internal separator
+        const rentalPeriod = order.items && order.items.length > 0 
+            ? order.items.map(item => `${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'}`).join('; ')
+            : 'N/A';
+        
+        // Format currency fields as clean numeric strings for Excel/data manipulation
+        const totalAmount = (order.totalAmount || 0).toFixed(2);
+        const sellerPayout = (order.sellerNetEarnings || 0).toFixed(2);
+        const pickupDate = order.pickupDate || 'N/A';
+        const createdAt = order.createdAt ? window.firebaseHelpers.formatDate(order.createdAt) : 'N/A';
+
+        const row = [
+            `#${order.id.substring(0, 8)}`,
+            statusText,
+            customerName,
+            order.customerPhone || 'N/A',
+            equipmentNames,
+            rentalPeriod,
+            totalAmount,
+            sellerPayout,
+            order.orderPincode || 'N/A',
+            pickupDate,
+            createdAt
+        ];
+        
+        // Escape content by wrapping in quotes if it contains commas
+        csvRows.push(row.map(cell => {
+             if (cell.includes(',')) {
+                 return `"${cell}"`;
+             }
+             return cell;
+        }).join(','));
+    });
+
+    // 3. Create Blob and trigger download
+    const csvString = csvRows.join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `farmrent_seller_orders_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    URL.revokeObjectURL(url);
+    window.firebaseHelpers.showAlert('Orders exported successfully to CSV!', 'success');
 }
+window.exportOrders = exportOrders; // Ensure it remains globally accessible
 
 // --- ADD EQUIPMENT ---
 document.getElementById('add-equipment-form')?.addEventListener('submit', async function(e) {
