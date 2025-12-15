@@ -20,29 +20,29 @@
         </div>
         
         <nav class="nav flex-column mt-4">
-            <a class="nav-link active" href="#" onclick="showSection('dashboard')">
+            <a class="nav-link" href="#dashboard" onclick="showSection('dashboard')">
                 <i class="fas fa-tachometer-alt"></i> Dashboard
             </a>
-            <a class="nav-link" href="#" onclick="showSection('equipment')">
+            <a class="nav-link" href="#equipment" onclick="showSection('equipment')">
                 <i class="fas fa-tools"></i> My Equipment
             </a>
-            <a class="nav-link" href="#" onclick="showSection('orders')">
+            <a class="nav-link" href="#orders" onclick="showSection('orders')">
                 <i class="fas fa-clipboard-list"></i> Orders
             </a>
-            <a class="nav-link" href="#" onclick="showSection('add-equipment')">
+            <a class="nav-link" href="#add-equipment" onclick="showSection('add-equipment')">
                 <i class="fas fa-plus-circle"></i> Add Equipment
             </a>
-            <a class="nav-link" href="#" onclick="showSection('earnings')">
+            <a class="nav-link" href="#earnings" onclick="showSection('earnings')">
                 <i class="fas fa-rupee-sign"></i> Earnings
             </a>
-            <a class="nav-link" href="#" onclick="showSection('notifications')">
+            <a class="nav-link" href="#notifications" onclick="showSection('notifications')">
                 <i class="fas fa-bell"></i> Notifications / Chat
                 <span class="badge bg-danger ms-auto" id="new-messages-count">0</span>
             </a>
-            <a class="nav-link" href="#" onclick="showSection('reviews')">
+            <a class="nav-link" href="#reviews" onclick="showSection('reviews')">
                 <i class="fas fa-star"></i> Reviews
             </a>
-            <a class="nav-link" href="#" onclick="showSection('profile')">
+            <a class="nav-link" href="#profile" onclick="showSection('profile')">
                 <i class="fas fa-user-cog"></i> Profile Settings
             </a>
         </nav>
@@ -78,7 +78,7 @@
         </div>
         <div class="offcanvas-body">
             <nav class="nav flex-column">
-                <a class="nav-link text-white active" href="#" onclick="showSection('dashboard')" data-bs-dismiss="offcanvas">
+                <a class="nav-link text-white" href="#" onclick="showSection('dashboard')" data-bs-dismiss="offcanvas">
                     <i class="fas fa-tachometer-alt me-2"></i> Dashboard
                 </a>
                 <a class="nav-link text-white" href="#" onclick="showSection('equipment')" data-bs-dismiss="offcanvas">
@@ -156,7 +156,7 @@
         </div>
 
         <!-- Dashboard Section -->
-        <div class="section" id="dashboard-section">
+        <div class="section" id="dashboard-section" style="display: none;">
             <!-- Stats Cards -->
             <div class="row mb-4">
                 <div class="col-xl-3 col-md-6 mb-4">
