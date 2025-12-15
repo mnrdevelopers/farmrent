@@ -588,6 +588,68 @@
                 businessName, pincode, village, city, state, address, gstNumber 
             };
             
+            // OVERRIDE REDIRECT FUNCTIONALITY FOR SELLER REGISTRATION
+            // We now redirect to the profile page with a hash indicating bank details are required.
+            
+            window.handleUserRegistration = async function (userData, currentRole) {
+                try {
+                    window.showLoading();
+                    
+                    const userCredential = await window.FirebaseAuth.createUserWithEmailAndPassword(
+                        userData.email, 
+                        userData.password
+                    );
+                    
+                    const user = userCredential.user;
+                    
+                    const userDoc = {
+                        uid: user.uid,
+                        email: userData.email,
+                        name: userData.name,
+                        mobile: userData.mobile,
+                        role: 'seller', // Hardcode role
+                        status: 'pending',
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        newsletter: userData.newsletter,
+                        signInMethod: 'password', 
+                        coins: 0, 
+                        referralCode: window.generateReferralCode(),
+                        referredBy: userData.referredBy || null,
+                        firstOrderPlaced: false,
+                        // Seller fields
+                        businessName: userData.businessName || '',
+                        gstNumber: userData.gstNumber || '',
+                        address: userData.address || '',
+                        pincode: userData.pincode || '',
+                        city: userData.city || '', 
+                        state: userData.state || '', 
+                        village: userData.village || '',
+                        // NEW: Bank details object will be empty initially
+                        bankDetails: {}
+                    };
+                    
+                    await window.FirebaseDB.collection('users').doc(user.uid).set(userDoc);
+                    await user.sendEmailVerification();
+                    
+                    localStorage.setItem('currentUser', JSON.stringify({ uid: user.uid, email: user.email, ...userDoc }));
+                    
+                    window.showAlert('Account created! Now setting up bank details for payout.', 'success');
+                    
+                    // Redirect to profile to immediately prompt for bank details
+                    setTimeout(() => {
+                        window.location.href = 'seller.html#profile&bank=required';
+                    }, 2000);
+                    
+                } catch (error) {
+                    console.error('Registration error:', error);
+                    let errorMessage = 'Registration failed. ' + (error.message || 'Please try again.');
+                    window.showAlert(errorMessage, 'danger');
+                    await window.FirebaseAuth.signOut();
+                } finally {
+                    window.hideLoading();
+                }
+            };
+
             window.handleUserRegistration(userData, CURRENT_ROLE);
         });
 
