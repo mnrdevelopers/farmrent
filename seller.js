@@ -74,10 +74,26 @@ window.loadSellerDashboard = async () => {
     setupOnlineStatusToggle(); 
     loadLibraryImages(); 
 
-    // Check profile completion (blocking if necessary)
+    // Check required fields for full account functionality
+    let missingRequiredDetails = false;
     if (!sellerData.pincode || !sellerData.businessName || !sellerData.address) {
         window.firebaseHelpers.showAlert('Please complete your profile (Pincode, Business Name, Address) before listing equipment.', 'warning');
-        // Show profile section, but ensure other steps run
+        missingRequiredDetails = true;
+    }
+    
+    // Check if bank details are missing after initial login/registration
+    const urlParams = new URLSearchParams(window.location.hash.substring(1));
+    const shouldOpenBankModal = urlParams.get('bank') === 'required';
+
+    if (shouldOpenBankModal || !sellerData.bankDetails || !sellerData.bankDetails.accountNumber) {
+        // Automatically prompt for bank details if they are missing or if redirect link demands it
+        if (sellerData.pincode && sellerData.businessName && sellerData.address) {
+            window.firebaseHelpers.showAlert('Bank details are mandatory for payout. Please enter them now.', 'warning');
+            setTimeout(() => openBankDetailsModal(), 500);
+        }
+    }
+    
+    if (missingRequiredDetails) {
         showSection('profile');
         if (loadingEl) loadingEl.classList.remove('active');
         return;
@@ -88,8 +104,7 @@ window.loadSellerDashboard = async () => {
     // loadDashboardData is called implicitly by showSection('dashboard') if no hash is present
 
     // FIX: Read URL hash on load and show the correct section, defaulting to 'dashboard'
-    // This logic ensures page reloads maintain the current tab.
-    const hash = window.location.hash.substring(1);
+    const hash = window.location.hash.substring(1).split('&')[0];
     const validSections = ['dashboard', 'equipment', 'orders', 'add-equipment', 'earnings', 'notifications', 'reviews', 'profile'];
     
     // Set the initial section, defaulting to 'dashboard' if no valid hash is found
@@ -179,6 +194,28 @@ function updateSellerInfo() {
              profilePincodeInput.readOnly = false;
              profilePincodeInput.classList.remove('bg-light', 'text-muted');
         }
+        
+        // NEW: Update Admin Approval Status Display
+        const approvalAlert = document.getElementById('seller-status-alert');
+        const approvedAlert = document.getElementById('seller-status-approved');
+        if (approvalAlert && approvedAlert) {
+            if (sellerData.status === 'approved') {
+                approvalAlert.style.display = 'none';
+                approvedAlert.style.display = 'block';
+            } else {
+                approvalAlert.style.display = 'block';
+                approvedAlert.style.display = 'none';
+                
+                // Check if basic profile + bank details are provided for a clear status
+                const detailsComplete = sellerData.pincode && sellerData.businessName && sellerData.address && sellerData.bankDetails?.accountNumber;
+                const statusMessage = detailsComplete 
+                    ? `Your profile is under review. Approval typically takes <span class="fw-bold">24 hours</span>.`
+                    : 'Please complete your Profile Details and Bank Details to initiate the Admin Check.';
+                
+                approvalAlert.querySelector('p.mb-0').innerHTML = statusMessage;
+            }
+        }
+        // END NEW
     }
 }
 
@@ -731,7 +768,6 @@ function initializeEarningsChart() {
                     }
                 }
             }
-        }
     });
 }
 
@@ -2044,7 +2080,11 @@ function loadSellerChatMessages(chatId, customerName, orderId) {
         messagesContainer.innerHTML = '';
         
         if (snapshot.empty) {
-            messagesContainer.innerHTML = '<div class="text-center text-muted mt-5"><p>No messages yet.</p></div>';
+            messagesContainer.innerHTML = `
+                <div class="system-message mt-4">
+                    Welcome to FarmRent Chat!<br>How can we help you today?
+                </div>
+            `;
         } else {
             snapshot.forEach(doc => {
                 const msg = doc.data();
@@ -2247,6 +2287,18 @@ async function loadProfileData() {
         })();
     }
     
+    // NEW: Load Bank Details Display
+    const bankDetails = sellerData.bankDetails || {};
+    document.getElementById('bank-holder-name').textContent = bankDetails.accountHolderName || 'N/A';
+    document.getElementById('bank-name-display').textContent = bankDetails.bankName || 'N/A';
+    document.getElementById('bank-ifsc-display').textContent = bankDetails.ifsc || 'N/A';
+    // Only display last 4 digits of A/C for security
+    const accDisplay = bankDetails.accountNumber 
+        ? '******' + bankDetails.accountNumber.slice(-4) 
+        : 'N/A';
+    document.getElementById('bank-account-display').textContent = accDisplay;
+    // END NEW
+    
     updateSellerInfo();
 }
     
@@ -2373,6 +2425,150 @@ async function deleteAccount() {
     } catch (error) {
         console.error('Error deleting account:', error);
         window.firebaseHelpers.showAlert('Error deleting account: ' + error.message, 'danger');
+    }
+}
+
+// --- NEW BANK DETAILS LOGIC ---
+
+/**
+ * Opens the bank details modal and pre-fills existing data.
+ */
+window.openBankDetailsModal = function() {
+    const modalElement = document.getElementById('bankDetailsModal');
+    if (!modalElement) return;
+
+    const bankDetails = sellerData.bankDetails || {};
+    
+    // Clear previous lookup results
+    document.getElementById('bank-name-input').value = bankDetails.bankName || '';
+    document.getElementById('bank-branch-input').value = bankDetails.branchName || '';
+    document.getElementById('ifsc-status-message').textContent = '';
+    document.getElementById('account-match-status').textContent = '';
+
+    // Pre-fill fields
+    document.getElementById('bank-ifsc').value = bankDetails.ifsc || '';
+    document.getElementById('bank-holder-name-input').value = bankDetails.accountHolderName || sellerData.name || '';
+    document.getElementById('bank-account-input').value = bankDetails.accountNumber || '';
+    document.getElementById('bank-confirm-account-input').value = bankDetails.accountNumber || '';
+
+    const modal = new bootstrap.Modal(modalElement);
+    modal.show();
+}
+
+/**
+ * Looks up bank and branch details using a public IFSC API.
+ */
+window.lookupIfsc = async function() {
+    const ifscInput = document.getElementById('bank-ifsc');
+    const statusMessage = document.getElementById('ifsc-status-message');
+    const bankNameInput = document.getElementById('bank-name-input');
+    const branchInput = document.getElementById('bank-branch-input');
+    
+    const ifsc = ifscInput.value.toUpperCase().trim();
+    ifscInput.value = ifsc;
+    
+    if (ifsc.length !== 11) {
+        statusMessage.textContent = 'IFSC must be 11 characters.';
+        statusMessage.className = 'form-text text-danger';
+        return;
+    }
+    
+    statusMessage.textContent = 'Looking up IFSC...';
+    statusMessage.className = 'form-text text-warning';
+    bankNameInput.value = '';
+    branchInput.value = '';
+
+    // Use the public API endpoint for Indian IFSC code lookup
+    const apiUrl = `https://ifsc.razorpay.com/${ifsc}`;
+    
+    try {
+        const response = await fetch(apiUrl);
+        const data = await response.json();
+        
+        if (response.ok && data && data.BANK && data.BRANCH) {
+            bankNameInput.value = data.BANK;
+            branchInput.value = data.BRANCH;
+            statusMessage.textContent = `Success! Bank: ${data.BANK}, Branch: ${data.BRANCH}`;
+            statusMessage.className = 'form-text text-success';
+        } else {
+            statusMessage.textContent = 'Invalid or not found. Please check the IFSC code.';
+            statusMessage.className = 'form-text text-danger';
+        }
+    } catch (error) {
+        statusMessage.textContent = 'Network error during lookup. Please check your connection or try again.';
+        statusMessage.className = 'form-text text-danger';
+    }
+}
+
+/**
+ * Saves the validated bank details to the seller's profile.
+ */
+window.saveBankDetails = async function() {
+    const form = document.getElementById('bank-details-form');
+    const ifsc = document.getElementById('bank-ifsc').value.toUpperCase().trim();
+    const holderName = document.getElementById('bank-holder-name-input').value.trim();
+    const accountNumber = document.getElementById('bank-account-input').value.trim();
+    const confirmAccount = document.getElementById('bank-confirm-account-input').value.trim();
+    const bankName = document.getElementById('bank-name-input').value.trim();
+    const branchName = document.getElementById('bank-branch-input').value.trim();
+    const matchStatus = document.getElementById('account-match-status');
+
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        window.firebaseHelpers.showAlert('Please fill all required bank fields.', 'warning');
+        return;
+    }
+    
+    if (accountNumber !== confirmAccount) {
+        matchStatus.textContent = 'Account numbers do not match!';
+        matchStatus.className = 'form-text text-danger';
+        window.firebaseHelpers.showAlert('Account numbers do not match.', 'danger');
+        return;
+    } else {
+        matchStatus.textContent = 'Account numbers match.';
+        matchStatus.className = 'form-text text-success';
+    }
+
+    if (bankName === '' || branchName === '') {
+        window.firebaseHelpers.showAlert('Please successfully look up the IFSC code before saving.', 'danger');
+        return;
+    }
+
+    try {
+        const bankDetails = {
+            ifsc: ifsc,
+            accountHolderName: holderName,
+            accountNumber: accountNumber,
+            bankName: bankName,
+            branchName: branchName,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        const updatePayload = {
+            bankDetails: bankDetails,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        // If the account was previously pending (e.g., just registered) and now has bank details,
+        // we can set the seller status to 'pending_review' or similar to re-trigger admin notice.
+        // For simplicity and consistency with current model, we rely on the visibility of all required fields in Firestore.
+
+        await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(updatePayload);
+        
+        // Update local data
+        sellerData.bankDetails = bankDetails;
+        window.currentUser.bankDetails = bankDetails;
+        loadProfileData(); // Reload profile data to update display
+        updateSellerInfo(); // Re-check and update admin approval status
+        
+        window.firebaseHelpers.showAlert('Bank Details saved successfully!', 'success');
+        
+        const modal = bootstrap.Modal.getInstance(document.getElementById('bankDetailsModal'));
+        if (modal) modal.hide();
+        
+    } catch (error) {
+        console.error('Error saving bank details:', error);
+        window.firebaseHelpers.showAlert('Error saving bank details. Please try again.', 'danger');
     }
 }
 
