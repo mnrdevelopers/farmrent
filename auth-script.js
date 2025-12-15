@@ -331,15 +331,16 @@ window.signInWithGoogle = async function (currentRole) {
         provider.addScope('email');
         provider.addScope('profile');
         
-        // Use signInWithRedirect for better compatibility in restrictive environments like iframes
-        await window.FirebaseAuth.signInWithRedirect(provider);
+        // Use signInWithRedirect for better compatibility in restrictive environments like iframes.
+        // DO NOT await this call, as it initiates a navigation change that terminates current execution.
+        window.FirebaseAuth.signInWithRedirect(provider);
         
-        // Control flow continues in handleGoogleRedirectResult on the redirect page.
+        // Execution stops here and resumes in handleGoogleRedirectResult on the next page load.
         
     } catch (error) {
         console.error('Google sign-in error:', error);
         window.showAlert(error.message || 'Google sign-in failed. Please try again.', 'danger');
-    } finally {
+        // Only hide loading if the initial attempt fails without redirecting
         window.hideLoading();
     }
 };
@@ -420,6 +421,7 @@ window.handleGoogleRedirectResult = async function (currentRole) {
                     userData.city = ''; 
                     userData.state = ''; 
                     userData.village = ''; 
+                    userData.bankDetails = {}; // Initialize bank details
                     
                     // Set immediate redirect to profile for completion
                     localStorage.setItem('currentUser', JSON.stringify({ uid: user.uid, email: user.email, ...userData }));
