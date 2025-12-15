@@ -1351,7 +1351,7 @@ window.clearCartForCurrentLocation = clearCartForCurrentLocation;
 async function startCheckout() {
     if (!window.currentUser) {
         window.firebaseHelpers.showAlert('Please log in before proceeding to checkout.', 'warning');
-        setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 1500);
+        setTimeout(() => { window.location.href = 'customer-auth.html'; }, 1500);
         return;
     }
     const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
@@ -1396,7 +1396,7 @@ async function loadCheckoutPage() {
     if (!user || cart.length === 0) {
         if (!user) {
             window.firebaseHelpers.showAlert('You must be logged in to checkout.', 'danger');
-            setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 2000);
+            setTimeout(() => { window.location.href = 'customer-auth.html'; }, 2000);
         } else {
             window.firebaseHelpers.showAlert('Your cart is empty. Please add items to proceed.', 'warning');
             setTimeout(() => { window.location.href = 'browse.html'; }, 2000);
@@ -1710,9 +1710,9 @@ function updateNavbarForLoggedOutUser() {
                 <i class="fas fa-user-tag me-1"></i> Sign Up As
             </a>
             <ul class="dropdown-menu">
-                <li><a class="dropdown-item" href="auth.html?role=customer"><i class="fas fa-user me-2"></i>Customer</a></li>
-                <li><a class="dropdown-item" href="auth.html?role=seller"><i class="fas fa-store me-2"></i>Seller</a></li>
-                <li><a class="dropdown-item" href="auth.html?role=admin"><i class="fas fa-user-shield me-2"></i>Admin</a></li>
+                <li><a class="dropdown-item" href="customer-auth.html"><i class="fas fa-user me-2"></i>Customer</a></li>
+                <li><a class="dropdown-item" href="seller-auth.html"><i class="fas fa-store me-2"></i>Seller</a></li>
+                <li><a class="dropdown-item" href="admin-auth.html"><i class="fas fa-user-shield me-2"></i>Admin</a></li>
             </ul>
         </li>
         <li class="nav-item">
@@ -2551,7 +2551,7 @@ async function loadProfilePage() {
     const user = await window.firebaseHelpers.getCurrentUser();
     if (!user) {
         window.firebaseHelpers.showAlert('You must be logged in to view your profile.', 'danger');
-        setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 2000);
+        setTimeout(() => { window.location.href = 'customer-auth.html'; }, 2000);
         return;
     }
     const userDocRef = window.FirebaseDB.collection('users').doc(user.uid);
@@ -2686,7 +2686,7 @@ async function loadOrdersPage() {
     const user = await window.firebaseHelpers.getCurrentUser();
     if (!user) {
         window.firebaseHelpers.showAlert('You must be logged in to view your orders.', 'danger');
-        setTimeout(() => { window.location.href = 'auth.html?role=customer'; }, 2000);
+        setTimeout(() => { window.location.href = 'customer-auth.html'; }, 2000);
         return;
     }
     const loadingEl = document.getElementById('loading');
@@ -3532,5 +3532,5 @@ window.applyCoinDiscount = function() {
 window.getReferralLink = function(code) {
     if (!code) return "Code not available.";
     const baseUrl = window.location.origin;
-    return `${baseUrl}/farmrent/auth.html?role=customer&ref=${code}`;
+    return `${baseUrl}/farmrent/customer-auth.html&ref=${code}`;
 }
