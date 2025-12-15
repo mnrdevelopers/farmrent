@@ -1,3 +1,12 @@
+/**
+ * Core Authentication Logic
+ * This script is shared by customer-auth.html, seller-auth.html, and admin-auth.html
+ * It relies on global objects: window.FirebaseAuth, window.FirebaseDB, and window.firebaseHelpers
+ */
+
+// --- GLOBAL UTILITIES (Copied from auth.html) ---
+
+// Role-specific data structure (must be available globally)
 const roleData = {
     customer: {
         role: 'customer',
@@ -128,8 +137,10 @@ window.redirectUser = function () {
 };
 
 /**
- * Handles the email/password login process, including admin special case.
- * @param {string} email 
+ * Handles the email/password login process, including admin standard case.
+ * * NOTE: Admin login now uses standard Firebase Auth and relies on the 
+ * Firestore user document having 'role: "admin"' for authorization.
+ * * @param {string} email 
  * @param {string} password 
  * @param {string} currentRole - The expected role (customer, seller, admin) from the current page.
  */
@@ -137,37 +148,15 @@ window.handleEmailLogin = async function (email, password, currentRole) {
     try {
         window.showLoading();
 
-        let user;
-        
-        if (currentRole === 'admin') {
-            // Admin Login: Use Remote Config credentials for authentication
-            if (!window.firebaseHelpers || !window.firebaseHelpers.getAdminCredentials) {
-                throw new Error('Firebase helpers not initialized.');
-            }
-            const adminCreds = await window.firebaseHelpers.getAdminCredentials();
-            
-            if (email !== adminCreds.email) {
-                // MODIFIED ERROR MESSAGE FOR CLARITY (Issue reported by user)
-                const configuredEmail = adminCreds.email || 'N/A';
-                throw new Error(`Invalid Admin email. The email entered does not match the configured Admin email in Remote Config (${configuredEmail}).`);
-            }
-            
-            // Step 1: Sign in with the RC email/password. 
-            // NOTE: The password provided by the user must match the actual Admin Password in Firebase Auth, 
-            // but the email check here ensures the input email matches the RC email config.
-            const userCredential = await window.FirebaseAuth.signInWithEmailAndPassword(adminCreds.email, password);
-            user = userCredential.user;
-        } else {
-            // Standard Customer/Seller Login
-            const userCredential = await window.FirebaseAuth.signInWithEmailAndPassword(email, password);
-            user = userCredential.user;
-        }
+        // Step 1: Standard Firebase Sign In for all roles
+        const userCredential = await window.FirebaseAuth.signInWithEmailAndPassword(email, password);
+        const user = userCredential.user;
 
         // Step 2: Get user data from Firestore for role verification
         const userDoc = await window.FirebaseDB.collection('users').doc(user.uid).get();
         
         if (!userDoc.exists) {
-            // If user logged in (especially via RC email/password) but has no profile, log them out for security
+            // If user logged in but has no profile, log them out for security
             await window.FirebaseAuth.signOut();
             throw new Error('User profile missing or role not configured.');
         }
@@ -206,7 +195,8 @@ window.handleEmailLogin = async function (email, password, currentRole) {
         
         switch (error.code) {
             case 'auth/user-not-found':
-                errorMessage += 'User not found.';
+            case 'auth/invalid-credential':
+                errorMessage += 'Invalid email or password.';
                 break;
             case 'auth/wrong-password':
                 errorMessage += 'Incorrect password.';
@@ -215,7 +205,12 @@ window.handleEmailLogin = async function (email, password, currentRole) {
                 errorMessage += 'Account is disabled.';
                 break;
             default:
-                errorMessage += error.message || 'Please try again.';
+                // Check if the original error was the old Remote Config error (should no longer happen)
+                if (error.message.includes('Invalid Admin email. The email entered does not match the configured Admin email')) {
+                     errorMessage += 'Admin configuration error. Please ensure your Admin user exists in Firebase Authentication.';
+                } else {
+                     errorMessage += error.message || 'Please try again.';
+                }
         }
         
         window.showAlert(errorMessage, 'danger');
@@ -493,9 +488,12 @@ window.checkSessionAndRedirect = function(currentRole) {
                             await window.FirebaseAuth.signOut();
                             window.showAlert(`You are logged in as ${userData.role}. Please log out or use the correct portal.`, 'danger');
                         }
-                    } else if (currentRole === 'admin' && user.email === roleData.admin.email) {
-    
+                    } else if (currentRole === 'admin') {
+                         // Admin should always have a profile if they successfully logged in. 
+                         // If here, log out.
+                         await window.FirebaseAuth.signOut();
                     } else {
+                        // Log out user with missing profile data
                         await window.FirebaseAuth.signOut();
                     }
                 } catch (error) {
