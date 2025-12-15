@@ -1132,7 +1132,7 @@ async function rentNowModal() {
     }
     const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
     if (!userPincode) {
-        window.firebaseHelpers.showAlert('Please set your location Pincode before proceeding to rent.', 'danger');
+        window.firebaseHelpers.showAlert('Location required! Please set your Pincode before proceeding to rent.', 'danger');
         showPincodeModal();
         return;
     }
@@ -1526,6 +1526,7 @@ function updateNavbarForLoggedInUser(userData) {
             </ul>
         </li>
     `;
+    navbarAuth.innerHTML = ''; // Clear existing content before inserting
     navbarAuth.insertAdjacentHTML('afterbegin', dropdownHtml);
 }
 
@@ -1702,6 +1703,7 @@ function updateNavbarForLoggedOutUser() {
     if (!navbarAuth) {
          return; 
     }
+    // FIX: Update Login button to point to central auth page
     navbarAuth.innerHTML = `
         <li class="nav-item dropdown" id="role-dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="roleDropdown" role="button" data-bs-toggle="dropdown">
@@ -1714,7 +1716,7 @@ function updateNavbarForLoggedOutUser() {
             </ul>
         </li>
         <li class="nav-item">
-            <a class="nav-link" href="auth.html?role=customer">
+            <a class="nav-link" href="auth.html">
                 <i class="fas fa-sign-in-alt me-1"></i> Login
             </a>
         </li>
@@ -3266,6 +3268,7 @@ async function loadUserConversations() {
             const chat = doc.data();
             const time = chat.updatedAt ? window.firebaseHelpers.formatTimeAgo(chat.updatedAt) : '';
             const unread = chat.unreadCountCustomer > 0 ? `<span class="badge bg-danger rounded-pill">${chat.unreadCountCustomer}</span>` : '';
+            
             body.innerHTML += `
                 <div class="p-3 border-bottom bg-white hover-bg-light cursor-pointer" onclick="loadChatMessages('${doc.id}', '${chat.sellerBusinessName}', '${chat.sellerId}')" style="cursor:pointer;">
                     <div class="d-flex justify-content-between align-items-center mb-1">
