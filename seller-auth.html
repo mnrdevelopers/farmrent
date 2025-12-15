@@ -660,7 +660,8 @@
         window.switchTab = switchTab;
         window.showResetPassword = showResetPassword;
         window.resetPassword = resetPassword;
-        window.signInWithGoogle = (role) => window.signInWithGoogle(CURRENT_ROLE);
+        // FIX: Removed the recursive redefinition. The HTML element's onclick attribute already calls the globally available function correctly.
+        // window.signInWithGoogle = (role) => window.signInWithGoogle(CURRENT_ROLE);
     </script>
 </body>
 </html>
