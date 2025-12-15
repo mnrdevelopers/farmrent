@@ -34,8 +34,7 @@ try {
             "post_office_api_url": "",
             "fast2sms_api_key": "",
             "geoapify_api_key": "",
-            "admin_login_email": "", // Ensure default is an empty string
-            "admin_login_password": "" // Ensure default is an empty string
+            // Removed admin_login_email and admin_login_password for enhanced security
         };
         
         // Fetch and activate the configuration values
@@ -246,34 +245,8 @@ window.firebaseHelpers = {
             return ""; 
         }
     },
-
-    /**
-     * NEW: Fetches the Admin Login Credentials from Firebase Remote Config.
-     * @returns {Promise<{email: string, password: string}>} The Admin credentials.
-     */
-    getAdminCredentials: async () => {
-        if (!remoteConfig) {
-            console.warn('Remote Config not available for Admin key.');
-            return { 
-                email: firebase.remoteConfig().defaultConfig.admin_login_email, 
-                password: firebase.remoteConfig().defaultConfig.admin_login_password 
-            }; 
-        }
-        try {
-            // Re-fetch and activate to ensure the latest values are available before reading
-            await remoteConfig.fetchAndActivate(); 
-            const email = remoteConfig.getString('admin_login_email');
-            const password = remoteConfig.getString('admin_login_password');
-            return { email, password };
-        } catch (error) {
-            console.error("Error retrieving Admin Credentials:", error);
-            // Fallback to default if RC fails
-            return { 
-                email: remoteConfig.defaultConfig.admin_login_email, 
-                password: remoteConfig.defaultConfig.admin_login_password 
-            };
-        }
-    },
+    
+    // Removed getAdminCredentials as the Admin login will now use standard Firebase Auth.
     
     /**
      * NEW: Sends an SMS alert using the Fast2SMS API.
