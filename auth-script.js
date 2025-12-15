@@ -329,26 +329,160 @@ window.signInWithGoogle = async function (currentRole) {
 
     try {
         window.showLoading();
+        console.log(`[Google Auth] Starting sign-in for role: ${currentRole}`);
         
+        // Clear any existing redirect result
+        localStorage.removeItem('googleSignInPending');
+        
+        // Use popup method instead of redirect for better control
         const provider = new firebase.auth.GoogleAuthProvider();
         provider.addScope('email');
         provider.addScope('profile');
         
-        // Log initiation
-        console.log(`[Google Auth] Starting sign-in redirect for role: ${currentRole}`);
+        // Set persistence to LOCAL so the session persists
+        await window.FirebaseAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
         
-        // Use signInWithRedirect for better compatibility in restrictive environments like iframes.
-        window.FirebaseAuth.signInWithRedirect(provider);
+        // Sign in with popup
+        const result = await window.FirebaseAuth.signInWithPopup(provider);
+        const user = result.user;
         
-        // Execution stops here and resumes in handleGoogleRedirectResult on the next page load.
+        console.log('[Google Auth] Popup sign-in successful', { uid: user.uid, email: user.email });
+        
+        // Process the user immediately
+        await processGoogleSignInUser(user, currentRole);
         
     } catch (error) {
-        console.error('[Google Auth Critical Error] Google sign-in initiation error:', error);
-        window.showAlert(error.message || 'Google sign-in failed. Please try again.', 'danger');
-        // Only hide loading if the initial attempt fails without redirecting
+        console.error('[Google Auth Error]', error);
+        
+        // Handle specific errors
+        if (error.code === 'auth/popup-closed-by-user') {
+            window.showAlert('Google sign-in was cancelled.', 'info');
+        } else if (error.code === 'auth/popup-blocked') {
+            window.showAlert('Popup was blocked by browser. Please allow popups for this site.', 'warning');
+        } else {
+            window.showAlert(error.message || 'Google sign-in failed. Please try again.', 'danger');
+        }
+        
         window.hideLoading();
     }
 };
+
+/**
+ * Process Google sign-in user and handle new/existing user logic
+ */
+async function processGoogleSignInUser(user, currentRole) {
+    try {
+        // Check if user exists in Firestore
+        const userDoc = await window.FirebaseDB.collection('users').doc(user.uid).get();
+        
+        if (userDoc.exists) {
+            // Existing user
+            const userData = userDoc.data();
+            
+            // Check role mismatch
+            if (userData.role !== currentRole) {
+                await window.FirebaseAuth.signOut();
+                throw new Error(`This account is registered as ${userData.role}. Please use the correct portal.`);
+            }
+            
+            // Check pending seller status
+            if (currentRole === 'seller' && userData.status !== 'approved') {
+                localStorage.setItem('currentUser', JSON.stringify({ 
+                    uid: user.uid, 
+                    email: user.email, 
+                    ...userData 
+                }));
+                window.showAlert('Login successful! Your seller account is pending approval.', 'warning');
+                setTimeout(() => window.location.href = 'seller-pending.html', 1500);
+                return;
+            }
+
+            // Check incomplete seller profile (Google sign-in)
+            if (currentRole === 'seller' && (!userData.businessName || !userData.address || !userData.pincode)) {
+                localStorage.setItem('currentUser', JSON.stringify({ 
+                    uid: user.uid, 
+                    email: user.email, 
+                    ...userData 
+                }));
+                window.showAlert('Login successful! Please complete your seller profile.', 'success');
+                setTimeout(() => { window.location.href = 'seller.html#profile'; }, 1500);
+                return;
+            }
+
+            // Existing and correct role/status - store and redirect
+            localStorage.setItem('currentUser', JSON.stringify({ 
+                uid: user.uid, 
+                email: user.email, 
+                ...userData 
+            }));
+            
+            window.showAlert('Login successful! Redirecting...', 'success');
+            setTimeout(() => {
+                window.redirectUser();
+            }, 1500);
+            
+        } else {
+            // New user via Google Sign-in
+            console.log('[Google Auth] New user detected. Creating Firestore profile.');
+            
+            const userData = {
+                uid: user.uid,
+                email: user.email,
+                name: user.displayName || 'User',
+                mobile: user.phoneNumber || '',
+                role: currentRole,
+                status: currentRole === 'seller' ? 'pending' : 'active',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                newsletter: true,
+                signInMethod: 'google', 
+                coins: 0,
+                referralCode: window.generateReferralCode(),
+                referredBy: null,
+                firstOrderPlaced: false,
+            };
+            
+            // Add seller default fields for new sign up
+            if (currentRole === 'seller') {
+                userData.businessName = ''; 
+                userData.address = ''; 
+                userData.pincode = '';
+                userData.city = ''; 
+                userData.state = ''; 
+                userData.village = ''; 
+                userData.bankDetails = {};
+            }
+            
+            // Save to Firestore
+            await window.FirebaseDB.collection('users').doc(user.uid).set(userData);
+            
+            // Store in localStorage
+            localStorage.setItem('currentUser', JSON.stringify({ 
+                uid: user.uid, 
+                email: user.email, 
+                ...userData 
+            }));
+            
+            // Handle redirection based on role
+            if (currentRole === 'seller') {
+                window.showAlert('Account created! Please complete your seller profile to get started.', 'success');
+                setTimeout(() => { window.location.href = 'seller.html#profile'; }, 1500);
+            } else {
+                // For Customer
+                window.showAlert('Account created successfully! Redirecting...', 'success');
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 1500);
+            }
+        }
+        
+    } catch (error) {
+        console.error('[Google Auth Processing Error]', error);
+        window.showAlert(error.message || 'Failed to process Google sign-in.', 'danger');
+        await window.FirebaseAuth.signOut();
+    } finally {
+        window.hideLoading();
+    }
+}
 
 /**
  * NEW: Handles the result after Google Sign-In Redirect.
@@ -356,113 +490,61 @@ window.signInWithGoogle = async function (currentRole) {
  * @param {string} currentRole - 'customer' or 'seller'.
  */
 window.handleGoogleRedirectResult = async function (currentRole) {
-    // Only attempt to process if the window is currently being loaded after a redirect.
-    // We rely on Firebase SDK to detect if this page load is a result of a redirect.
-    
     try {
-        window.showLoading();
-        
-        console.log(`[Google Auth] Attempting to process redirect result for role: ${currentRole}`);
+        // Only process if there's a pending redirect
         const result = await window.FirebaseAuth.getRedirectResult();
-
+        
         if (result.user) {
-            // User successfully signed in via redirect
-            const user = result.user;
-            console.log('[Google Auth] Successfully received user result from redirect.', { uid: user.uid, email: user.email, displayName: user.displayName });
-            
-            // Check if user exists in Firestore
-            const userDoc = await window.FirebaseDB.collection('users').doc(user.uid).get();
-            
-            if (userDoc.exists) {
-                const userData = userDoc.data();
-                
-                // Check role mismatch
-                if (userData.role !== currentRole) {
-                    console.error(`[Google Auth Role Mismatch] User is registered as ${userData.role} but attempted login via ${currentRole} portal.`);
-                    await window.FirebaseAuth.signOut();
-                    throw new Error(`This account is registered as ${userData.role}. Please use the correct portal.`);
-                }
-                
-                // Check pending seller status
-                if (currentRole === 'seller' && userData.status !== 'approved') {
-                    localStorage.setItem('currentUser', JSON.stringify({ uid: user.uid, email: user.email, ...userData }));
-                    window.showAlert('Login successful! Your seller account is pending approval.', 'warning');
-                    setTimeout(() => window.location.href = 'seller-pending.html', 1500);
-                    return;
-                }
-
-                // Check incomplete seller profile (Google sign-in)
-                if (currentRole === 'seller' && (!userData.businessName || !userData.address || !userData.pincode)) {
-                    localStorage.setItem('currentUser', JSON.stringify({ uid: user.uid, email: user.email, ...userData }));
-                    window.showAlert('Login successful! Please complete your seller profile.', 'success');
-                    setTimeout(() => { window.location.href = 'seller.html#profile'; }, 1500);
-                    return;
-                }
-
-                // Existing and correct role/status - store and redirect
-                localStorage.setItem('currentUser', JSON.stringify({ uid: user.uid, email: user.email, ...userData }));
-                
-            } else {
-                // New user via Google Sign-in
-                console.log('[Google Auth] New user detected. Creating Firestore profile.');
-                
-                const userData = {
-                    uid: user.uid,
-                    email: user.email,
-                    name: user.displayName || 'User',
-                    mobile: user.phoneNumber || '',
-                    role: currentRole,
-                    status: currentRole === 'seller' ? 'pending' : 'active',
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    newsletter: true,
-                    signInMethod: 'google', 
-                    coins: 0,
-                    referralCode: window.generateReferralCode(),
-                    referredBy: null,
-                    firstOrderPlaced: false,
-                };
-                
-                // Add seller default fields for new sign up
-                if (currentRole === 'seller') {
-                    userData.businessName = ''; 
-                    userData.address = ''; 
-                    userData.pincode = '';
-                    userData.city = ''; 
-                    userData.state = ''; 
-                    userData.village = ''; 
-                    userData.bankDetails = {};
-                    
-                    localStorage.setItem('currentUser', JSON.stringify({ uid: user.uid, email: user.email, ...userData }));
-                    await window.FirebaseDB.collection('users').doc(user.uid).set(userData);
-
-                    window.showAlert('Account created! Please complete your seller profile to get started.', 'success');
-                    setTimeout(() => { window.location.href = 'seller.html#profile'; }, 1500);
-                    return;
-                }
-
-                // For Customer
-                await window.FirebaseDB.collection('users').doc(user.uid).set(userData);
-                localStorage.setItem('currentUser', JSON.stringify({ uid: user.uid, email: user.email, ...userData }));
-            }
-
-            window.showAlert('Login successful! Redirecting...', 'success');
-            
-            setTimeout(() => {
-                window.redirectUser();
-            }, 1500);
-            
-        } else {
-            // No user result from redirect (e.g., first load or closed tab)
-            console.log('[Google Auth] No redirect result found. Continuing normal page load.');
+            console.log('[Google Auth] Processing redirect result');
+            await processGoogleSignInUser(result.user, currentRole);
         }
-
     } catch (error) {
-        console.error('[Google Auth Critical Error] Google redirect result error:', error);
-        window.showAlert(error.message || 'Google login failed after redirect. Please try again.', 'danger');
-        await window.FirebaseAuth.signOut();
-    } finally {
-        window.hideLoading();
+        console.error('[Google Auth Redirect Error]', error);
+        // Don't show alert here to avoid confusion
     }
+};
+
+/**
+ * Enhanced redirectUser function to handle all cases
+ */
+window.redirectUser = function () {
+    const user = JSON.parse(localStorage.getItem('currentUser'));
+
+    if (!user) {
+        console.warn('No user found in localStorage');
+        window.location.href = 'index.html';
+        return;
+    }
+
+    console.log('Redirecting user:', { role: user.role, status: user.status });
+    
+    // Customer
+    if (user.role === 'customer') {
+        window.location.href = 'index.html';
+        return;
+    }
+    
+    // Seller
+    if (user.role === 'seller') {
+        if (user.status === 'pending') {
+            window.location.href = 'seller-pending.html';
+        } else if (user.signInMethod === 'google' && (!user.businessName || !user.address || !user.pincode)) {
+            // Redirect to profile for profile completion
+            window.location.href = 'seller.html#profile'; 
+        } else {
+            window.location.href = 'seller.html';
+        }
+        return;
+    }
+    
+    // Admin
+    if (user.role === 'admin') {
+        window.location.href = 'admin.html';
+        return;
+    }
+    
+    // Fallback
+    window.location.href = 'index.html';
 };
 
 
