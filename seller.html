@@ -529,13 +529,49 @@
 <div class="section" id="earnings-section" style="display: none;">
     <div class="page-header">
         <h1>Earnings & Analytics</h1>
-        <p class="text-muted">Track your earnings and performance</p>
+        <p class="text-muted">Track your earnings and settlement status</p>
     </div>
+    
+    <!-- NEW: Wallet Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-4 col-md-6 mb-4">
+            <div class="dashboard-card wallet-card">
+                <div class="card-icon">
+                    <i class="fas fa-wallet"></i>
+                </div>
+                <h3 class="card-value" id="wallet-balance">₹0</h3>
+                <p class="card-label">Current Wallet Balance (Unsettled)</p>
+                <small class="text-muted">Amount due from FarmRent for completed rentals.</small>
+            </div>
+        </div>
+        <div class="col-xl-4 col-md-6 mb-4">
+            <div class="dashboard-card card-orders">
+                <div class="card-icon">
+                    <i class="fas fa-handshake"></i>
+                </div>
+                <h3 class="card-value" id="settled-amount">₹0</h3>
+                <p class="card-label">Total Settled Amount (Paid)</p>
+                <small class="text-success"><i class="fas fa-check-double me-1"></i> Lifetime Payouts</small>
+            </div>
+        </div>
+        <div class="col-xl-4 col-md-6 mb-4">
+            <div class="dashboard-card card-earnings">
+                <div class="card-icon">
+                    <i class="fas fa-rupee-sign"></i>
+                </div>
+                <h3 class="card-value" id="total-payout-due">₹0</h3>
+                <p class="card-label">Total Payout Due (Lifetime)</p>
+                <small class="text-primary">Wallet + Settled Amount</small>
+            </div>
+        </div>
+    </div>
+    <!-- END NEW: Wallet Cards -->
+
     
     <div class="row mb-4">
         <div class="col-md-8">
             <div class="table-container">
-                <h5 class="mb-3">Earnings Summary</h5>
+                <h5 class="mb-3">Monthly Earnings Trend</h5>
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         <div class="dashboard-card">
@@ -568,29 +604,42 @@
         </div>
     </div>
     
-   <!-- Settlement History -->
+   <!-- Settlement History and Daily Earnings Table -->
     <div class="row mt-4">
         <div class="col-12">
             <div class="table-container">
-                <h5 class="mb-3"><i class="fas fa-history me-2"></i>Payment Tracking History</h5>
-                <p class="text-muted small">Overview of payments settled by FarmRent for your completed orders.</p>
+                <h5 class="mb-3"><i class="fas fa-calendar-alt me-2"></i>Daily Earnings Breakdown</h5>
+                
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <p class="text-muted small mb-0">Orders are logged as earnings upon completion/return.</p>
+                    <div class="d-flex gap-2">
+                        <select class="form-select form-select-sm" id="daily-earnings-status-filter" onchange="filterDetailedEarnings()">
+                            <option value="all">All Orders</option>
+                            <option value="settled">Settled (Paid)</option>
+                            <option value="unsettled">Unsettled (In Wallet)</option>
+                        </select>
+                        <input type="date" class="form-control form-control-sm" id="daily-earnings-date-filter" onchange="filterDetailedEarnings()">
+                    </div>
+                </div>
+                
                 <div class="table-responsive">
                     <table class="table table-hover">
                         <thead>
                             <tr>
+                                <th>Date</th>
                                 <th>Order ID</th>
+                                <th>Customer Name</th>
                                 <th>Rental Value</th>
-                                <th>Platform Cut</th>
                                 <th>Net Payout</th>
-                                <th>Settled On</th>
-                                <th>Status</th>
+                                <th>Settlement Status</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="settlement-history-table">
+                        <tbody id="detailed-earnings-table">
                             <tr>
-                                <td colspan="6" class="text-center py-4">
+                                <td colspan="7" class="text-center py-4">
                                     <div class="spinner-border spinner-border-sm text-primary"></div>
-                                    <p class="mt-2 mb-0">Loading settlement history...</p>
+                                    <p class="mt-2 mb-0">Loading daily earnings data...</p>
                                 </td>
                             </tr>
                         </tbody>
