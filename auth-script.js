@@ -315,7 +315,7 @@ window.handleUserRegistration = async function (userData, currentRole) {
 };
 
 /**
- * Handles Google Sign-In for Customer/Seller roles.
+ * Handles Google Sign-In for Customer/Seller roles using redirect method.
  * @param {string} currentRole - 'customer' or 'seller'.
  */
 window.signInWithGoogle = async function (currentRole) {
@@ -331,99 +331,131 @@ window.signInWithGoogle = async function (currentRole) {
         provider.addScope('email');
         provider.addScope('profile');
         
-        const result = await window.FirebaseAuth.signInWithPopup(provider);
-        const user = result.user;
+        // Use signInWithRedirect for better compatibility in restrictive environments like iframes
+        await window.FirebaseAuth.signInWithRedirect(provider);
         
-        // Check if user exists in Firestore
-        const userDoc = await window.FirebaseDB.collection('users').doc(user.uid).get();
-        
-        if (userDoc.exists) {
-            const userData = userDoc.data();
-            
-            // Check role mismatch
-            if (userData.role !== currentRole) {
-                await window.FirebaseAuth.signOut();
-                throw new Error(`This account is registered as ${userData.role}. Please use the correct portal.`);
-            }
-            
-            // Check pending seller status
-            if (currentRole === 'seller' && userData.status !== 'approved') {
-                await window.FirebaseAuth.signOut();
-                window.showAlert('Your seller account is pending approval.', 'warning');
-                setTimeout(() => window.location.href = 'seller-pending.html', 1500);
-                return;
-            }
-            
-            // Check incomplete seller profile (Google sign-in)
-            if (currentRole === 'seller' && (!userData.businessName || !userData.address || !userData.pincode)) {
-                 localStorage.setItem('currentUser', JSON.stringify({ uid: user.uid, email: user.email, ...userData }));
-                 window.showAlert('Login successful! Please complete your seller profile.', 'success');
-                 setTimeout(() => { window.location.href = 'seller.html#profile'; }, 1500);
-                 return;
-            }
-
-            // Existing and correct role/status - store and redirect
-            localStorage.setItem('currentUser', JSON.stringify({ uid: user.uid, email: user.email, ...userData }));
-            
-        } else {
-            // New user - create document
-            const referralCode = document.getElementById('referralCode')?.value.trim().toUpperCase() || '';
-            let referrerId = null;
-            if (referralCode && window.lookupReferralCode) {
-                 referrerId = await window.lookupReferralCode(referralCode);
-            }
-            
-            const userData = {
-                uid: user.uid,
-                email: user.email,
-                name: user.displayName || 'User',
-                mobile: user.phoneNumber || '',
-                role: currentRole,
-                status: currentRole === 'seller' ? 'pending' : 'active',
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                newsletter: true,
-                signInMethod: 'google', 
-                coins: 0,
-                referralCode: window.generateReferralCode(),
-                referredBy: referrerId,
-                firstOrderPlaced: false,
-            };
-            
-            // Add seller default fields for new sign up
-            if (currentRole === 'seller') {
-                userData.businessName = ''; 
-                userData.address = ''; 
-                userData.pincode = '';
-                userData.city = ''; 
-                userData.state = ''; 
-                userData.village = ''; 
-                // Set immediate redirect to profile for completion
-                localStorage.setItem('currentUser', JSON.stringify({ uid: user.uid, email: user.email, ...userData }));
-                await window.FirebaseDB.collection('users').doc(user.uid).set(userData);
-
-                window.showAlert('Account created! Please complete your seller profile to get started.', 'success');
-                setTimeout(() => { window.location.href = 'seller.html#profile'; }, 1500);
-                return;
-            }
-
-            await window.FirebaseDB.collection('users').doc(user.uid).set(userData);
-            localStorage.setItem('currentUser', JSON.stringify({ uid: user.uid, email: user.email, ...userData }));
-        }
-        
-        window.showAlert('Login successful! Redirecting...', 'success');
-        
-        setTimeout(() => {
-            window.redirectUser();
-        }, 1500);
+        // Control flow continues in handleGoogleRedirectResult on the redirect page.
         
     } catch (error) {
         console.error('Google sign-in error:', error);
         window.showAlert(error.message || 'Google sign-in failed. Please try again.', 'danger');
+    } finally {
+        window.hideLoading();
+    }
+};
+
+/**
+ * NEW: Handles the result after Google Sign-In Redirect.
+ * Must be called on every load of the auth pages.
+ * @param {string} currentRole - 'customer' or 'seller'.
+ */
+window.handleGoogleRedirectResult = async function (currentRole) {
+    try {
+        window.showLoading();
+        
+        const result = await window.FirebaseAuth.getRedirectResult();
+
+        if (result.user) {
+            // User successfully signed in via redirect
+            const user = result.user;
+            
+            // Check if user exists in Firestore
+            const userDoc = await window.FirebaseDB.collection('users').doc(user.uid).get();
+            
+            if (userDoc.exists) {
+                const userData = userDoc.data();
+                
+                // Check role mismatch
+                if (userData.role !== currentRole) {
+                    await window.FirebaseAuth.signOut();
+                    throw new Error(`This account is registered as ${userData.role}. Please use the correct portal.`);
+                }
+                
+                // Check pending seller status
+                if (currentRole === 'seller' && userData.status !== 'approved') {
+                    localStorage.setItem('currentUser', JSON.stringify({ uid: user.uid, email: user.email, ...userData }));
+                    window.showAlert('Login successful! Your seller account is pending approval.', 'warning');
+                    setTimeout(() => window.location.href = 'seller-pending.html', 1500);
+                    return;
+                }
+
+                // Check incomplete seller profile (Google sign-in)
+                if (currentRole === 'seller' && (!userData.businessName || !userData.address || !userData.pincode)) {
+                    localStorage.setItem('currentUser', JSON.stringify({ uid: user.uid, email: user.email, ...userData }));
+                    window.showAlert('Login successful! Please complete your seller profile.', 'success');
+                    setTimeout(() => { window.location.href = 'seller.html#profile'; }, 1500);
+                    return;
+                }
+
+                // Existing and correct role/status - store and redirect
+                localStorage.setItem('currentUser', JSON.stringify({ uid: user.uid, email: user.email, ...userData }));
+                
+            } else {
+                // New user via Google Sign-in
+                
+                // Note: Referral Code capture is disabled for redirect flow as form data is lost.
+                // We proceed with registration without referral check.
+                
+                const userData = {
+                    uid: user.uid,
+                    email: user.email,
+                    name: user.displayName || 'User',
+                    mobile: user.phoneNumber || '',
+                    role: currentRole,
+                    status: currentRole === 'seller' ? 'pending' : 'active',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    newsletter: true,
+                    signInMethod: 'google', 
+                    coins: 0,
+                    referralCode: window.generateReferralCode(),
+                    referredBy: null, // No referrer in redirect flow unless stored securely
+                    firstOrderPlaced: false,
+                };
+                
+                // Add seller default fields for new sign up
+                if (currentRole === 'seller') {
+                    userData.businessName = ''; 
+                    userData.address = ''; 
+                    userData.pincode = '';
+                    userData.city = ''; 
+                    userData.state = ''; 
+                    userData.village = ''; 
+                    
+                    // Set immediate redirect to profile for completion
+                    localStorage.setItem('currentUser', JSON.stringify({ uid: user.uid, email: user.email, ...userData }));
+                    await window.FirebaseDB.collection('users').doc(user.uid).set(userData);
+
+                    window.showAlert('Account created! Please complete your seller profile to get started.', 'success');
+                    setTimeout(() => { window.location.href = 'seller.html#profile'; }, 1500);
+                    return;
+                }
+
+                // For Customer
+                await window.FirebaseDB.collection('users').doc(user.uid).set(userData);
+                localStorage.setItem('currentUser', JSON.stringify({ uid: user.uid, email: user.email, ...userData }));
+            }
+
+            window.showAlert('Login successful! Redirecting...', 'success');
+            
+            setTimeout(() => {
+                window.redirectUser();
+            }, 1500);
+            
+        } else {
+            // No user result from redirect (e.g., first load or closed tab)
+            window.hideLoading();
+            // Continue with normal page loading logic
+        }
+
+    } catch (error) {
+        console.error('Google redirect result error:', error);
+        window.showAlert(error.message || 'Google login failed after redirect. Please try again.', 'danger');
         await window.FirebaseAuth.signOut();
     } finally {
         window.hideLoading();
     }
 };
+
 
 /**
  * Reset password
@@ -480,9 +512,12 @@ window.checkSessionAndRedirect = function(currentRole) {
                                 email: user.email,
                                 ...userData
                             }));
-                            setTimeout(() => {
-                                window.redirectUser();
-                            }, 500);
+                            // Only redirect if a result from Google isn't being processed
+                            if (window.FirebaseAuth.getRedirectResult && !localStorage.getItem('isGoogleRedirectProcessing')) {
+                                setTimeout(() => {
+                                    window.redirectUser();
+                                }, 500);
+                            }
                         } else {
                             // Mismatch role: log out and show error
                             await window.FirebaseAuth.signOut();
