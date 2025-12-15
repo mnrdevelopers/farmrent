@@ -148,6 +148,21 @@ body {
     color: white;
 }
 
+/* NEW: Wallet Card Style (Unsettled Amount) */
+.wallet-card {
+    border: 3px solid var(--sun-yellow);
+}
+
+.wallet-card .card-icon {
+    background: linear-gradient(135deg, var(--sun-yellow), #e0b143);
+    color: var(--farm-green);
+}
+
+.wallet-card .card-value {
+    color: var(--earth-brown);
+}
+/* END NEW */
+
 /* Table Styles */
 .table-container {
     background: white;
