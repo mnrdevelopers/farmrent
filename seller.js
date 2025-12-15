@@ -87,7 +87,13 @@ window.loadSellerDashboard = async () => {
     loadProfileData();
     
     if (loadingEl) loadingEl.classList.remove('active');
-    showSection('dashboard');
+    
+    // FIX: Read URL hash on load and show the correct section, defaulting to 'dashboard'
+    const hash = window.location.hash.substring(1);
+    const validSections = ['dashboard', 'equipment', 'orders', 'add-equipment', 'earnings', 'notifications', 'reviews', 'profile'];
+    const initialSection = validSections.includes(hash) ? hash : 'dashboard';
+
+    showSection(initialSection);
     loadLibraryImages(); // Load image library
 }
 
@@ -147,7 +153,7 @@ function updateSellerInfo() {
 
         const registeredPincodeDisplay = document.getElementById('registered-pincode-display');
         if (registeredPincodeDisplay) {
-            registeredPincodeDisplay.textContent = sellerData.pincode || 'N/A';
+            registeredPincodeDisplay.textContent = sellerData?.pincode || 'N/A';
         }
         
         // Enforce readonly Pincode in profile if set
@@ -194,6 +200,9 @@ function showSection(sectionId) {
     if (navLink) {
         navLink.classList.add('active');
     }
+    
+    // Update URL hash (Crucial for page reloads)
+    window.location.hash = sectionId;
     
     // Load section data
     switch(sectionId) {
