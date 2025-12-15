@@ -93,7 +93,10 @@ window.showAlert = function (message, type = 'info') {
         form.insertBefore(alertDiv, form.firstChild);
     } else {
          // Fallback to the general helper for non-form alerts
-         window.firebaseHelpers.showAlert(message, type);
+         // Assuming window.firebaseHelpers.showAlert exists elsewhere.
+         if (window.firebaseHelpers && typeof window.firebaseHelpers.showAlert === 'function') {
+             window.firebaseHelpers.showAlert(message, type);
+         }
     }
     
     // Auto remove after 5 seconds
@@ -331,14 +334,16 @@ window.signInWithGoogle = async function (currentRole) {
         provider.addScope('email');
         provider.addScope('profile');
         
+        // Log initiation
+        console.log(`[Google Auth] Starting sign-in redirect for role: ${currentRole}`);
+        
         // Use signInWithRedirect for better compatibility in restrictive environments like iframes.
-        // DO NOT await this call, as it initiates a navigation change that terminates current execution.
         window.FirebaseAuth.signInWithRedirect(provider);
         
         // Execution stops here and resumes in handleGoogleRedirectResult on the next page load.
         
     } catch (error) {
-        console.error('Google sign-in error:', error);
+        console.error('[Google Auth Critical Error] Google sign-in initiation error:', error);
         window.showAlert(error.message || 'Google sign-in failed. Please try again.', 'danger');
         // Only hide loading if the initial attempt fails without redirecting
         window.hideLoading();
@@ -351,14 +356,19 @@ window.signInWithGoogle = async function (currentRole) {
  * @param {string} currentRole - 'customer' or 'seller'.
  */
 window.handleGoogleRedirectResult = async function (currentRole) {
+    // Only attempt to process if the window is currently being loaded after a redirect.
+    // We rely on Firebase SDK to detect if this page load is a result of a redirect.
+    
     try {
         window.showLoading();
         
+        console.log(`[Google Auth] Attempting to process redirect result for role: ${currentRole}`);
         const result = await window.FirebaseAuth.getRedirectResult();
 
         if (result.user) {
             // User successfully signed in via redirect
             const user = result.user;
+            console.log('[Google Auth] Successfully received user result from redirect.', { uid: user.uid, email: user.email, displayName: user.displayName });
             
             // Check if user exists in Firestore
             const userDoc = await window.FirebaseDB.collection('users').doc(user.uid).get();
@@ -368,6 +378,7 @@ window.handleGoogleRedirectResult = async function (currentRole) {
                 
                 // Check role mismatch
                 if (userData.role !== currentRole) {
+                    console.error(`[Google Auth Role Mismatch] User is registered as ${userData.role} but attempted login via ${currentRole} portal.`);
                     await window.FirebaseAuth.signOut();
                     throw new Error(`This account is registered as ${userData.role}. Please use the correct portal.`);
                 }
@@ -393,9 +404,7 @@ window.handleGoogleRedirectResult = async function (currentRole) {
                 
             } else {
                 // New user via Google Sign-in
-                
-                // Note: Referral Code capture is disabled for redirect flow as form data is lost.
-                // We proceed with registration without referral check.
+                console.log('[Google Auth] New user detected. Creating Firestore profile.');
                 
                 const userData = {
                     uid: user.uid,
@@ -409,7 +418,7 @@ window.handleGoogleRedirectResult = async function (currentRole) {
                     signInMethod: 'google', 
                     coins: 0,
                     referralCode: window.generateReferralCode(),
-                    referredBy: null, // No referrer in redirect flow unless stored securely
+                    referredBy: null,
                     firstOrderPlaced: false,
                 };
                 
@@ -421,9 +430,8 @@ window.handleGoogleRedirectResult = async function (currentRole) {
                     userData.city = ''; 
                     userData.state = ''; 
                     userData.village = ''; 
-                    userData.bankDetails = {}; // Initialize bank details
+                    userData.bankDetails = {};
                     
-                    // Set immediate redirect to profile for completion
                     localStorage.setItem('currentUser', JSON.stringify({ uid: user.uid, email: user.email, ...userData }));
                     await window.FirebaseDB.collection('users').doc(user.uid).set(userData);
 
@@ -445,12 +453,11 @@ window.handleGoogleRedirectResult = async function (currentRole) {
             
         } else {
             // No user result from redirect (e.g., first load or closed tab)
-            window.hideLoading();
-            // Continue with normal page loading logic
+            console.log('[Google Auth] No redirect result found. Continuing normal page load.');
         }
 
     } catch (error) {
-        console.error('Google redirect result error:', error);
+        console.error('[Google Auth Critical Error] Google redirect result error:', error);
         window.showAlert(error.message || 'Google login failed after redirect. Please try again.', 'danger');
         await window.FirebaseAuth.signOut();
     } finally {
@@ -477,7 +484,7 @@ window.resetPassword = async function () {
         
         // Hide modal
         const modal = bootstrap.Modal.getInstance(document.getElementById('resetPasswordModal'));
-        modal.hide();
+        if (modal) modal.hide();
         
     } catch (error) {
         console.error('Reset password error:', error);
@@ -497,6 +504,7 @@ window.showResetPassword = function () {
 
 /**
  * Checks for existing user session with the current role on page load.
+ * NOTE: This runs only when a user is NOT actively processing a redirect result.
  * @param {string} currentRole 
  */
 window.checkSessionAndRedirect = function(currentRole) {
@@ -514,12 +522,10 @@ window.checkSessionAndRedirect = function(currentRole) {
                                 email: user.email,
                                 ...userData
                             }));
-                            // Only redirect if a result from Google isn't being processed
-                            if (window.FirebaseAuth.getRedirectResult && !localStorage.getItem('isGoogleRedirectProcessing')) {
-                                setTimeout(() => {
-                                    window.redirectUser();
-                                }, 500);
-                            }
+                            // Redirect if session is verified and we are not handling a fresh redirect
+                            setTimeout(() => {
+                                window.redirectUser();
+                            }, 500);
                         } else {
                             // Mismatch role: log out and show error
                             await window.FirebaseAuth.signOut();
