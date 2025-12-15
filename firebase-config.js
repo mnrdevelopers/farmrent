@@ -34,8 +34,8 @@ try {
             "post_office_api_url": "",
             "fast2sms_api_key": "",
             "geoapify_api_key": "",
-            "admin_login_email": "", 
-            "admin_login_password": "" 
+            "admin_login_email": "", // Ensure default is an empty string
+            "admin_login_password": "" // Ensure default is an empty string
         };
         
         // Fetch and activate the configuration values
@@ -260,7 +260,7 @@ window.firebaseHelpers = {
             }; 
         }
         try {
-            // Fetch and activate to ensure the latest values are available before reading
+            // Re-fetch and activate to ensure the latest values are available before reading
             await remoteConfig.fetchAndActivate(); 
             const email = remoteConfig.getString('admin_login_email');
             const password = remoteConfig.getString('admin_login_password');
