@@ -757,7 +757,11 @@ function initializeEarningsChart() {
         },
         options: {
             responsive: true,
-            plugins: { legend: { display: true } },
+            plugins: { 
+                legend: { 
+                    display: true 
+                } 
+            },
             scales: {
                 y: {
                     beginAtZero: true,
@@ -768,6 +772,7 @@ function initializeEarningsChart() {
                     }
                 }
             }
+        }  // <-- This was the missing closing brace for the 'options' object
     });
 }
 
