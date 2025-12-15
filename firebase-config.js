@@ -33,10 +33,9 @@ try {
             "razorpay_key_id": "", 
             "post_office_api_url": "",
             "fast2sms_api_key": "",
-            "geoapify_api_key": "", // NEW: Geoapify API Key
-            // NEW ADMIN CONFIG KEYS: Set a known login for the admin role
-            "admin_login_email": "admin@farmrent.com", 
-            "admin_login_password": "AdminPassword123" 
+            "geoapify_api_key": "",
+            "admin_login_email": "", 
+            "admin_login_password": "" 
         };
         
         // Fetch and activate the configuration values
