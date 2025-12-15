@@ -16,6 +16,12 @@ try {
         firebase.initializeApp(firebaseConfig);
     }
     
+    // Set persistence to LOCAL for better session handling
+    firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+        .catch(error => {
+            console.warn('Persistence setting error:', error);
+        });
+    
     // Initialize Firebase services
     const auth = firebase.auth();
     const db = firebase.firestore();
