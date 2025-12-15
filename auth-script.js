@@ -1,12 +1,3 @@
-/**
- * Core Authentication Logic
- * This script is shared by customer-auth.html, seller-auth.html, and admin-auth.html
- * It relies on global objects: window.FirebaseAuth, window.FirebaseDB, and window.firebaseHelpers
- */
-
-// --- GLOBAL UTILITIES (Copied from auth.html) ---
-
-// Role-specific data structure (must be available globally)
 const roleData = {
     customer: {
         role: 'customer',
@@ -156,7 +147,9 @@ window.handleEmailLogin = async function (email, password, currentRole) {
             const adminCreds = await window.firebaseHelpers.getAdminCredentials();
             
             if (email !== adminCreds.email) {
-                throw new Error('Invalid Admin email.');
+                // MODIFIED ERROR MESSAGE FOR CLARITY (Issue reported by user)
+                const configuredEmail = adminCreds.email || 'N/A';
+                throw new Error(`Invalid Admin email. The email entered does not match the configured Admin email in Remote Config (${configuredEmail}).`);
             }
             
             // Step 1: Sign in with the RC email/password. 
@@ -501,11 +494,8 @@ window.checkSessionAndRedirect = function(currentRole) {
                             window.showAlert(`You are logged in as ${userData.role}. Please log out or use the correct portal.`, 'danger');
                         }
                     } else if (currentRole === 'admin' && user.email === roleData.admin.email) {
-                         // Allow admin to proceed if RC email matches and no profile exists yet (should be created on first login)
-                         // But for now, we rely on the handleEmailLogin creating/checking the profile. If here, it means the token is old.
-                         // Do nothing, let user login again.
+    
                     } else {
-                        // Log out user with missing profile data
                         await window.FirebaseAuth.signOut();
                     }
                 } catch (error) {
