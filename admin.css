@@ -464,24 +464,31 @@ body {
 
 /* Only settlement tabs */
 .settlement-tabs .nav-link {
-    background-color: #0d2b5b;
-    color: #ffffff;
-    border: none;
-    margin-right: 6px;
+    background-color: #f8f9fa; /* Light gray background */
+    color: #333;
+    border: 1px solid #ddd;
+    border-bottom: none;
+    margin-right: 2px;
 }
 
 .settlement-tabs .nav-link.active {
-    background-color: #123a7a;
+    background-color: var(--admin-blue);
     color: #ffffff;
+    border-color: var(--admin-blue);
     font-weight: 600;
 }
 
-.settlement-tabs .nav-link:hover {
-    background-color: #174a9c;
-    color: #ffffff;
+.settlement-tabs .nav-link:hover:not(.active) {
+    background-color: #e9ecef;
 }
 
 .settlement-tabs .nav-link i {
-    color: #ffffff;
+    color: inherit;
 }
 
+/* Settlement Filters */
+.settlement-filters {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+}
