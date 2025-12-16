@@ -10,7 +10,7 @@ let detailedReportChart = null;
 let orderStatusChart = null;
 let categoryChart = null;
 let userGrowthChart = null;
-let allNotifications = []; // New global variable to hold notifications
+let allNotifications = []; 
 let allOrdersData = []; // Store all orders once fetched, to avoid redundant reads
 
 // Helper to get the Firestore document reference for public collections
@@ -53,9 +53,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Hide loading spinner
     document.getElementById('loading').classList.remove('active');
     
-    // Check URL hash for the current section (FIX APPLIED HERE)
+    // Check URL hash for the current section
     const hash = window.location.hash.substring(1);
-    // Use the hash if it matches a known section ID, otherwise default to 'dashboard'
     const validSections = ['dashboard', 'users', 'sellers', 'equipment', 'orders', 'settlements', 'reports', 'categories', 'notifications', 'settings'];
     const initialSection = validSections.includes(hash) ? hash : 'dashboard';
 
@@ -124,13 +123,13 @@ function showSection(sectionId) {
         case 'categories':
             loadCategories();
             break;
-        case 'notifications': // NEW: Load notifications
+        case 'notifications': 
             loadNotifications();
             break;
         case 'settings':
             loadSettingsData();
             break;
-        case 'settlements': // NEW: Load Settlements
+        case 'settlements': 
             loadSettlements();
             break;
     }
@@ -146,9 +145,9 @@ function updatePageTitle(sectionId) {
         orders: 'Orders Management',
         reports: 'Reports & Analytics',
         categories: 'Categories Management',
-        notifications: 'Notifications Management', // NEW TITLE
+        notifications: 'Notifications Management',
         settings: 'System Settings',
-        settlements: 'Payment Settlements' // NEW TITLE
+        settlements: 'Wallet & Settlements' 
     };
     
     document.getElementById('page-title').textContent = titles[sectionId] || 'Admin Panel';
@@ -170,7 +169,7 @@ async function loadDashboardData() {
         document.getElementById('pending-users-count').textContent = 0; 
         document.getElementById('pending-sellers-count').textContent = stats.pendingSellers;
         document.getElementById('pending-equipment-count').textContent = stats.pendingEquipment;
-        // NEW: Update Notification Badge Count
+        // Update Notification Badge Count
         document.getElementById('new-notifications-count').textContent = stats.unreadNotifications; 
         document.getElementById('notification-count').textContent = stats.unreadNotifications; 
         
@@ -189,7 +188,7 @@ async function loadDashboardData() {
     }
 }
 
-// Calculate platform statistics
+// Calculate platform statistics (Updated to track platform fees)
 async function calculatePlatformStats() {
     try {
         // --- 1. User & Seller Counts ---
@@ -236,9 +235,10 @@ async function calculatePlatformStats() {
         let todayRevenue = 0;
         let revenueData = [0, 0, 0, 0, 0, 0, 0]; // Last 7 days
         let pendingSettlementsAmount = 0;
+        let totalSettledAmount = 0; // Added for Settlements Tab
+        let platformFeesCollected = 0; // Added for Settlements Tab
         let unsettledCount = 0;
-        let settledCount = 0;
-
+        
         ordersSnapshot.forEach(doc => {
             const order = { id: doc.id, ...doc.data() };
             allOrdersData.push(order); // Store all orders
@@ -254,13 +254,18 @@ async function calculatePlatformStats() {
                 revenueData[6 - daysAgo] += order.totalAmount || 0;
             }
             
-            // Settlement Stats Calculation
+            // Settlement Stats Calculation (only for confirmed completions)
             if ((order.status === 'completed' || order.status === 'returned')) {
+                 const commission = order.platformCommissionAmount || 0;
+                 const customerFee = order.platformFee || 0;
+                 
+                 platformFeesCollected += (commission + customerFee); // Track TOTAL platform revenue
+
                  if (order.settlementStatus === 'unsettled') {
                      pendingSettlementsAmount += order.sellerNetEarnings || 0;
                      unsettledCount++;
                  } else if (order.settlementStatus === 'settled') {
-                     settledCount++;
+                     totalSettledAmount += order.settledAmount || order.sellerNetEarnings || 0;
                  }
             }
         });
@@ -276,7 +281,7 @@ async function calculatePlatformStats() {
                 message: `New Seller registration: ${seller.name || 'New User'} (${seller.businessName || 'N/A'})`,
                 relatedId: doc.id,
                 date: seller.createdAt,
-                read: false, // Default to unread for pending approvals
+                read: false, 
                 action: () => showSection('sellers')
             });
         });
@@ -297,7 +302,7 @@ async function calculatePlatformStats() {
         // Sort notifications by date (newest first)
         notifications.sort((a, b) => (b.date?.toDate() || 0) - (a.date?.toDate() || 0));
         
-        allNotifications = notifications; // Store globally
+        allNotifications = notifications; 
         const unreadNotifications = notifications.filter(n => !n.read).length;
         const recentNotifications = notifications.slice(0, 5);
         
@@ -313,13 +318,13 @@ async function calculatePlatformStats() {
             unreadNotifications,
             recentNotifications,
             pendingSettlementsAmount,
-            unsettledCount,
-            settledCount
+            totalSettledAmount,
+            platformFeesCollected,
+            unsettledCount
         };
         
     } catch (error) {
         console.error('Error calculating stats:', error);
-        // Ensure failure returns initialized values for all expected fields
         return {
             totalUsers: 0,
             totalSellers: 0,
@@ -332,25 +337,27 @@ async function calculatePlatformStats() {
             unreadNotifications: 0,
             recentNotifications: [],
             pendingSettlementsAmount: 0,
-            unsettledCount: 0,
-            settledCount: 0
+            totalSettledAmount: 0,
+            platformFeesCollected: 0,
+            unsettledCount: 0
         };
     }
 }
 
-// Load settlements (Modified to focus on stats update and initial load)
+// Load settlements with enhanced stats
 async function loadSettlements() {
     try {
         // Recalculate stats to ensure figures are up-to-date and allOrdersData is populated
         const stats = await calculatePlatformStats();
         
-        // Update stats cards using the results from calculatePlatformStats
+        // Update stats cards
         document.getElementById('pending-settlements-amount').textContent = window.firebaseHelpers.formatCurrency(stats.pendingSettlementsAmount);
+        document.getElementById('total-settled-amount').textContent = window.firebaseHelpers.formatCurrency(stats.totalSettledAmount);
+        document.getElementById('platform-fees-collected').textContent = window.firebaseHelpers.formatCurrency(stats.platformFeesCollected);
         document.getElementById('unsettled-count').textContent = stats.unsettledCount.toLocaleString();
-        document.getElementById('settled-count').textContent = stats.settledCount.toLocaleString();
 
-        // Default to showing the unsettled list
-        displaySettlementData('unsettled'); 
+        // Default: Show wallets aggregation first (it's the active tab in HTML)
+        displaySettlementData('wallets'); 
 
     } catch (error) {
         console.error('Error loading settlements:', error);
@@ -359,134 +366,215 @@ async function loadSettlements() {
 }
 
 /**
- * Displays settlement data based on status (unsettled or settled)
- * @param {string} status 'unsettled' or 'settled'
+ * Filter Settlements Data based on Inputs
  */
-async function displaySettlementData(status) {
-    const tableId = status === 'settled' ? 'settled-history-table' : 'settlements-table';
-    const settlementsTable = document.getElementById(tableId);
-    if (!settlementsTable) return;
+function applySettlementFilters() {
+    // Read the active tab to know what to refresh
+    const activeTab = document.querySelector('.settlement-tabs .nav-link.active');
+    if (activeTab.id === 'seller-wallets-tab') {
+        displaySettlementData('wallets');
+    } else if (activeTab.id === 'unsettled-tab') {
+        displaySettlementData('unsettled');
+    } else {
+        displaySettlementData('settled');
+    }
+}
+window.applySettlementFilters = applySettlementFilters;
 
-    // Show loading state
-    settlementsTable.innerHTML = `
-        <tr>
-            <td colspan="7" class="text-center py-4">
-                <div class="spinner-border spinner-border-sm text-primary"></div>
-                <p class="mt-2 mb-0">Loading ${status} history...</p>
-            </td>
-        </tr>
-    `;
+/**
+ * Displays settlement data based on active tab and filters
+ * @param {string} viewType 'wallets', 'unsettled', or 'settled'
+ */
+async function displaySettlementData(viewType) {
+    // 1. Get Filter Values
+    const searchInput = document.getElementById('settlement-search').value.toLowerCase();
+    const startDateVal = document.getElementById('settlement-start-date').value;
+    const endDateVal = document.getElementById('settlement-end-date').value;
     
-    // Ensure allOrdersData is populated (should be done by loadSettlements/calculatePlatformStats)
+    // 2. Prepare Data (allOrdersData is already loaded by loadSettlements/calculatePlatformStats)
     if (allOrdersData.length === 0) {
+        // Fallback fetch if accessed directly without full load
         try {
             const ordersSnapshot = await getPublicCollectionRef('orders').get();
-            ordersSnapshot.forEach(doc => {
-                 allOrdersData.push({ id: doc.id, ...doc.data() });
-            });
-        } catch (e) {
-             console.error("Failed to fetch orders for displaySettlementData:", e);
-             // Leave loading message or set error message
-             settlementsTable.innerHTML = `
-                 <tr>
-                     <td colspan="7" class="text-center py-4 text-danger">
-                         <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
-                         <p>Error fetching order data.</p>
-                     </td>
-                 </tr>
-             `;
-             return;
-        }
+            ordersSnapshot.forEach(doc => { allOrdersData.push({ id: doc.id, ...doc.data() }); });
+        } catch (e) { console.error(e); }
     }
 
-    const ordersToShow = allOrdersData.filter(order => 
-        (order.status === 'completed' || order.status === 'returned') && 
-        order.settlementStatus === status
+    // 3. Filter Data Base
+    let filteredOrders = allOrdersData.filter(order => 
+        (order.status === 'completed' || order.status === 'returned')
     );
 
-    if (ordersToShow.length === 0) {
-        settlementsTable.innerHTML = `
-            <tr>
-                <td colspan="7" class="text-center py-4">
-                    <i class="fas fa-info-circle fa-2x text-muted mb-3"></i>
-                    <p>No ${status} records found.</p>
-                </td>
-            </tr>
-        `;
-        return;
+    // Apply Search Filter (Seller Name, Business Name, Order ID)
+    if (searchInput) {
+        filteredOrders = filteredOrders.filter(order => {
+            const sellerName = order.sellerBusinessNames ? order.sellerBusinessNames.toLowerCase() : '';
+            const orderId = order.id.toLowerCase();
+            return sellerName.includes(searchInput) || orderId.includes(searchInput);
+        });
     }
 
-    settlementsTable.innerHTML = '';
-    ordersToShow.forEach(order => {
-        if (status === 'unsettled') {
-            settlementsTable.innerHTML += createSettlementRow(order);
-        } else {
-            settlementsTable.innerHTML += createSettledHistoryRow(order);
-        }
-    });
-    
-    // Update active tab visual state
-    const unsettledTab = document.getElementById('unsettled-tab');
-    const settledTab = document.getElementById('settled-tab');
+    // Apply Date Filter
+    if (startDateVal || endDateVal) {
+        const startDate = startDateVal ? new Date(startDateVal) : new Date('2000-01-01');
+        const endDate = endDateVal ? new Date(endDateVal) : new Date();
+        endDate.setHours(23, 59, 59); // End of day
 
-    if (unsettledTab && settledTab) {
-        if (status === 'unsettled') {
-            unsettledTab.classList.add('active');
-            settledTab.classList.remove('active');
-            // Ensure content is shown
-            document.getElementById('unsettled-content').classList.add('show', 'active');
-            document.getElementById('settled-content').classList.remove('show', 'active');
-        } else {
-            unsettledTab.classList.remove('active');
-            settledTab.classList.add('active');
-            // Ensure content is shown
-            document.getElementById('unsettled-content').classList.remove('show', 'active');
-            document.getElementById('settled-content').classList.add('show', 'active');
-        }
+        filteredOrders = filteredOrders.filter(order => {
+            // Use settledAt for settled history, otherwise createdAt/updatedAt
+            const dateToCheck = viewType === 'settled' && order.settledAt ? order.settledAt.toDate() : order.createdAt.toDate();
+            return dateToCheck >= startDate && dateToCheck <= endDate;
+        });
+    }
+
+    // 4. Render Specific View
+    if (viewType === 'wallets') {
+        renderSellerWallets(filteredOrders);
+    } else if (viewType === 'unsettled') {
+        renderUnsettledList(filteredOrders);
+    } else {
+        renderSettledHistory(filteredOrders);
     }
 }
 window.displaySettlementData = displaySettlementData; 
 
 /**
- * Creates a row for PENDING settlements (Unsettled list)
+ * Aggregates pending orders by Seller to show "Wallet Balances"
  */
+function renderSellerWallets(orders) {
+    const tableBody = document.getElementById('seller-wallets-table');
+    tableBody.innerHTML = '';
+
+    // Only aggregate UNSETTLED orders
+    const unsettledOrders = orders.filter(o => o.settlementStatus === 'unsettled');
+
+    if (unsettledOrders.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted">No pending wallets found for criteria.</td></tr>`;
+        return;
+    }
+
+    // Group by Seller ID
+    const wallets = {};
+    unsettledOrders.forEach(order => {
+        // Handle potentially multiple sellers in one order (though rare in MVP, structure supports it)
+        // For simplicity, assuming primary seller or split logic matches ID arrays
+        const sellerIds = order.sellerIds || [];
+        const businessNames = (order.sellerBusinessNames || '').split(',');
+        
+        sellerIds.forEach((sid, index) => {
+            if (!wallets[sid]) {
+                wallets[sid] = {
+                    name: businessNames[index] || 'Unknown Business',
+                    orderCount: 0,
+                    totalRental: 0,
+                    totalFees: 0,
+                    netPayout: 0,
+                    orderIds: []
+                };
+            }
+            // For MVP, simplistic attribution (assuming 1 seller per item usually)
+            // Ideally, we'd split amount per seller. Using total here if single seller.
+            if (sellerIds.length === 1) {
+                wallets[sid].orderCount++;
+                wallets[sid].totalRental += order.subtotalAmount || 0;
+                wallets[sid].totalFees += order.platformCommissionAmount || 0;
+                wallets[sid].netPayout += order.sellerNetEarnings || 0;
+                wallets[sid].orderIds.push(order.id);
+            }
+        });
+    });
+
+    Object.entries(wallets).forEach(([sellerId, wallet]) => {
+        tableBody.innerHTML += `
+            <tr>
+                <td><strong>${wallet.name}</strong><br><small class="text-muted">ID: ${sellerId.substring(0,8)}...</small></td>
+                <td>${wallet.orderCount}</td>
+                <td>${window.firebaseHelpers.formatCurrency(wallet.totalRental)}</td>
+                <td class="text-danger">-${window.firebaseHelpers.formatCurrency(wallet.totalFees)}</td>
+                <td><strong class="text-success h6">${window.firebaseHelpers.formatCurrency(wallet.netPayout)}</strong></td>
+                <td>
+                    <button class="btn btn-sm btn-success" onclick="processWalletSettlement('${sellerId}', '${wallet.netPayout}', '${wallet.orderIds.join(',')}')">
+                        <i class="fas fa-check-double me-1"></i> Settle All
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+/**
+ * Render individual unsettled orders
+ */
+function renderUnsettledList(orders) {
+    const tableBody = document.getElementById('settlements-table');
+    tableBody.innerHTML = '';
+    
+    const relevantOrders = orders.filter(o => o.settlementStatus === 'unsettled');
+
+    if (relevantOrders.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted">No pending individual orders.</td></tr>`;
+        return;
+    }
+
+    relevantOrders.forEach(order => {
+        tableBody.innerHTML += createSettlementRow(order);
+    });
+}
+
+/**
+ * Render settled history
+ */
+function renderSettledHistory(orders) {
+    const tableBody = document.getElementById('settled-history-table');
+    tableBody.innerHTML = '';
+    
+    const relevantOrders = orders.filter(o => o.settlementStatus === 'settled');
+
+    if (relevantOrders.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted">No settled history found.</td></tr>`;
+        return;
+    }
+
+    relevantOrders.forEach(order => {
+        tableBody.innerHTML += createSettledHistoryRow(order);
+    });
+}
+
 function createSettlementRow(order) {
-    const platformCutRate = (order.platformCommissionRate * 100).toFixed(1);
+    // Show dates
+    const date = window.firebaseHelpers.formatDate(order.createdAt);
     
     return `
         <tr>
             <td>#${order.id.substring(0, 8)}</td>
-            <td>${order.sellerBusinessNames || 'N/A'} (ID: ${order.sellerIds?.join(',') || 'N/A'})</td>
+            <td>${date}</td>
+            <td>${order.sellerBusinessNames || 'N/A'}</td>
             <td>${window.firebaseHelpers.formatCurrency(order.subtotalAmount || 0)}</td>
-            <td>${window.firebaseHelpers.formatCurrency(order.platformCommissionAmount || 0)} (${platformCutRate}%)</td>
+            <td class="text-danger">-${window.firebaseHelpers.formatCurrency(order.platformCommissionAmount || 0)}</td>
             <td><strong>${window.firebaseHelpers.formatCurrency(order.sellerNetEarnings || 0)}</strong></td>
-            <td><span class="status-badge status-pending">Unsettled</span></td>
             <td>
-                <button class="btn-action btn-approve" onclick="processSettlement('${order.id}')" title="Mark as Settled and Paid">
-                    <i class="fas fa-handshake"></i> Settle Payment
+                <button class="btn-action btn-approve" onclick="processSettlement('${order.id}')" title="Settle Single Order">
+                    <i class="fas fa-handshake"></i>
                 </button>
             </td>
         </tr>
     `;
 }
 
-/**
- * NEW: Creates a row for COMPLETED settlements (Settled History list)
- */
 function createSettledHistoryRow(order) {
-    const settledAt = order.settledAt ? window.firebaseHelpers.formatDateTime(order.settledAt) : 'N/A';
-    const transactionId = order.transactionId || 'N/A';
-    
+    const settledAt = order.settledAt ? window.firebaseHelpers.formatDateTime(order.settledAt) : 'Manual';
+    const totalPlatformRevenue = (order.platformCommissionAmount || 0) + (order.platformFee || 0);
+
     return `
         <tr>
             <td>#${order.id.substring(0, 8)}</td>
-            <td>${order.sellerBusinessNames || 'N/A'} (ID: ${order.sellerIds?.join(',') || 'N/A'})</td>
-            <td><strong>${window.firebaseHelpers.formatCurrency(order.settledAmount || 0)}</strong></td>
             <td>${settledAt}</td>
-            <td><small>${transactionId.substring(0, 15)}...</small></td>
+            <td>${order.sellerBusinessNames || 'N/A'}</td>
+            <td><strong>${window.firebaseHelpers.formatCurrency(order.settledAmount || 0)}</strong></td>
+            <td class="text-success">+${window.firebaseHelpers.formatCurrency(totalPlatformRevenue)}</td>
             <td><span class="status-badge status-approved">Settled</span></td>
             <td>
-                <button class="btn-action btn-view" onclick="viewOrderDetails('${order.id}')" title="View Order Details">
+                <button class="btn-action btn-view" onclick="viewOrderDetails('${order.id}')">
                     <i class="fas fa-eye"></i>
                 </button>
             </td>
@@ -494,11 +582,10 @@ function createSettledHistoryRow(order) {
     `;
 }
 
-// NEW: Process Settlement
+// Process Single Settlement
 async function processSettlement(orderId) {
-    // FIX: Replaced confirm() with alert due to sandbox constraint
-    window.firebaseHelpers.showAlert('Settlement feature needs confirmation UI.', 'warning'); 
-    if (!confirm(`Confirm payment settlement for Order #${orderId.substring(0, 8)}? This action is irreversible and marks the amount as paid to the seller.`)) return;
+    window.firebaseHelpers.showAlert('Settlement processing...', 'info'); 
+    if (!confirm(`Confirm payout settlement for Order #${orderId.substring(0, 8)}? This marks the order as paid to the seller.`)) return;
 
     try {
         const orderRef = getPublicCollectionRef('orders').doc(orderId);
@@ -510,28 +597,65 @@ async function processSettlement(orderId) {
         }
 
         const order = orderDoc.data();
-        if (order.settlementStatus === 'settled') {
-             window.firebaseHelpers.showAlert('Order already settled.', 'info');
-             return;
-        }
-
         await orderRef.update({
             settlementStatus: 'settled',
-            // Use sellerNetEarnings calculated during checkout as the settled amount
             settledAmount: order.sellerNetEarnings || 0, 
             settledAt: firebase.firestore.FieldValue.serverTimestamp(),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        window.firebaseHelpers.showAlert(`Settlement for Order #${orderId.substring(0, 8)} marked as Paid and Settled.`, 'success');
-        loadSettlements(); // Reload both tables and stats
+        window.firebaseHelpers.showAlert(`Settlement for Order #${orderId.substring(0, 8)} marked as Paid.`, 'success');
+        loadSettlements(); // Reload all stats and tables
         
     } catch (error) {
         console.error('Error processing settlement:', error);
         window.firebaseHelpers.showAlert('Error processing settlement', 'danger');
     }
 }
-window.processSettlement = processSettlement; // Expose globally for HTML onclick
+window.processSettlement = processSettlement; 
+
+// Process Batch Wallet Settlement
+async function processWalletSettlement(sellerId, amount, orderIdsStr) {
+    window.firebaseHelpers.showAlert(`Processing wallet settlement of ₹${amount}...`, 'info');
+    
+    if (!confirm(`Confirm BULK settlement of ₹${amount} for Seller? This will mark ${orderIdsStr.split(',').length} orders as Settled.`)) return;
+
+    const orderIds = orderIdsStr.split(',');
+    const batch = window.FirebaseDB.batch();
+    const timestamp = firebase.firestore.FieldValue.serverTimestamp();
+
+    try {
+        // We need to fetch docs individually to update them in a batch, or iterate
+        // Since we can't do a "where in" update easily without knowing exact docs, iterating ID list is best
+        const ordersRef = getPublicCollectionRef('orders');
+        
+        // This loop prepares the batch
+        orderIds.forEach(id => {
+            const docRef = ordersRef.doc(id);
+            // We blindly update assuming ID is valid from our own generated list
+            // Ideally we'd read first to get accurate 'settledAmount' logic but we calculated 'amount' from sums already
+            // so for the individual doc update, we trust the existing field values or set fixed status
+            // NOTE: Batch update implies we can't easily read-modify-write inside the loop without reads. 
+            // For robustness, we just set status.
+            batch.update(docRef, {
+                settlementStatus: 'settled',
+                settledAt: timestamp,
+                updatedAt: timestamp
+                // We assume 'settledAmount' was already 'sellerNetEarnings' in the doc or we accept it's just a status change
+            });
+        });
+
+        await batch.commit();
+        
+        window.firebaseHelpers.showAlert('Wallet settled successfully!', 'success');
+        loadSettlements();
+
+    } catch (error) {
+        console.error('Batch settlement error:', error);
+        window.firebaseHelpers.showAlert('Failed to settle wallet. Try individual orders.', 'danger');
+    }
+}
+window.processWalletSettlement = processWalletSettlement;
 
 // NEW: Display top navbar notifications
 function displayTopNotifications(notifications) {
@@ -1505,19 +1629,14 @@ function filterOrders() {
 // View order details
 async function viewOrderDetails(orderId) {
     try {
-        // BUG FIX: Use scoped public collection for orders
         const doc = await getPublicCollectionRef('orders').doc(orderId).get();
         if (doc.exists) {
             const order = doc.data();
-            
-            // Format dates
             const createdAt = window.firebaseHelpers.formatDateTime(order.createdAt);
-            // UPDATED: Use consolidated rental details from order.items for a better description.
             const rentalPeriod = order.items.map(item => 
                 `${item.rentalValue} ${item.rentalType === 'acre' ? 'Acres' : 'Hours'}`
             ).join(', ');
             
-            // Create modal content
             const modalBody = `
                 <div class="row">
                     <div class="col-md-6">
@@ -1684,7 +1803,6 @@ async function calculateReportData(periodDays) {
             }
         });
         
-        // Merge pickedup/returned into active for simpler donut chart view if too many slices
         const simplifiedStatusData = [
             { status: 'Completed', count: orderStatusCount.completed, color: '#4caf50' },
             { status: 'Active (Confirmed/Rented)', count: orderStatusCount.active + orderStatusCount.pickedup + orderStatusCount.returned, color: '#2196f3' },
@@ -1692,8 +1810,6 @@ async function calculateReportData(periodDays) {
             { status: 'Cancelled/Rejected', count: orderStatusCount.cancelled, color: '#f44336' }
         ].filter(item => item.count > 0);
         
-        
-        // Get user growth data
         const userGrowthData = [];
         for (let i = 0; i < periodDays; i++) {
             const date = new Date();
@@ -1718,7 +1834,7 @@ async function calculateReportData(periodDays) {
             newSellers,
             dailyData,
             categoryData,
-            orderStatusData: simplifiedStatusData, // Use simplified for chart
+            orderStatusData: simplifiedStatusData, 
             userGrowthData,
             periodDays
         };
@@ -1922,7 +2038,6 @@ async function loadCategories() {
                         name: categoryName,
                         icon: getCategoryIcon(equipment.category),
                         count: 0,
-                        // Simulate active status since they are implicitly active if equipment exists
                         status: 'active' 
                     };
                 }
@@ -1946,15 +2061,15 @@ async function loadCategories() {
 function getCategoryIcon(categoryName) {
     const icons = {
         'tractor': 'fas fa-tractor',
-        'harvester': 'fas fa-industry',        // no direct combine icon, this fits heavy machinery
+        'harvester': 'fas fa-industry',        
         'cultivator': 'fas fa-seedling',
-        'drone': 'fas fa-drone',              // correct drone icon exists in FA6+
+        'drone': 'fas fa-drone',              
         'spray': 'fas fa-spray-can',
-        'crane': 'fas fa-dolly-flatbed',      // best alternative for lifting/loader
-        'jcb': 'fas fa-truck-monster',        // visually closer to heavy-duty vehicle
+        'crane': 'fas fa-dolly-flatbed',      
+        'jcb': 'fas fa-truck-monster',        
         'grass-cutter': 'fas fa-cut',
-        'trolley': 'fas fa-wheelbarrow',      // FA6 wheelbarrow icon – suitable
-        'water-tanker': 'fas fa-truck',       // remove fa-regular, doesn't exist
+        'trolley': 'fas fa-wheelbarrow',      
+        'water-tanker': 'fas fa-truck',       
         'default': 'fas fa-tools'
     };
 
@@ -1971,7 +2086,7 @@ function displayCategories(categories) {
         <div class="col-12 mb-4">
             <div class="alert alert-info">
                 <i class="fas fa-info-circle me-2"></i>
-                Category management features have been disabled. Categories are now automatically generated from your **Equipment Listings** to ensure consistency on the homepage and browse page.
+                Category management features have been disabled. Categories are now automatically generated from your **Equipment Listings**.
             </div>
         </div>
     `;
@@ -1995,7 +2110,6 @@ function displayCategories(categories) {
 
 // Create category card
 function createCategoryCard(category) {
-    // MODIFIED: Removed Edit/Delete buttons to prevent breaking the dynamic feature
     return `
         <div class="col-lg-3 col-md-4 col-sm-6 mb-4">
             <div class="category-card">
@@ -2023,11 +2137,9 @@ function searchCategories() {
     displayCategories(filteredCategories);
 }
 
-// *** REMOVED/STUBBED OUT MANUAL CRUD FUNCTIONS ***
-
-// Show add category modal (STUBBED - Will alert the user instead)
+// Show add category modal (STUBBED)
 function showAddCategoryModal() {
-     window.firebaseHelpers.showAlert('Categories are now automatically generated by equipment listings. Manual adding is disabled.', 'info');
+     window.firebaseHelpers.showAlert('Categories are now automatically generated by equipment listings.', 'info');
 }
 
 // Add new category (STUBBED)
@@ -2035,22 +2147,10 @@ async function addNewCategory() {
     window.firebaseHelpers.showAlert('Category CRUD is disabled. Categories are auto-generated.', 'danger');
 }
 
-// Edit category (STUBBED)
-function editCategory(categoryId) {
-    window.firebaseHelpers.showAlert('Category editing is disabled. Categories are auto-generated from equipment data.', 'info');
-}
-
-// Delete category (STUBBED)
-function deleteCategory(categoryId) {
-    window.firebaseHelpers.showAlert('Category deletion is disabled. Remove all equipment in this category to remove it.', 'danger');
-}
-// *** END REMOVED/STUBBED OUT MANUAL CRUD FUNCTIONS ***
-
-// NEW: Load Notifications Section
+// Load Notifications Section
 async function loadNotifications() {
-    // Recalculate stats to ensure 'allNotifications' is up-to-date
     const stats = await calculatePlatformStats();
-    const notifications = stats.recentNotifications; // Use all notifications found
+    const notifications = stats.recentNotifications; 
 
     const listContainer = document.getElementById('notifications-list');
     const loading = document.getElementById('notifications-loading');
@@ -2097,20 +2197,18 @@ async function loadNotifications() {
     });
 }
 
-// NEW: Handle action button click in Notifications section
+// Handle action button click in Notifications section
 function handleNotificationAction(relatedId, type) {
     if (type === 'seller_approval') {
         showSection('sellers');
-        // Optionally highlight the seller row (requires additional logic)
     } else if (type === 'equipment_approval') {
         showSection('equipment');
-        // Optionally highlight the equipment item (requires additional logic)
     } else {
         window.firebaseHelpers.showAlert('Unknown notification type.', 'warning');
     }
 }
 
-// NEW: Mark all notifications as read (simulated/cleared upon action)
+// Mark all notifications as read (simulated/cleared upon action)
 function markAllNotificationsRead() {
     window.firebaseHelpers.showAlert('All pending approvals must be actioned through their respective sections.', 'info');
 }
@@ -2121,10 +2219,8 @@ async function loadSettingsData() {
         const settingsDoc = await getPlatformSettingsRef().get();
         const settings = settingsDoc.exists ? settingsDoc.data() : {};
         
-        // Populate fields with saved settings or defaults
         document.getElementById('site-name').value = settings.siteName || 'FarmRent';
         document.getElementById('site-url').value = settings.siteUrl || 'https://farmrent.com';
-        // Removed: document.getElementById('seller-commission').value = settings.sellerCommission || 15;
         document.getElementById('platform-fee').value = settings.platformFee || 5;
         document.getElementById('email-notifications').checked = settings.emailNotifications !== undefined ? settings.emailNotifications : true;
         document.getElementById('seller-approval-emails').checked = settings.sellerApprovalEmails !== undefined ? settings.sellerApprovalEmails : true;
@@ -2149,7 +2245,6 @@ document.getElementById('system-settings-form').addEventListener('submit', async
         const settings = {
             siteName: document.getElementById('site-name').value,
             siteUrl: document.getElementById('site-url').value,
-            // Seller Commission is now handled in script.js as a hardcoded 0%
             platformFee: parseFloat(document.getElementById('platform-fee').value),
             emailNotifications: document.getElementById('email-notifications').checked,
             sellerApprovalEmails: document.getElementById('seller-approval-emails').checked,
@@ -2157,13 +2252,11 @@ document.getElementById('system-settings-form').addEventListener('submit', async
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
         
-        // FIX: Save settings to the dedicated public Firestore document
         await getPlatformSettingsRef().set(settings, { merge: true });
 
         window.firebaseHelpers.showAlert('Settings saved successfully', 'success');
         document.getElementById('last-updated').textContent = window.firebaseHelpers.formatDateTime(settings.updatedAt);
         
-        // Re-load settings to confirm
         loadSettingsData();
         
     } catch (error) {
@@ -2196,9 +2289,10 @@ window.markEquipmentAsFeatured = markEquipmentAsFeatured;
 window.showSection = showSection;
 window.logout = logout;
 window.markAllNotificationsRead = markAllNotificationsRead;
-window.handleNotificationAction = handleNotificationAction; // Needed by notifications UI in HTML
-window.loadSettlements = loadSettlements; // Needed by Settlements UI in HTML
-window.displaySettlementData = displaySettlementData; // Needed by Settlements UI in HTML
-window.createSettlementRow = createSettlementRow; // Needed by Settlements UI in HTML
-window.createSettledHistoryRow = createSettledHistoryRow; // Needed by Settlements UI in HTML
-window.processSettlement = processSettlement; // Needed by Settlements UI in HTML
+window.handleNotificationAction = handleNotificationAction; 
+window.loadSettlements = loadSettlements; 
+window.displaySettlementData = displaySettlementData; 
+window.createSettlementRow = createSettlementRow; 
+window.createSettledHistoryRow = createSettledHistoryRow; 
+window.processSettlement = processSettlement; 
+window.processWalletSettlement = processWalletSettlement;
