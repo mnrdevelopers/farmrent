@@ -45,7 +45,7 @@
                 <i class="fas fa-shopping-cart"></i> Orders
             </a>
             <a class="nav-link" href="#settlements" onclick="showSection('settlements')">
-                <i class="fas fa-handshake"></i> Settlements
+                <i class="fas fa-wallet"></i> Settlements & Wallet
             </a>
             <a class="nav-link" href="#reports" onclick="showSection('reports')">
                 <i class="fas fa-chart-bar"></i> Reports & Analytics
@@ -53,12 +53,10 @@
             <a class="nav-link" href="#categories" onclick="showSection('categories')">
                 <i class="fas fa-tags"></i> Categories
             </a>
-            <!-- NEW NOTIFICATION LINK -->
             <a class="nav-link" href="#notifications" onclick="showSection('notifications')">
                 <i class="fas fa-bell"></i> Notifications
                 <span class="badge bg-danger ms-auto" id="new-notifications-count">0</span>
             </a>
-            <!-- END NEW NOTIFICATION LINK -->
             <a class="nav-link" href="#settings" onclick="showSection('settings')">
                 <i class="fas fa-cogs"></i> System Settings
             </a>
@@ -111,7 +109,7 @@
                     <i class="fas fa-shopping-cart me-2"></i> Orders
                 </a>
                 <a class="nav-link text-white" href="#" onclick="showSection('settlements')" data-bs-dismiss="offcanvas">
-                <i class="fas fa-handshake me-2"></i> Settlements
+                    <i class="fas fa-wallet me-2"></i> Settlements & Wallet
                 </a>
                 <a class="nav-link text-white" href="#" onclick="showSection('reports')" data-bs-dismiss="offcanvas">
                     <i class="fas fa-chart-bar me-2"></i> Reports
@@ -119,11 +117,9 @@
                 <a class="nav-link text-white" href="#" onclick="showSection('categories')" data-bs-dismiss="offcanvas">
                     <i class="fas fa-tags me-2"></i> Categories
                 </a>
-                <!-- NEW NOTIFICATION LINK (Mobile) -->
                 <a class="nav-link text-white" href="#" onclick="showSection('notifications')" data-bs-dismiss="offcanvas">
                     <i class="fas fa-bell me-2"></i> Notifications
                 </a>
-                <!-- END NEW NOTIFICATION LINK (Mobile) -->
                 <a class="nav-link text-white" href="#" onclick="showSection('settings')" data-bs-dismiss="offcanvas">
                     <i class="fas fa-cogs me-2"></i> Settings
                 </a>
@@ -521,36 +517,47 @@
             </div>
         </div>
 
-        <!-- Settlements Management Section -->
+        <!-- Settlements Management Section (UPDATED) -->
         <div class="section" id="settlements-section" style="display: none;">
             <div class="page-header">
-                <h1>Payment Settlements</h1>
-                <p class="text-muted">Manage payments due to sellers for completed orders</p>
+                <h1>Wallet & Settlements</h1>
+                <p class="text-muted">Manage seller payouts, track platform fees, and settle wallets.</p>
             </div>
 
+            <!-- Settlement Stats & Platform Earnings -->
             <div class="row mb-4">
-                <div class="col-xl-4 col-md-6 mb-4">
+                <div class="col-xl-3 col-md-6 mb-4">
                     <div class="dashboard-card card-earnings">
                         <div class="card-icon">
                             <i class="fas fa-hourglass-half"></i>
                         </div>
                         <h3 class="card-value" id="pending-settlements-amount">₹0</h3>
-                        <p class="card-label">Total Pending Settlement</p>
+                        <p class="card-label">Total Pending Payout</p>
                     </div>
                 </div>
-                <div class="col-xl-4 col-md-6 mb-4">
+                <div class="col-xl-3 col-md-6 mb-4">
                     <div class="dashboard-card card-orders">
                         <div class="card-icon">
                             <i class="fas fa-check-double"></i>
                         </div>
-                        <h3 class="card-value" id="settled-count">0</h3>
-                        <p class="card-label">Orders Settled (Total)</p>
+                        <h3 class="card-value" id="total-settled-amount">₹0</h3>
+                        <p class="card-label">Total Amount Settled</p>
                     </div>
                 </div>
-                <div class="col-xl-4 col-md-6 mb-4">
+                <div class="col-xl-3 col-md-6 mb-4">
                     <div class="dashboard-card card-equipment">
                         <div class="card-icon">
-                            <i class="fas fa-clipboard-list"></i>
+                            <i class="fas fa-coins"></i>
+                        </div>
+                        <h3 class="card-value" id="platform-fees-collected">₹0</h3>
+                        <p class="card-label">Total Platform Revenue</p>
+                        <small class="text-muted" style="font-size:0.75rem;">(Fees + Commissions)</small>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="dashboard-card card-rating">
+                        <div class="card-icon">
+                            <i class="fas fa-list-ol"></i>
                         </div>
                         <h3 class="card-value" id="unsettled-count">0</h3>
                         <p class="card-label">Orders Pending Settlement</p>
@@ -561,76 +568,123 @@
             <div class="row">
                 <div class="col-12">
                     <div class="table-container">
-                        <!-- Settlement Tabs -->
-                           <ul class="nav nav-tabs settlement-tabs">
-    <li class="nav-item">
-        <a class="nav-link active" id="unsettled-tab" data-bs-toggle="tab"
-           href="#unsettled-content" role="tab"
-           onclick="displaySettlementData('unsettled')">
-            <i class="fas fa-clock me-1"></i> Pending Payments
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" id="settled-tab" data-bs-toggle="tab"
-           href="#settled-content" role="tab"
-           onclick="displaySettlementData('settled')">
-            <i class="fas fa-history me-1"></i> Settled History
-        </a>
-    </li>
-</ul>
                         
-                        <div class="tab-content">
-                            <!-- Pending Settlements Table (Default View) -->
-                            <div class="tab-pane fade show active" id="unsettled-content" role="tabpanel">
-                                <h5 class="mb-3">Unsettled Completed Orders (Action Required)</h5>
+                        <!-- FILTER BAR (NEW) -->
+                        <div class="settlement-filters bg-light p-3 rounded mb-3 border">
+                            <h6 class="mb-2 text-primary"><i class="fas fa-filter me-2"></i>Filter Settlements</h6>
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-4">
+                                    <label class="form-label small mb-1">Search (Seller/Order ID)</label>
+                                    <input type="text" class="form-control form-control-sm" id="settlement-search" placeholder="Type to search...">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small mb-1">Start Date</label>
+                                    <input type="date" class="form-control form-control-sm" id="settlement-start-date">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small mb-1">End Date</label>
+                                    <input type="date" class="form-control form-control-sm" id="settlement-end-date">
+                                </div>
+                                <div class="col-md-2">
+                                    <button class="btn btn-sm btn-primary w-100" onclick="applySettlementFilters()">Apply Filters</button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- END FILTER BAR -->
+
+                        <!-- Settlement Tabs -->
+                        <ul class="nav nav-tabs settlement-tabs mb-0">
+                            <li class="nav-item">
+                                <a class="nav-link active" id="seller-wallets-tab" data-bs-toggle="tab"
+                                   href="#seller-wallets-content" role="tab"
+                                   onclick="displaySettlementData('wallets')">
+                                    <i class="fas fa-wallet me-1"></i> Seller Wallets (Aggregated)
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" id="unsettled-tab" data-bs-toggle="tab"
+                                   href="#unsettled-content" role="tab"
+                                   onclick="displaySettlementData('unsettled')">
+                                    <i class="fas fa-list me-1"></i> Individual Unsettled Orders
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" id="settled-tab" data-bs-toggle="tab"
+                                   href="#settled-content" role="tab"
+                                   onclick="displaySettlementData('settled')">
+                                    <i class="fas fa-history me-1"></i> Settled History
+                                </a>
+                            </li>
+                        </ul>
+                        
+                        <div class="tab-content border border-top-0 p-3 rounded-bottom">
+                            
+                            <!-- Tab 1: Seller Wallets (New) -->
+                            <div class="tab-pane fade show active" id="seller-wallets-content" role="tabpanel">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h5 class="mb-0 text-primary">Pending Payouts by Seller</h5>
+                                </div>
                                 <div class="table-responsive">
-                                    <table class="table table-hover">
-                                        <thead>
+                                    <table class="table table-hover align-middle">
+                                        <thead class="table-light">
                                             <tr>
-                                                <th>Order ID</th>
-                                                <th>Seller</th>
-                                                <th>Rental Amount</th>
-                                                <th>Platform Cut</th>
-                                                <th>Seller Payout Due</th>
-                                                <th>Status</th>
+                                                <th>Seller Name / Business</th>
+                                                <th>Pending Orders Count</th>
+                                                <th>Total Rental Value</th>
+                                                <th>Platform Fees</th>
+                                                <th>Net Payout Due (Wallet Balance)</th>
                                                 <th>Actions</th>
                                             </tr>
                                         </thead>
-                                        <tbody id="settlements-table">
+                                        <tbody id="seller-wallets-table">
+                                            <!-- Loaded by JS -->
+                                            <tr><td colspan="6" class="text-center py-4">Loading wallets...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Tab 2: Individual Unsettled Orders -->
+                            <div class="tab-pane fade" id="unsettled-content" role="tabpanel">
+                                <h5 class="mb-3 text-warning">Individual Orders Pending Settlement</h5>
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle">
+                                        <thead class="table-light">
                                             <tr>
-                                                <td colspan="7" class="text-center py-4">
-                                                    <div class="spinner-border spinner-border-sm text-primary"></div>
-                                                    <p class="mt-2 mb-0">Loading pending settlements...</p>
-                                                </td>
+                                                <th>Order ID</th>
+                                                <th>Date</th>
+                                                <th>Seller</th>
+                                                <th>Rental Amount</th>
+                                                <th>Platform Fee</th>
+                                                <th>Seller Payout</th>
+                                                <th>Action</th>
                                             </tr>
+                                        </thead>
+                                        <tbody id="settlements-table">
+                                            <tr><td colspan="7" class="text-center py-4">Loading orders...</td></tr>
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
                             
-                            <!-- Settled History Table (New View) -->
+                            <!-- Tab 3: Settled History -->
                             <div class="tab-pane fade" id="settled-content" role="tabpanel">
-                                <h5 class="mb-3">Completed and Settled Orders (For Tracking)</h5>
+                                <h5 class="mb-3 text-success">Settlement History</h5>
                                 <div class="table-responsive">
-                                    <table class="table table-hover">
-                                        <thead>
+                                    <table class="table table-hover align-middle">
+                                        <thead class="table-light">
                                             <tr>
                                                 <th>Order ID</th>
+                                                <th>Settled Date</th>
                                                 <th>Seller</th>
                                                 <th>Net Payout</th>
-                                                <th>Settled On</th>
-                                                <th>Transaction ID</th>
+                                                <th>Platform Revenue</th>
                                                 <th>Status</th>
-                                                <th>Actions</th>
+                                                <th>View</th>
                                             </tr>
                                         </thead>
                                         <tbody id="settled-history-table">
-                                            <tr>
-                                                <td colspan="7" class="text-center py-4">
-                                                    <div class="spinner-border spinner-border-sm text-primary"></div>
-                                                    <p class="mt-2 mb-0">Loading settled history...</p>
-                                                </td>
-                                            </tr>
+                                            <tr><td colspan="7" class="text-center py-4">Loading history...</td></tr>
                                         </tbody>
                                     </table>
                                 </div>
