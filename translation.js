@@ -4,13 +4,17 @@
  */
 
 const LT_CONFIG = {
-    // PUBLIC INSTANCE (Use your own for production!)
-    // Options: 'https://libretranslate.de/translate', 'http://localhost:5000/translate'
-    API_URL: 'https://libretranslate.de/translate', 
-    API_KEY: '', // Add API Key if using a paid/private instance requiring it
-    SOURCE_LANG: 'en', // Original language of the site
-    CACHE_KEY: 'farmrent_translations_v1'
+  API_URLS: [
+    'https://translate.argosopentech.com/translate',
+    'https://libretranslate.de/translate',
+    'http://localhost:5000/translate' // self-hosted (best)
+  ],
+  API_KEY: null, // keep null unless required
+  SOURCE_LANG: 'en',
+  CACHE_KEY: 'farmrent_translations_v1',
+  TIMEOUT: 6000 // 6 seconds max
 };
+
 
 const SUPPORTED_LANGUAGES = [
     { code: 'en', name: 'English' },
