@@ -11,7 +11,7 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="styles.css">
     <!-- Razorpay SDK -->
-    <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth-compat.js"></script>
@@ -167,15 +167,15 @@
                         
                         <!-- NEW PAYMENT METHOD SELECTION -->
                         <div class="mb-3">
-    <label class="form-label">Select Payment Method</label>
-    <select class="form-select" id="payment-method-select">
-        <option value="cashfree">Pay Now (Cashfree - Recommended)</option>
-        <option value="cash">Cash On Pickup</option>
-    </select>
-    <div class="alert alert-info mt-2 p-2 small" id="payment-warning">
-        <i class="fas fa-lock me-1"></i> Secure payments via Cashfree. Full payment confirms the rental booking.
-    </div>
-</div>
+                            <label class="form-label">Select Payment Method</label>
+                            <select class="form-select" id="payment-method-select">
+                                <option value="razorpay">Pay Now (Razorpay - Recommended)</option>
+                                <option value="test_cop">Cash On Pickup (Test/Simulation ONLY)</option>
+                            </select>
+                            <div class="alert alert-info mt-2 p-2 small" id="payment-warning">
+                                <i class="fas fa-lock me-1"></i> Secure payments via Razorpay. Full payment confirms the rental booking.
+                            </div>
+                        </div>
                         <!-- END NEW PAYMENT METHOD SELECTION -->
 
                         <button class="btn btn-primary btn-lg w-100" id="pay-now-btn" onclick="processPayment()">
