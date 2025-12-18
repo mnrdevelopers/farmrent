@@ -118,7 +118,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const paymentSelect = document.getElementById('payment-method-select');
         if (paymentSelect) {
             paymentSelect.onchange = function() {
-                const total = window.razorpayContext?.total || 0;
+                const total = window.paymentContext?.total || 0;
                 window.updatePaymentButtonUI(total);
             };
         }
@@ -1459,7 +1459,7 @@ async function loadCheckoutPage() {
     if (customerPhoneInput) customerPhoneInput.value = window.currentUser?.mobile || '';
     const coinBalanceDisplay = document.getElementById('coin-balance-display');
     if (coinBalanceDisplay) coinBalanceDisplay.textContent = `${availableCoins || 0} Coins`;
-    window.razorpayContext = {
+    window.paymentContext = {
         items: cart,
         orderPickupDate: cart[0]?.pickupDate,
         orderPickupTime: cart[0]?.pickupTime,
@@ -2304,8 +2304,8 @@ function displayCheckoutSummary(cart) {
     if (pickupDateInput && firstItem) {
         pickupDateInput.value = `${firstItem.rentalValue} ${firstItem.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'} | Pickup: ${firstItem.pickupDate} @ ${firstItem.pickupTime}`;
     }
-    window.razorpayContext = {
-        ...window.razorpayContext,
+    window.paymentContext = {
+        ...window.paymentContext,
         orderPickupDate: firstItem?.pickupDate,
         orderPickupTime: firstItem?.pickupTime,
         items: cart,
@@ -2341,8 +2341,8 @@ function displayCheckoutSummary(cart) {
     }
     total = Math.max(1, total);
     coinsToApply = effectiveCoinsUsed;
-    window.razorpayContext = { 
-        ...window.razorpayContext,
+    window.paymentContext = { 
+        ...window.paymentContext,
         subtotal, 
         fees, 
         total, 
@@ -2374,6 +2374,7 @@ async function processPayment() {
         window.firebaseHelpers.showAlert('Please fill all required customer details.', 'warning');
         return;
     }
+    
     const paymentMethod = document.getElementById('payment-method-select').value;
     const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
     if (!userPincode) {
@@ -2382,9 +2383,9 @@ async function processPayment() {
         if (payBtn) payBtn.disabled = true;
         return;
     }
+    
     const isPickup = true; 
-    const { total, orderPickupDate, orderPickupTime, discount, coinsUsed } = window.razorpayContext; 
-    const totalInPaise = Math.round(total * 100);
+    const { total, orderPickupDate, orderPickupTime, discount, coinsUsed } = window.paymentContext || window.cashfreeContext; 
     const customerData = {
         name: document.getElementById('customer-name').value,
         email: document.getElementById('customer-email').value,
@@ -2395,52 +2396,113 @@ async function processPayment() {
         pickupDate: orderPickupDate,
         pickupTime: orderPickupTime,
     };
-    const orderId = window.firebaseHelpers.generateId(); 
-    if (paymentMethod === 'test_cop') {
+    
+    const orderId = window.firebaseHelpers.generateId();
+    
+    if (paymentMethod === 'cash') {
         const payBtn = document.getElementById('pay-now-btn');
         const originalText = payBtn.innerHTML;
         payBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Confirming...';
         payBtn.disabled = true;
         try {
-            await placeOrderInFirestore(orderId, customerData, 'TEST_COP_TXN', total, 'pending', 'Cash On Pickup (Test)', discount, coinsUsed);
+            await placeOrderInFirestore(orderId, customerData, 'CASH_ON_PICKUP', total, 'pending', 'Cash on Pickup', discount, coinsUsed);
         } catch (error) {
-            window.firebaseHelpers.showAlert('Test order placement failed. See console for details.', 'danger');
+            window.firebaseHelpers.showAlert('Order placement failed. See console for details.', 'danger');
         } finally {
             payBtn.innerHTML = originalText;
             payBtn.disabled = false;
         }
-    } else { 
-        const keyId = await window.firebaseHelpers.getRazorpayKeyId();
-        if (!keyId) {
-            window.firebaseHelpers.showAlert('Payment gateway key missing. Cannot proceed.', 'danger');
-            return;
-        }
-        const options = {
-            key: keyId, 
-            amount: totalInPaise, 
-            currency: "INR",
-            name: "FarmRent",
-            description: "Rental Equipment Booking",
-            handler: async function (response) {
-                await placeOrderInFirestore(orderId, customerData, response.razorpay_payment_id, total, 'paid', 'Razorpay', discount, coinsUsed);
-            },
-            prefill: {
-                name: customerData.name,
-                email: customerData.email,
-                contact: customerData.phone
-            },
-            theme: {
-                color: "#2B5C2B" 
+    } else { // Cashfree payment
+        try {
+            const cashfree = initializeCashfree();
+            if (!cashfree) {
+                window.firebaseHelpers.showAlert('Payment gateway not available. Please refresh and try again.', 'danger');
+                return;
             }
-        };
-        const rzp = new window.Razorpay(options);
-        rzp.on('payment.failed', function (response) {
-            window.firebaseHelpers.showAlert('Payment failed: ' + response.error.description, 'danger');
-        });
-        rzp.open();
+            
+            // Get Cashfree keys from Remote Config
+            const clientId = await window.firebaseHelpers.getCashfreeClientId();
+            if (!clientId) {
+                window.firebaseHelpers.showAlert('Payment gateway configuration missing.', 'danger');
+                return;
+            }
+            
+            const paymentSessionId = await createCashfreePaymentSession(orderId, total, customerData);
+            if (!paymentSessionId) {
+                window.firebaseHelpers.showAlert('Could not create payment session.', 'danger');
+                return;
+            }
+            
+            cashfree.checkout({
+                paymentSessionId: paymentSessionId,
+                returnUrl: `${window.location.origin}/farmrent/checkout-success.html?orderId=${orderId}`,
+                onSuccess: async function(data) {
+                    await placeOrderInFirestore(
+                        orderId, 
+                        customerData, 
+                        data.referenceId || data.paymentId, 
+                        total, 
+                        'paid', 
+                        'Cashfree', 
+                        discount, 
+                        coinsUsed
+                    );
+                },
+                onFailure: function(data) {
+                    window.firebaseHelpers.showAlert('Payment failed: ' + (data.error?.message || 'Unknown error'), 'danger');
+                },
+                onClose: function() {
+                    console.log('Payment modal closed');
+                }
+            });
+        } catch (error) {
+            window.firebaseHelpers.showAlert('Payment initialization failed: ' + error.message, 'danger');
+        }
     }
 }
-window.processPayment = processPayment;
+
+// Add new function to create Cashfree payment session
+async function createCashfreePaymentSession(orderId, amount, customerData) {
+    try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const cashfreeClientId = await window.firebaseHelpers.getCashfreeClientId();
+        const cashfreeSecret = await window.firebaseHelpers.getCashfreeSecret();
+        
+        const response = await fetch(`https://api.cashfree.com/pg/orders`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-client-id': cashfreeClientId,
+                'x-client-secret': cashfreeSecret,
+                'x-api-version': '2023-08-01'
+            },
+            body: JSON.stringify({
+                order_id: orderId,
+                order_amount: amount,
+                order_currency: 'INR',
+                customer_details: {
+                    customer_id: window.currentUser?.uid || 'guest',
+                    customer_email: customerData.email,
+                    customer_phone: customerData.phone,
+                    customer_name: customerData.name
+                },
+                order_meta: {
+                    return_url: `${window.location.origin}/farmrent/checkout-success.html?orderId=${orderId}`
+                }
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Cashfree API error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return data.payment_session_id;
+    } catch (error) {
+        console.error('Cashfree session creation error:', error);
+        return null;
+    }
+}
 
 // UPDATED: Function to include financial breakdown for settlement
 async function placeOrderInFirestore(orderId, customerData, transactionId, discountedTotalAmount, paymentStatus, paymentMethod, totalDiscount, coinsUsed) {
@@ -2452,7 +2514,7 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, disco
     const itemNames = cart.map(item => item.name).join(', ');
     const sellerIds = [...new Set(cart.map(item => item.sellerId))].join(', ');
     const businessNames = [...new Set(cart.map(item => item.businessName))].join(', ');
-    const orderPincode = window.razorpayContext.orderPincode; 
+    const orderPincode = window.paymentContext.orderPincode; 
     
     // Calculate Subtotal (price before platform fees and discounts)
     let subtotal = 0;
@@ -2495,7 +2557,7 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, disco
             
             // Customer-facing totals
             totalAmount: discountedTotalAmount, // Total customer paid (after discounts, including customer-facing fees)
-            platformFee: window.razorpayContext.fees, // Customer-facing fee
+            platformFee: window.paymentContext.fees, // Customer-facing fee
             discount: totalDiscount,
             coinsUsed: coinsUsed,
             status: 'pending',
@@ -3450,12 +3512,17 @@ async function updateCartCount() {
 }
 window.updateCartCount = updateCartCount;
 
-if (typeof Razorpay === 'undefined') {
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    document.head.appendChild(script);
+function initializeCashfree() {
+    if (typeof Cashfree === 'undefined') {
+        console.error('Cashfree SDK not loaded');
+        return null;
+    }
+    return Cashfree({
+        mode: "production" // or "sandbox" for testing
+    });
 }
 
+// Update the payment method UI update function
 window.updatePaymentButtonUI = function(totalAmount) {
     const paymentSelect = document.getElementById('payment-method-select');
     const payBtn = document.getElementById('pay-now-btn');
@@ -3463,34 +3530,37 @@ window.updatePaymentButtonUI = function(totalAmount) {
     if (!paymentSelect || !payBtn) return;
     const method = paymentSelect.value;
     const formattedAmount = window.firebaseHelpers.formatCurrency(totalAmount);
-    if (method === 'test_cop') {
-        payBtn.innerHTML = `<i class="fas fa-truck-loading me-2"></i> Confirm Rental (No Upfront Payment)`;
+    
+    if (method === 'cash') {
+        payBtn.innerHTML = `<i class="fas fa-truck-loading me-2"></i> Confirm Rental (Pay on Pickup)`;
         payBtn.classList.remove('btn-primary');
         payBtn.classList.add('btn-warning');
         if(paymentWarning) {
-            paymentWarning.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i> **TEST MODE:** This option simulates order placement with **No Upfront Payment**. Order status will be **Pending** for seller review.';
-            paymentWarning.classList.remove('alert-info');
-            paymentWarning.classList.add('alert-danger');
+            paymentWarning.innerHTML = '<i class="fas fa-info-circle me-1"></i> <strong>Cash on Pickup:</strong> Your order will be confirmed. Payment will be collected when you pick up the equipment.';
+            paymentWarning.classList.remove('alert-danger', 'alert-info');
+            paymentWarning.classList.add('alert-warning');
         }
-    } else {
+    } else { // cashfree
         payBtn.innerHTML = `<i class="fas fa-money-check-alt me-2"></i>Pay <span id="pay-button-amount">${formattedAmount}</span> Now`;
         payBtn.classList.remove('btn-warning');
         payBtn.classList.add('btn-primary');
         if(paymentWarning) {
-            paymentWarning.innerHTML = '<i class="fas fa-lock me-1"></i> Secure payments via Razorpay. Full payment confirms the rental booking.';
-            paymentWarning.classList.remove('alert-danger');
+            paymentWarning.innerHTML = '<i class="fas fa-lock me-1"></i> Secure payments via Cashfree. Full payment confirms the rental booking.';
+            paymentWarning.classList.remove('alert-danger', 'alert-warning');
             paymentWarning.classList.add('alert-info');
         }
     }
     payBtn.disabled = totalAmount < 1; 
 }
 
+
+
 window.applyCoinDiscount = function() {
     const coinInput = document.getElementById('coins-to-apply');
     const warningText = document.getElementById('coin-warning-text');
     if (!coinInput) return;
     let requestedCoins = parseInt(coinInput.value) || 0;
-    const cart = window.razorpayContext?.items || [];
+    const cart = window.paymentContext?.items || [];
     if (cart.length === 0) {
         warningText.textContent = "Cart is empty. Please add items first.";
         warningText.classList.remove('text-muted', 'text-success', 'text-warning');
