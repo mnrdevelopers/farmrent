@@ -1739,9 +1739,6 @@ async function updateOrderStatus(orderId, newStatus) {
                     smsMessage = `FarmRent: Order ${orderShortId} completed successfully! Thank you for renting with us.`;
                 }
                 
-                if (smsMessage) {
-                    await window.firebaseHelpers.sendSmsAlert(order.customerPhone, smsMessage);
-                }
             }
 
             viewOrderDetails(orderId);
