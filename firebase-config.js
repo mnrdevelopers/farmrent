@@ -516,32 +516,30 @@ window.firebaseHelpers = {
         /**
          * Show pincode change warning
          */
-        showPincodeChangeWarning: (compatibilityResult) => {
-            if (!compatibilityResult.changed || compatibilityResult.allItemsCompatible || compatibilityResult.incompatibleItems.length === 0) {
-                // Do not show warning if no incompatible items exist, even if pincode changed
-                return;
-            }
-            
-            const warningMessage = `
-                <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    <strong>Location Changed!</strong> Your cart contains items from **Pincode ${compatibilityResult.oldPincode}**, 
-                    but your current location is **${compatibilityResult.newPincode}**. 
-                    <br><small>These items may not be available in your new location.</small>
-                    <div class="mt-2">
-                        <button class="btn btn-sm btn-outline-warning me-2" onclick="updateCartForNewPincode()">
-                            Clear Cart & Shop Local
-                        </button>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="revertToPreviousPincode()">
-                            Revert to Previous Location (${compatibilityResult.oldPincode})
-                        </button>
-                    </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            `;
-            
-            // Show alert (isHtml=true)
-            window.firebaseHelpers.showAlert(warningMessage, 'warning', true);
-        }
+       showPincodeChangeWarning: (compatibilityResult) => {
+    if (!compatibilityResult.changed || compatibilityResult.allItemsCompatible) {
+        return;
+    }
+    
+    const warningMessage = `
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Location Change Detected</strong>
+            <p class="mb-2">Your cart contains ${compatibilityResult.incompatibleItems.length} item(s) from ${compatibilityResult.oldPincode}. 
+            To shop in ${compatibilityResult.newPincode}, you'll need to clear your cart or update the item locations.</p>
+            <div class="mt-2">
+                <button class="btn btn-sm btn-outline-warning me-2" onclick="updateCartForNewPincode()">
+                    Clear Cart & Shop in ${compatibilityResult.newPincode}
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="revertToPreviousPincode()">
+                    Return to ${compatibilityResult.oldPincode}
+                </button>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    window.firebaseHelpers.showAlert(warningMessage, 'warning', true);
+}
     }
 };
