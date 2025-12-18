@@ -2374,7 +2374,7 @@ async function processPayment() {
         window.firebaseHelpers.showAlert('Please fill all required customer details.', 'warning');
         return;
     }
-    const paymentMethod = document.getElementById('payment-method-select').value;
+    
     const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
     if (!userPincode) {
         window.firebaseHelpers.showAlert('Critical Error: Customer Pincode is not set. Cannot proceed.', 'danger');
@@ -2382,9 +2382,17 @@ async function processPayment() {
         if (payBtn) payBtn.disabled = true;
         return;
     }
-    const isPickup = true; 
-    const { total, orderPickupDate, orderPickupTime, discount, coinsUsed } = window.razorpayContext; 
+    
+    const isPickup = true;
+    const { total, orderPickupDate, orderPickupTime, discount, coinsUsed } = window.razorpayContext;
     const totalInPaise = Math.round(total * 100);
+    
+    // Prevent payment if total is less than 1 rupee (edge case with coins)
+    if (totalInPaise < 100) { // Minimum 1 rupee
+        window.firebaseHelpers.showAlert('Total amount must be at least ₹1 to proceed with payment.', 'warning');
+        return;
+    }
+    
     const customerData = {
         name: document.getElementById('customer-name').value,
         email: document.getElementById('customer-email').value,
@@ -2395,155 +2403,57 @@ async function processPayment() {
         pickupDate: orderPickupDate,
         pickupTime: orderPickupTime,
     };
-    const orderId = window.firebaseHelpers.generateId(); 
-    if (paymentMethod === 'test_cop') {
-        const payBtn = document.getElementById('pay-now-btn');
-        const originalText = payBtn.innerHTML;
-        payBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Confirming...';
-        payBtn.disabled = true;
-        try {
-            await placeOrderInFirestore(orderId, customerData, 'TEST_COP_TXN', total, 'pending', 'Cash On Pickup (Test)', discount, coinsUsed);
-        } catch (error) {
-            window.firebaseHelpers.showAlert('Test order placement failed. See console for details.', 'danger');
-        } finally {
-            payBtn.innerHTML = originalText;
-            payBtn.disabled = false;
-        }
-    } else { 
-        const keyId = await window.firebaseHelpers.getRazorpayKeyId();
-        if (!keyId) {
-            window.firebaseHelpers.showAlert('Payment gateway key missing. Cannot proceed.', 'danger');
-            return;
-        }
-        const options = {
-            key: keyId, 
-            amount: totalInPaise, 
-            currency: "INR",
-            name: "FarmRent",
-            description: "Rental Equipment Booking",
-            handler: async function (response) {
-                await placeOrderInFirestore(orderId, customerData, response.razorpay_payment_id, total, 'paid', 'Razorpay', discount, coinsUsed);
-            },
-            prefill: {
-                name: customerData.name,
-                email: customerData.email,
-                contact: customerData.phone
-            },
-            theme: {
-                color: "#2B5C2B" 
-            }
-        };
-        const rzp = new window.Razorpay(options);
-        rzp.on('payment.failed', function (response) {
-            window.firebaseHelpers.showAlert('Payment failed: ' + response.error.description, 'danger');
-        });
-        rzp.open();
-    }
-}
-window.processPayment = processPayment;
-
-// UPDATED: Function to include financial breakdown for settlement
-async function placeOrderInFirestore(orderId, customerData, transactionId, discountedTotalAmount, paymentStatus, paymentMethod, totalDiscount, coinsUsed) {
-    const cart = await getCartFromFirestore();
-    if (cart.length === 0) {
-        window.firebaseHelpers.showAlert('Cart is empty, cannot place order.', 'danger');
+    
+    const orderId = window.firebaseHelpers.generateId();
+    
+    // Get Razorpay key
+    const keyId = await window.firebaseHelpers.getRazorpayKeyId();
+    if (!keyId) {
+        window.firebaseHelpers.showAlert('Payment gateway configuration error. Please try again later.', 'danger');
         return;
     }
-    const itemNames = cart.map(item => item.name).join(', ');
-    const sellerIds = [...new Set(cart.map(item => item.sellerId))].join(', ');
-    const businessNames = [...new Set(cart.map(item => item.businessName))].join(', ');
-    const orderPincode = window.razorpayContext.orderPincode; 
     
-    // Calculate Subtotal (price before platform fees and discounts)
-    let subtotal = 0;
-    cart.forEach(item => {
-        subtotal += Number(item.price) || 0;
-    });
-
-    // Settlement Calculations
-    const platformCutRate = SELLER_COMMISSION_RATE; // Hardcoded to 0% as per user request
-    const platformCommissionAmount = subtotal * platformCutRate;
-    const sellerNetEarnings = subtotal - platformCommissionAmount; // Amount seller is DUE from platform
-
-    try {
-        const orderData = {
-            userId: window.currentUser.uid,
-            customerName: customerData.name,
-            customerEmail: customerData.email,
-            customerPhone: customerData.phone,
-            deliveryAddress: customerData.address, 
-            notes: customerData.notes,
-            isPickup: true, 
-            pickupDate: customerData.pickupDate, 
-            pickupTime: customerData.pickupTime,
-            equipmentNames: itemNames,
-            sellerIds: sellerIds.split(',').map(id => id.trim()).filter(id => id),
-            sellerBusinessNames: businessNames,
-            orderPincode: orderPincode, 
-            items: cart, 
-            
-            // Financial Breakdown for Settlement
-            subtotalAmount: subtotal, // Total rental cost (100%)
-            platformCommissionRate: platformCutRate,
-            platformCommissionAmount: platformCommissionAmount, // Platform's cut (Should be 0)
-            sellerNetEarnings: sellerNetEarnings, // Amount seller is DUE from platform (Should equal subtotal)
-            
-            // Settlement Status (Initial)
-            settlementStatus: 'unsettled', // 'unsettled', 'settled'
-            settledAmount: 0,
-            settledAt: null,
-            
-            // Customer-facing totals
-            totalAmount: discountedTotalAmount, // Total customer paid (after discounts, including customer-facing fees)
-            platformFee: window.razorpayContext.fees, // Customer-facing fee
-            discount: totalDiscount,
-            coinsUsed: coinsUsed,
-            status: 'pending',
-            paymentStatus: paymentStatus,
-            paymentMethod: paymentMethod,
-            transactionId: transactionId,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
-        await ordersCollectionRef.doc(orderId).set(orderData);
-        await updateCartInFirestore([]); 
-        let customerUpdates = {};
-        let referrerRewardMessage = '';
-        if (!window.currentUser.firstOrderPlaced) {
-            customerUpdates.firstOrderPlaced = true;
-            window.currentUser.firstOrderPlaced = true;
-            const referrerId = window.currentUser.referredBy;
-            if (referrerId) {
-                const referrerRef = window.FirebaseDB.collection('users').doc(referrerId);
-                await referrerRef.update({
-                    coins: firebase.firestore.FieldValue.increment(100),
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                referrerRewardMessage = `<br>Your referrer (UID: ${referrerId.substring(0, 8)}...) has received **100 Coins**!`;
+    // Check if Razorpay is loaded
+    if (typeof Razorpay === 'undefined') {
+        window.firebaseHelpers.showAlert('Payment system is loading. Please wait a moment and try again.', 'warning');
+        return;
+    }
+    
+    const options = {
+        key: keyId,
+        amount: totalInPaise,
+        currency: "INR",
+        name: "FarmRent",
+        description: "Rental Equipment Booking",
+        handler: async function (response) {
+            await placeOrderInFirestore(orderId, customerData, response.razorpay_payment_id, total, 'paid', 'Razorpay', discount, coinsUsed);
+        },
+        prefill: {
+            name: customerData.name,
+            email: customerData.email,
+            contact: customerData.phone
+        },
+        theme: {
+            color: "#2B5C2B"
+        },
+        modal: {
+            ondismiss: function() {
+                window.firebaseHelpers.showAlert('Payment cancelled. Your booking is not confirmed.', 'info');
             }
         }
-        if (coinsUsed > 0) {
-             customerUpdates.coins = firebase.firestore.FieldValue.increment(-coinsUsed);
-             window.currentUser.coins = (window.currentUser.coins || 0) - coinsUsed;
-        }
-        if (Object.keys(customerUpdates).length > 0) {
-            await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(customerUpdates);
-            availableCoins = window.currentUser.coins;
-        }
-        coinsToApply = 0;
-        let successMessage = paymentStatus === 'paid' 
-            ? `Order #${orderId.substring(0, 8)} placed successfully! Payment confirmed.`
-            : `Test Order #${orderId.substring(0, 8)} placed successfully! Payment is **Pending**.`;
-        successMessage += referrerRewardMessage;
-        window.firebaseHelpers.showAlert(successMessage + ' You will be redirected to My Orders.', 'success');
-        checkCustomerNotifications();
-        setTimeout(() => {
-            window.location.href = 'orders.html'; 
-        }, 3000);
+    };
+    
+    try {
+        const rzp = new Razorpay(options);
+        rzp.on('payment.failed', function (response) {
+            const errorMsg = response.error ? 
+                `${response.error.description} (Code: ${response.error.code})` : 
+                'Payment failed. Please try again.';
+            window.firebaseHelpers.showAlert('Payment failed: ' + errorMsg, 'danger');
+        });
+        rzp.open();
     } catch (error) {
-        window.firebaseHelpers.showAlert('Order placement failed in database. Please contact support.', 'danger');
+        window.firebaseHelpers.showAlert('Error initializing payment: ' + error.message, 'danger');
     }
 }
 
@@ -3454,35 +3364,6 @@ if (typeof Razorpay === 'undefined') {
     const script = document.createElement('script');
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
     document.head.appendChild(script);
-}
-
-window.updatePaymentButtonUI = function(totalAmount) {
-    const paymentSelect = document.getElementById('payment-method-select');
-    const payBtn = document.getElementById('pay-now-btn');
-    const paymentWarning = document.getElementById('payment-warning');
-    if (!paymentSelect || !payBtn) return;
-    const method = paymentSelect.value;
-    const formattedAmount = window.firebaseHelpers.formatCurrency(totalAmount);
-    if (method === 'test_cop') {
-        payBtn.innerHTML = `<i class="fas fa-truck-loading me-2"></i> Confirm Rental (No Upfront Payment)`;
-        payBtn.classList.remove('btn-primary');
-        payBtn.classList.add('btn-warning');
-        if(paymentWarning) {
-            paymentWarning.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i> **TEST MODE:** This option simulates order placement with **No Upfront Payment**. Order status will be **Pending** for seller review.';
-            paymentWarning.classList.remove('alert-info');
-            paymentWarning.classList.add('alert-danger');
-        }
-    } else {
-        payBtn.innerHTML = `<i class="fas fa-money-check-alt me-2"></i>Pay <span id="pay-button-amount">${formattedAmount}</span> Now`;
-        payBtn.classList.remove('btn-warning');
-        payBtn.classList.add('btn-primary');
-        if(paymentWarning) {
-            paymentWarning.innerHTML = '<i class="fas fa-lock me-1"></i> Secure payments via Razorpay. Full payment confirms the rental booking.';
-            paymentWarning.classList.remove('alert-danger');
-            paymentWarning.classList.add('alert-info');
-        }
-    }
-    payBtn.disabled = totalAmount < 1; 
 }
 
 window.applyCoinDiscount = function() {
