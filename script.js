@@ -2570,6 +2570,29 @@ async function placeOrderInFirestore(orderId, customerData, transactionId, disco
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
         await ordersCollectionRef.doc(orderId).set(orderData);
+
+         
+        // Send confirmation email
+        const emailSent = await window.firebaseHelpers.sendOrderConfirmationEmail({
+            orderId: orderId,
+            customerEmail: customerData.email,
+            customerName: customerData.name,
+            equipmentNames: itemNames,
+            totalAmount: discountedTotalAmount,
+            pickupDate: customerData.pickupDate,
+            pickupTime: customerData.pickupTime,
+            sellerBusinessNames: businessNames,
+            sellerAddress: cart[0]?.sellerAddress || 'Will be shared by seller',
+            paymentStatus: paymentStatus,
+            paymentMethod: paymentMethod
+        });
+        
+        if (emailSent) {
+            console.log('Order confirmation email sent successfully');
+        } else {
+            console.warn('Order confirmation email failed to send');
+        }
+        
         await updateCartInFirestore([]); 
         let customerUpdates = {};
         let referrerRewardMessage = '';
