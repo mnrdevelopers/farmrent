@@ -261,25 +261,38 @@ async function getCurrentLocationPincode() {
     const buttonElement = document.getElementById('location-access-btn');
     
     if (!navigator.geolocation) {
-        if(statusElement) statusElement.textContent = 'Geolocation is not supported by your browser.';
-        if(statusElement) statusElement.classList.remove('text-muted');
-        if(statusElement) statusElement.classList.add('text-danger');
-        window.firebaseHelpers.showAlert('Geolocation not supported.', 'danger');
+        if (statusElement) {
+            statusElement.textContent = 'Geolocation is not supported by your browser.';
+            statusElement.classList.remove('text-muted');
+            statusElement.classList.add('text-danger');
+        }
+        window.firebaseHelpers.showAlert('Location access is not supported. Please enter pincode manually.', 'warning');
         return;
     }
-    if(statusElement) statusElement.textContent = 'Fetching location...';
-    if(statusElement) statusElement.classList.remove('text-danger', 'text-warning', 'text-success', 'text-info');
-    if(statusElement) statusElement.classList.add('text-muted');
-    if(buttonElement) buttonElement.disabled = true;
-    if(buttonElement) buttonElement.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Detecting...';
+    
+    if (statusElement) {
+        statusElement.textContent = 'Requesting location permission...';
+        statusElement.classList.remove('text-danger', 'text-warning', 'text-success', 'text-info');
+        statusElement.classList.add('text-muted');
+    }
+    
+    if (buttonElement) {
+        buttonElement.disabled = true;
+        buttonElement.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Detecting...';
+    }
     
     const geoapifyKey = await window.firebaseHelpers.getGeoapifyApiKey();
     if (!geoapifyKey) {
-        if(statusElement) statusElement.textContent = 'Geoapify API Key is missing. Cannot use real geolocation.';
-        if(statusElement) statusElement.classList.remove('text-muted');
-        if(statusElement) statusElement.classList.add('text-danger');
-        if(buttonElement) buttonElement.disabled = false;
-        if(buttonElement) buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
+        if (statusElement) {
+            statusElement.textContent = 'Location service temporarily unavailable.';
+            statusElement.classList.remove('text-muted');
+            statusElement.classList.add('text-warning');
+        }
+        if (buttonElement) {
+            buttonElement.disabled = false;
+            buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
+        }
+        window.firebaseHelpers.showAlert('Location service is currently unavailable. Please enter pincode manually.', 'info');
         return;
     }
     
@@ -302,47 +315,70 @@ async function getCurrentLocationPincode() {
 
     navigator.geolocation.getCurrentPosition(async (position) => {
         const { latitude, longitude } = position.coords;
-        if(statusElement) statusElement.textContent = `Location found. Determining Pincode...`;
+        
+        if (statusElement) {
+            statusElement.textContent = 'Location found. Determining pincode...';
+        }
+        
         const pincode = await reverseGeocode(latitude, longitude);
+        
         if (pincode && window.firebaseHelpers.pincodeSystem.validatePincode(pincode)) {
-            if(statusElement) statusElement.textContent = `Pincode found: ${pincode}. Applying filter...`;
-            if(statusElement) statusElement.classList.remove('text-muted');
-            if(statusElement) statusElement.classList.add('text-success');
-            if(inputElement) inputElement.value = pincode;
+            if (statusElement) {
+                statusElement.textContent = `Location detected: ${pincode}`;
+                statusElement.classList.remove('text-muted');
+                statusElement.classList.add('text-success');
+            }
             
+            if (inputElement) {
+                inputElement.value = pincode;
+            }
+            
+            // Auto-save after short delay
             setTimeout(async () => {
                 await savePincode(pincode);
-                const modal = bootstrap.Modal.getInstance(document.getElementById('pincodeModal'));
-                if (modal) modal.hide();
-                if(buttonElement) buttonElement.disabled = false;
-                if(buttonElement) buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
+                if (buttonElement) {
+                    buttonElement.disabled = false;
+                    buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
+                }
             }, 1000);
         } else {
-            if(statusElement) statusElement.textContent = 'Could not determine a valid Indian Pincode. Please enter manually.';
-            if(statusElement) statusElement.classList.remove('text-muted');
-            if(statusElement) statusElement.classList.add('text-warning');
-            if(buttonElement) buttonElement.disabled = false;
-            if(buttonElement) buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
+            if (statusElement) {
+                statusElement.textContent = 'Could not determine Indian pincode. Please enter manually.';
+                statusElement.classList.remove('text-muted');
+                statusElement.classList.add('text-warning');
+            }
+            if (buttonElement) {
+                buttonElement.disabled = false;
+                buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
+            }
+            window.firebaseHelpers.showAlert('Unable to detect Indian pincode. Please enter it manually.', 'info');
         }
     }, (error) => {
         let message = 'Location access denied or error occurred.';
         if (error.code === error.PERMISSION_DENIED) {
-            message = 'Geolocation denied. Please enable location access or enter Pincode manually.';
+            message = 'Location permission denied. Please enable location access or enter pincode manually.';
         } else if (error.code === error.POSITION_UNAVAILABLE) {
             message = 'Location information is unavailable.';
         } else if (error.code === error.TIMEOUT) {
-            message = 'The request to get user location timed out.';
+            message = 'Location request timed out.';
         }
-        if(statusElement) statusElement.textContent = message;
-        if(statusElement) statusElement.classList.remove('text-muted');
-        if(statusElement) statusElement.classList.add('text-danger');
-        if(buttonElement) buttonElement.disabled = false;
-        if(buttonElement) buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
-        window.firebaseHelpers.showAlert(message, 'danger');
+        
+        if (statusElement) {
+            statusElement.textContent = message;
+            statusElement.classList.remove('text-muted');
+            statusElement.classList.add('text-danger');
+        }
+        
+        if (buttonElement) {
+            buttonElement.disabled = false;
+            buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
+        }
+        
+        window.firebaseHelpers.showAlert(message, 'warning');
     }, {
         enableHighAccuracy: true,
         timeout: 10000,
-        maximumAge: 0
+        maximumAge: 60000 // Cache for 1 minute
     });
 }
 window.getCurrentLocationPincode = getCurrentLocationPincode;
@@ -364,54 +400,99 @@ async function checkAndPromptForPincode() {
 function showPincodeModal() {
     const modalElement = document.getElementById('pincodeModal');
     if (!modalElement) return;
+    
     const pincodeInput = document.getElementById('pincode-input');
     if (pincodeInput) pincodeInput.value = window.customerPincode || '';
+    
     const statusElement = document.getElementById('location-status');
     if (statusElement) {
         statusElement.textContent = '';
         statusElement.className = 'text-muted mt-1';
     }
+    
     const buttonElement = document.getElementById('location-access-btn');
     if (buttonElement) {
         buttonElement.disabled = false;
         buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
     }
+    
+    // Render recent pincodes
+    setTimeout(renderRecentPincodes, 100);
+    
     const modal = new bootstrap.Modal(modalElement, {
-        backdrop: 'static', 
-        keyboard: false 
+        backdrop: 'static',
+        keyboard: false
     });
     modal.show();
+    
     const form = document.getElementById('pincode-form');
     if (form && !form.dataset.listener) {
         form.addEventListener('submit', handlePincodeSubmit);
         form.dataset.listener = 'true';
     }
+    
+    // Auto-focus input
+    setTimeout(() => {
+        if (pincodeInput) pincodeInput.focus();
+    }, 500);
 }
 window.showPincodeModal = showPincodeModal;
 
 async function handlePincodeSubmit(e) {
     e.preventDefault();
-    const pincode = document.getElementById('pincode-input').value.trim();
-    if (window.firebaseHelpers.pincodeSystem.validatePincode(pincode)) {
+    const pincodeInput = document.getElementById('pincode-input');
+    const pincode = pincodeInput.value.trim();
+    
+    if (!window.firebaseHelpers.pincodeSystem.validatePincode(pincode)) {
+        window.firebaseHelpers.showAlert('Please enter a valid 6-digit Indian pincode.', 'danger');
+        pincodeInput.focus();
+        pincodeInput.select();
+        return;
+    }
+    
+    // Show loading state
+    const submitBtn = e.submitter;
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Checking...';
+    submitBtn.disabled = true;
+    
+    try {
+        // Verify pincode exists
+        const postOffices = await getPostOfficeData(pincode);
+        if (postOffices.length === 0) {
+            window.firebaseHelpers.showAlert('This pincode was not found. Please check and try again.', 'danger');
+            pincodeInput.focus();
+            pincodeInput.select();
+            return;
+        }
+        
         await savePincode(pincode);
-        const modal = bootstrap.Modal.getInstance(document.getElementById('pincodeModal'));
-        if (modal) modal.hide();
-    } else {
-        window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
+    } finally {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
     }
 }
 
 async function savePincode(pincode) {
     const compatibilityResult = await window.firebaseHelpers.pincodeSystem.checkPincodeCompatibility();
     await window.firebaseHelpers.pincodeSystem.setPincode(pincode);
+    
+    // Add to recent pincodes
+    addToRecentPincodes(pincode);
+    
+    // Get location info
     const postOffices = await getPostOfficeData(pincode);
     let locationInfo = pincode;
     if (postOffices.length > 0) {
-        locationInfo = `${postOffices[0].District}, ${postOffices[0].State} (${pincode})`;
+        locationInfo = `${postOffices[0].District}, ${postOffices[0].State}`;
     }
-    window.firebaseHelpers.showAlert(`Location set to ${locationInfo}. Filtering results.`, 'success');
+    
+    // Professional success message
+    window.firebaseHelpers.showAlert(`Location set to ${locationInfo}. Showing local equipment.`, 'success');
+    
     updateHomepagePincodeDisplay();
     updateNavbarPincodeDisplay();
+    
     const path = window.location.pathname.split('/').pop();
     if (path === 'browse.html') {
         updatePincodeDisplay();
@@ -423,9 +504,14 @@ async function savePincode(pincode) {
     } else {
         loadFeaturedEquipment();
     }
+    
     if (compatibilityResult.changed && !compatibilityResult.allItemsCompatible) {
         window.firebaseHelpers.pincodeSystem.showPincodeChangeWarning(compatibilityResult);
     }
+    
+    // Close modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('pincodeModal'));
+    if (modal) modal.hide();
 }
 window.savePincode = savePincode;
 
@@ -433,9 +519,12 @@ function skipPincode() {
     window.firebaseHelpers.pincodeSystem.clearPincode();
     const modal = bootstrap.Modal.getInstance(document.getElementById('pincodeModal'));
     if (modal) modal.hide();
-    window.firebaseHelpers.showAlert('Viewing all equipment (no location filter applied).', 'info');
+    
+    window.firebaseHelpers.showAlert('Viewing equipment from all locations. Set your pincode to see local availability.', 'info');
+    
     updateHomepagePincodeDisplay();
     updateNavbarPincodeDisplay();
+    
     const path = window.location.pathname.split('/').pop();
     if (path === 'browse.html') {
         updatePincodeDisplay();
@@ -448,22 +537,42 @@ window.skipPincode = skipPincode;
 
 function updateHomepagePincodeDisplay() {
     const pincodeValueElement = document.getElementById('current-pincode-value');
-    if (pincodeValueElement) {
-        pincodeValueElement.textContent = window.customerPincode ? window.customerPincode : 'All Locations';
-    }
     const homepageDisplay = document.getElementById('homepage-pincode-display');
+    
+    const pincode = window.customerPincode;
+    
+    if (pincodeValueElement) {
+        pincodeValueElement.textContent = pincode ? pincode : 'All Locations';
+    }
+    
     if (homepageDisplay) {
-         const strongElement = homepageDisplay.querySelector('p strong');
-         if (strongElement) strongElement.textContent = window.customerPincode ? window.customerPincode : 'All Locations';
-         const buttonElement = homepageDisplay.querySelector('button');
-         if (buttonElement) buttonElement.textContent = window.customerPincode ? 'Change Location Filter' : 'Set Location Filter';
+        const strongElement = homepageDisplay.querySelector('p strong');
+        if (strongElement) {
+            strongElement.textContent = pincode ? pincode : 'All Locations';
+        }
+        
+        const buttonElement = homepageDisplay.querySelector('button');
+        if (buttonElement) {
+            if (pincode) {
+                buttonElement.innerHTML = '<i class="fas fa-map-marker-alt me-1"></i> Change Location';
+            } else {
+                buttonElement.innerHTML = '<i class="fas fa-map-marker-alt me-1"></i> Set Your Location';
+            }
+        }
     }
 }
 
 function updateNavbarPincodeDisplay() {
     const navPincodeValueElement = document.getElementById('current-pincode-value-nav');
     if (navPincodeValueElement) {
-        navPincodeValueElement.textContent = window.customerPincode ? window.customerPincode : 'All Locations';
+        const pincode = window.customerPincode;
+        if (pincode) {
+            navPincodeValueElement.textContent = pincode;
+            navPincodeValueElement.parentElement.title = 'Click to change location';
+        } else {
+            navPincodeValueElement.textContent = 'Set Location';
+            navPincodeValueElement.parentElement.title = 'Click to set your location';
+        }
     }
 }
 
@@ -707,25 +816,39 @@ async function loadBrowsePageData() {
 async function updatePincodeDisplay() {
     const container = document.getElementById('pincode-alert-container');
     if (!container) return;
+    
     const pincode = window.customerPincode;
+    
     if (!pincode) {
         container.innerHTML = `
-            <div class="alert alert-danger d-flex justify-content-between align-items-center mb-0">
+            <div class="alert alert-warning d-flex justify-content-between align-items-center mb-0">
                 <div>
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    **Location Filter Missing!** Please set your Pincode to view local equipment.
+                    <i class="fas fa-map-marker-alt me-2"></i>
+                    <strong>Location Not Set</strong> - Showing equipment from all locations
                 </div>
-                <a href="#" class="btn btn-sm btn-danger text-white" onclick="showPincodeModal()">Set Pincode Now</a>
+                <a href="#" class="btn btn-sm btn-outline-warning text-dark" onclick="showPincodeModal()">Set Your Location</a>
             </div>
         `;
     } else {
+        // Get location name for better display
+        let locationName = pincode;
+        try {
+            const postOffices = await getPostOfficeData(pincode);
+            if (postOffices.length > 0) {
+                locationName = `${postOffices[0].District}, ${postOffices[0].State} (${pincode})`;
+            }
+        } catch (error) {
+            // Fallback to just pincode
+        }
+        
         container.innerHTML = `
             <div class="alert alert-success d-flex justify-content-between align-items-center mb-0">
                 <div>
                     <i class="fas fa-map-marker-alt me-2"></i>
-                    Equipment listings displayed for Pincode: <strong>${pincode}</strong> Only
+                    <strong>Location:</strong> ${locationName}
+                    <small class="d-block text-muted">Showing equipment available in your area</small>
                 </div>
-                <a href="#" class="btn btn-sm btn-outline-success" onclick="showPincodeModal()">Change Pincode</a>
+                <a href="#" class="btn btn-sm btn-outline-success" onclick="showPincodeModal()">Change</a>
             </div>
         `;
     }
@@ -3408,3 +3531,51 @@ window.getReferralLink = function(code) {
     const baseUrl = window.location.origin;
     return `${baseUrl}/farmrent/customer-auth.html&ref=${code}`;
 }
+
+// Store recent pincodes in localStorage
+function getRecentPincodes() {
+    const recent = localStorage.getItem('recentPincodes');
+    return recent ? JSON.parse(recent) : [];
+}
+
+function addToRecentPincodes(pincode) {
+    let recent = getRecentPincodes();
+    recent = recent.filter(p => p !== pincode); // Remove if already exists
+    recent.unshift(pincode); // Add to beginning
+    recent = recent.slice(0, 5); // Keep only last 5
+    localStorage.setItem('recentPincodes', JSON.stringify(recent));
+    return recent;
+}
+
+function renderRecentPincodes() {
+    const recentContainer = document.getElementById('recent-pincodes');
+    if (!recentContainer) return;
+    
+    const recentPincodes = getRecentPincodes();
+    
+    if (recentPincodes.length === 0) {
+        recentContainer.innerHTML = `
+            <div class="text-center w-100">
+                <small class="text-muted">No recent locations</small>
+            </div>
+        `;
+        return;
+    }
+    
+    recentContainer.innerHTML = '';
+    recentPincodes.forEach(pincode => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-outline-secondary';
+        btn.textContent = pincode;
+        btn.onclick = () => {
+            document.getElementById('pincode-input').value = pincode;
+            // Auto-submit after 500ms for better UX
+            setTimeout(() => {
+                document.getElementById('pincode-form').dispatchEvent(new Event('submit'));
+            }, 500);
+        };
+        recentContainer.appendChild(btn);
+    });
+}
+
