@@ -691,4 +691,34 @@ body {
     background-color: #f1f1f1;
 }
 
+/* Pincode change warning styling */
+#pincodeChangeModal .modal-header {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+#pincodeChangeModal .alert-warning {
+    background-color: rgba(255, 193, 7, 0.2);
+    border-color: #ffc107;
+}
+
+#pincodeChangeModal ul {
+    padding-left: 1.5rem;
+}
+
+#pincodeChangeModal ul li {
+    margin-bottom: 0.5rem;
+}
+
+/* Pincode input styling */
+#profile-pincode:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+#pincode-input-group .input-group .btn-outline-primary:hover {
+    background-color: #0d6efd;
+    color: white;
+}
+
 /* --- END CHAT WIDGET STYLES --- */
