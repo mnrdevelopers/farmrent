@@ -131,6 +131,79 @@ function setupOnlineStatusToggle() {
     });
 }
 
+// Add a warning modal for pincode changes
+function showPincodeChangeWarning(oldPincode, newPincode) {
+    return new Promise((resolve) => {
+        const modalHtml = `
+            <div class="modal fade" id="pincodeChangeModal" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header bg-warning text-dark">
+                            <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>Pincode Change Warning</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-warning">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Important:</strong> Changing your pincode will affect future equipment listings.
+                            </div>
+                            
+                            <p><strong>Current Pincode:</strong> ${oldPincode || 'Not set'}</p>
+                            <p><strong>New Pincode:</strong> ${newPincode}</p>
+                            
+                            <div class="mt-3">
+                                <h6>Effects of this change:</h6>
+                                <ul>
+                                    <li>Future equipment listings will use the new pincode: <strong>${newPincode}</strong></li>
+                                    <li>Existing equipment listings will <strong>NOT</strong> be updated</li>
+                                    <li>Customers will see your new pincode for future rentals</li>
+                                    <li>This may affect your visibility in search results</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="form-check mt-3">
+                                <input class="form-check-input" type="checkbox" id="confirm-pincode-change">
+                                <label class="form-check-label" for="confirm-pincode-change">
+                                    I understand and want to change my pincode
+                                </label>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-warning" id="confirm-pincode-change-btn" disabled>
+                                Change Pincode
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modalElement = document.getElementById('pincodeChangeModal');
+        const modalInstance = new bootstrap.Modal(modalElement);
+        modalInstance.show();
+        
+        const confirmCheckbox = document.getElementById('confirm-pincode-change');
+        const confirmButton = document.getElementById('confirm-pincode-change-btn');
+        
+        confirmCheckbox.addEventListener('change', function() {
+            confirmButton.disabled = !this.checked;
+        });
+        
+        confirmButton.addEventListener('click', () => {
+            modalInstance.hide();
+            modalElement.remove();
+            resolve(true);
+        });
+        
+        modalElement.addEventListener('hidden.bs.modal', () => {
+            modalElement.remove();
+            resolve(false);
+        });
+    });
+}
+
 function updateStatusText(isOnline) {
     const statusText = document.getElementById('online-status-text');
     if (statusText) {
@@ -138,7 +211,6 @@ function updateStatusText(isOnline) {
         statusText.className = isOnline ? 'me-2 fw-bold text-success' : 'me-2 fw-bold text-muted';
     }
 }
-
 function updateSellerInfo() {
     if (sellerData) {
         const sellerNameEl = document.getElementById('seller-name');
@@ -158,21 +230,19 @@ function updateSellerInfo() {
         }
         
         const profilePincodeInput = document.getElementById('profile-pincode');
-        const pincodeGroup = document.getElementById('pincode-input-group');
         if (profilePincodeInput && sellerData.pincode) {
             profilePincodeInput.value = sellerData.pincode;
-            profilePincodeInput.readOnly = true;
-            profilePincodeInput.classList.add('bg-light', 'text-muted');
+    
+            const pincodeGroup = document.getElementById('pincode-input-group');
             if (pincodeGroup && !pincodeGroup.querySelector('.alert')) {
                 pincodeGroup.innerHTML += `
                     <div class="alert alert-info p-2 mt-2 small">
-                        <i class="fas fa-lock me-1"></i> Your Seller Pincode is permanent for consistency.
+                        <i class="fas fa-info-circle me-1"></i> 
+                        Changing your pincode will affect future equipment listings. 
+                        Existing equipment listings will retain their original pincode.
                     </div>
                 `;
             }
-        } else if (profilePincodeInput) {
-             profilePincodeInput.readOnly = false;
-             profilePincodeInput.classList.remove('bg-light', 'text-muted');
         }
         
         const approvalAlert = document.getElementById('seller-status-alert');
@@ -197,7 +267,6 @@ function updateSellerInfo() {
 }
 
 function showSection(sectionId) {
-    // Hide all sections
     document.querySelectorAll('.section').forEach(section => {
         section.style.display = 'none';
     });
@@ -2281,9 +2350,21 @@ document.getElementById('profile-form')?.addEventListener('submit', async functi
     const cityInput = document.getElementById('profile-city')?.value;
     const stateInput = document.getElementById('profile-state')?.value;
     
+    // Validate pincode format
     if (!pincodeInput || !/^[0-9]{6}$/.test(pincodeInput)) {
         window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
         return;
+    }
+    
+    // Check if pincode has changed
+    const isPincodeChanged = sellerData.pincode && pincodeInput !== sellerData.pincode;
+    
+    if (isPincodeChanged) {
+        // Show warning modal for pincode change
+        const confirmed = await showPincodeChangeWarning(sellerData.pincode, pincodeInput);
+        if (!confirmed) {
+            return; // User cancelled the change
+        }
     }
     
     if (villageSelect && !villageSelect.value) {
@@ -2306,10 +2387,16 @@ document.getElementById('profile-form')?.addEventListener('submit', async functi
             city: cityInput,
             state: stateInput,
             village: villageSelect ? villageSelect.value : '',
-            pincode: pincodeInput,
+            pincode: pincodeInput, // This can now be changed
             bio: document.getElementById('profile-bio')?.value,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
+        
+        // If pincode changed, also update status to pending for re-verification
+        if (isPincodeChanged) {
+            updates.status = 'pending';
+            window.firebaseHelpers.showAlert('Pincode changed! Your profile will be re-verified by admin.', 'warning');
+        }
         
         const currentPassword = document.getElementById('current-password')?.value;
         const newPassword = document.getElementById('new-password')?.value;
@@ -2350,6 +2437,13 @@ document.getElementById('profile-form')?.addEventListener('submit', async functi
         updateSellerInfo();
         
         window.firebaseHelpers.showAlert('Profile updated successfully', 'success');
+        
+        // If status changed to pending, redirect to pending page
+        if (isPincodeChanged && updates.status === 'pending') {
+            setTimeout(() => {
+                window.location.href = 'seller-pending.html';
+            }, 2000);
+        }
         
     } catch (error) {
         console.error('Error updating profile:', error);
