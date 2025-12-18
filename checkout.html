@@ -247,24 +247,12 @@
                         </div>
                         
                         <!-- Popular Cities (Optional) -->
-                        <div id="popular-cities">
-                            <h6 class="text-muted mb-2">Popular Locations (Demo):</h6>
-                            <div class="d-flex flex-wrap gap-2">
-                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="savePincode('500001')">
-                                    Hyderabad
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="savePincode('110001')">
-                                    Delhi
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="savePincode('400001')">
-                                    Mumbai
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="savePincode('600001')">
-                                    Chennai
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                       <div id="popular-cities">
+    <h6 class="text-muted mb-2">Recently Searched:</h6>
+    <div class="d-flex flex-wrap gap-2" id="recent-pincodes">
+        <!-- Will be dynamically loaded from user's search history -->
+    </div>
+</div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-outline-secondary" onclick="skipPincode()">
                             Skip for now
