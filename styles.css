@@ -761,3 +761,86 @@ body {
         box-shadow: 0 0 0 0 rgba(255, 59, 48, 0);
     }
 }
+
+/* Professional Pincode Styling */
+.pincode-modal .modal-content {
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.pincode-modal .modal-header {
+    background: linear-gradient(135deg, var(--farm-green), #1a472a);
+}
+
+.pincode-indicator {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+}
+
+.pincode-indicator:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+#recent-pincodes .btn {
+    border-radius: 20px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+}
+
+#recent-pincodes .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+#location-status {
+    min-height: 1.5rem;
+    transition: all 0.3s ease;
+}
+
+/* Auto-complete styling for pincode input */
+#pincode-input {
+    letter-spacing: 1px;
+    font-family: monospace;
+    font-size: 1.1rem;
+}
+
+#pincode-input:focus {
+    border-color: var(--farm-green);
+    box-shadow: 0 0 0 0.25rem rgba(43, 92, 43, 0.25);
+}
+
+/* Location permission button */
+#location-access-btn {
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+#location-access-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* Loading state for pincode verification */
+.spinner-border-sm.text-primary {
+    vertical-align: middle;
+}
+
+/* Responsive adjustments */
+@media (max-width: 576px) {
+    .pincode-modal .modal-dialog {
+        margin: 0.5rem;
+    }
+    
+    .pincode-indicator {
+        font-size: 0.85rem;
+        padding: 0.2rem 0.5rem;
+    }
+    
+    #pincode-input {
+        font-size: 1rem;
+    }
+}
