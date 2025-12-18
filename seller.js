@@ -1,27 +1,19 @@
-// Global variables
 let sellerData = null; 
 let equipmentData = [];
 let ordersData = [];
 let earningsChart = null;
 let detailedEarningsChart = null;
 let sellerNotifications = [];
-
-// NEW: Earnings specific global variables
-let allCompletedOrders = []; // Full list of completed/returned orders for the seller
+let allCompletedOrders = [];
 let totalSettledAmount = 0;
 let totalWalletBalance = 0;
-
-// Chat Globals
 let sellerActiveChatId = null;
 let sellerChatUnsubscribe = null;
 let sellertypingTimeout = null;
 
-
-// Seller Alerts
 const SELLER_ALERTS_COLLECTION = 'seller_alerts';
 let dismissedAlerts = new Set();
 
-// Image Library
 const libraryImages = [
     'images/Farm_Tractor_45HP.png',
     'images/Combine_Harvester.png',
@@ -33,7 +25,6 @@ const libraryImages = [
 ];
 let currentImageTab = 'upload';
 
-// Helper Functions
 function getPublicCollectionRef(collectionName) {
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     return window.FirebaseDB.collection('artifacts').doc(appId)
@@ -48,12 +39,10 @@ function getSellerAlertsRef() {
         .collection('users').doc(window.currentUser.uid).collection(SELLER_ALERTS_COLLECTION).doc('dismissed');
 }
 
-// --- INITIALIZATION ---
 window.loadSellerDashboard = async () => {
     const loadingEl = document.getElementById('loading');
     if (loadingEl) loadingEl.classList.add('active');
 
-    // Check authentication
     const authCheck = await window.firebaseHelpers.checkAuthAndRole('seller');
     
     if (!authCheck.authenticated) {
@@ -74,19 +63,16 @@ window.loadSellerDashboard = async () => {
         return;
     }
     
-    // Load static UI components and check profile completion
     updateSellerInfo();
     setupOnlineStatusToggle(); 
     loadLibraryImages(); 
 
-    // Check required fields for full account functionality
     let missingRequiredDetails = false;
     if (!sellerData.pincode || !sellerData.businessName || !sellerData.address) {
         window.firebaseHelpers.showAlert('Please complete your profile (Pincode, Business Name, Address) before listing equipment.', 'warning');
         missingRequiredDetails = true;
     }
     
-    // Check if bank details are missing after initial login/registration
     const urlParams = new URLSearchParams(window.location.hash.substring(1));
     const shouldOpenBankModal = urlParams.get('bank') === 'required';
 
@@ -104,37 +90,28 @@ window.loadSellerDashboard = async () => {
         return;
     }
     
-    // Load required data
     await loadDismissedAlerts();
-    // loadDashboardData is called implicitly by showSection('dashboard') if no hash is present
-
-    // FIX: Read URL hash on load and show the correct section, defaulting to 'dashboard'
+   
     const hash = window.location.hash.substring(1).split('&')[0];
     const validSections = ['dashboard', 'equipment', 'orders', 'add-equipment', 'earnings', 'notifications', 'reviews', 'profile'];
     
-    // Set the initial section, defaulting to 'dashboard' if no valid hash is found
     const initialSection = validSections.includes(hash) ? hash : 'dashboard';
 
-    // Show the initial section, which triggers the corresponding data load function
     showSection(initialSection);
 
-    // Hide the loading spinner once the initial section data starts loading
     if (loadingEl) loadingEl.classList.remove('active');
 }
 
-// --- ONLINE STATUS MANAGEMENT ---
 function setupOnlineStatusToggle() {
     const toggle = document.getElementById('seller-online-toggle');
     const statusText = document.getElementById('online-status-text');
     
     if (!toggle || !window.currentUser) return;
 
-    // Set initial state
     const isOnline = sellerData.isOnline || false;
     toggle.checked = isOnline;
     updateStatusText(isOnline);
 
-    // Add listener
     toggle.addEventListener('change', async (e) => {
         const newStatus = e.target.checked;
         updateStatusText(newStatus);
@@ -162,7 +139,6 @@ function updateStatusText(isOnline) {
     }
 }
 
-// --- SELLER INFO ---
 function updateSellerInfo() {
     if (sellerData) {
         const sellerNameEl = document.getElementById('seller-name');
@@ -181,7 +157,6 @@ function updateSellerInfo() {
             registeredPincodeDisplay.textContent = sellerData?.pincode || 'N/A';
         }
         
-        // Enforce readonly Pincode in profile if set
         const profilePincodeInput = document.getElementById('profile-pincode');
         const pincodeGroup = document.getElementById('pincode-input-group');
         if (profilePincodeInput && sellerData.pincode) {
@@ -200,7 +175,6 @@ function updateSellerInfo() {
              profilePincodeInput.classList.remove('bg-light', 'text-muted');
         }
         
-        // NEW: Update Admin Approval Status Display
         const approvalAlert = document.getElementById('seller-status-alert');
         const approvedAlert = document.getElementById('seller-status-approved');
         if (approvalAlert && approvedAlert) {
@@ -211,7 +185,6 @@ function updateSellerInfo() {
                 approvalAlert.style.display = 'block';
                 approvedAlert.style.display = 'none';
                 
-                // Check if basic profile + bank details are provided for a clear status
                 const detailsComplete = sellerData.pincode && sellerData.businessName && sellerData.address && sellerData.bankDetails?.accountNumber;
                 const statusMessage = detailsComplete 
                     ? `Your profile is under review. Approval typically takes <span class="fw-bold">24 hours</span>.`
@@ -220,37 +193,29 @@ function updateSellerInfo() {
                 approvalAlert.querySelector('p.mb-0').innerHTML = statusMessage;
             }
         }
-        // END NEW
     }
 }
 
-// --- SECTION MANAGEMENT ---
 function showSection(sectionId) {
     // Hide all sections
     document.querySelectorAll('.section').forEach(section => {
         section.style.display = 'none';
     });
     
-    // Remove active class from all nav links
     document.querySelectorAll('.nav-link').forEach(link => {
         link.classList.remove('active');
     });
     
-    // Show selected section
     const targetSection = document.getElementById(`${sectionId}-section`);
     if (targetSection) targetSection.style.display = 'block';
     
-    // Update active nav link
-    // Use the href attribute containing the hash fragment for matching (for both desktop and mobile navs)
     const navLink = document.querySelector(`.nav-link[href="#${sectionId}"]`);
     if (navLink) {
         navLink.classList.add('active');
     }
     
-    // Update URL hash (Crucial for page reloads)
     window.location.hash = sectionId;
     
-    // Load section data
     switch(sectionId) {
         case 'dashboard':
             loadDashboardData();
@@ -285,12 +250,10 @@ function showSection(sectionId) {
 }
 window.showSection = showSection; // Expose globally for HTML
 
-// --- DASHBOARD DATA ---
 async function loadDashboardData() {
     try {
         if (!window.currentUser) return;
         
-        // NEW: Load all relevant order data once for earnings and wallet calculations
         await loadAllSellerOrders(); 
 
         const [stats, notificationData] = await Promise.all([
@@ -298,7 +261,6 @@ async function loadDashboardData() {
             calculateSellerNotifications()
         ]);
         
-        // Update stats cards
         const totalEarningsEl = document.getElementById('total-earnings');
         if (totalEarningsEl) totalEarningsEl.textContent = window.firebaseHelpers.formatCurrency(stats.totalEarnings);
         
@@ -311,7 +273,6 @@ async function loadDashboardData() {
         const sellerRatingEl = document.getElementById('seller-rating');
         if (sellerRatingEl) sellerRatingEl.textContent = stats.rating.toFixed(1);
         
-        // Update notification badges (now includes chat messages)
         const newMessagesCountEl = document.getElementById('new-messages-count');
         if (newMessagesCountEl) newMessagesCountEl.textContent = notificationData.unreadCount || '';
         
@@ -326,10 +287,8 @@ async function loadDashboardData() {
 
         displayTopNotifications(notificationData.recentNotifications);
         
-        // Load recent orders
         await loadRecentOrders();
         
-        // Initialize chart
         initializeEarningsChart();
         
     } catch (error) {
@@ -338,7 +297,6 @@ async function loadDashboardData() {
     }
 }
 
-// --- NOTIFICATIONS & ALERTS ---
 async function loadDismissedAlerts() {
     const docRef = getSellerAlertsRef();
     if (!docRef) return;
@@ -381,7 +339,6 @@ async function calculateSellerNotifications() {
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
     try {
-        // 1. Pending Orders and Returns (Alerts)
         const ordersSnapshot = await getPublicCollectionRef('orders')
             .where('sellerIds', 'array-contains', window.currentUser.uid)
             .where('status', 'in', ['pending', 'returned'])
@@ -414,7 +371,6 @@ async function calculateSellerNotifications() {
             });
         });
 
-        // 2. New Reviews (Alerts)
         const yesterday = firebase.firestore.Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
         const reviewsSnapshot = await window.FirebaseDB.collection('reviews')
             .where('sellerId', '==', window.currentUser.uid)
@@ -424,8 +380,6 @@ async function calculateSellerNotifications() {
 
         reviewsSnapshot.forEach(doc => {
             const review = doc.data();
-            // Note: Since reviews don't have a specific read/dismiss mechanism, 
-            // they are treated as unread if they were created recently (last 24h).
             notifications.push({
                 id: doc.id,
                 type: 'new_review',
@@ -437,7 +391,6 @@ async function calculateSellerNotifications() {
             });
         });
 
-        // 3. Unread Chat Messages (Communication) <-- FIX ADDED HERE
         const conversationsSnapshot = await window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations')
             .where('sellerId', '==', window.currentUser.uid)
             .get();
@@ -448,7 +401,6 @@ async function calculateSellerNotifications() {
             const chat = doc.data();
             unreadChatCount += chat.unreadCountSeller || 0;
             
-            // Optionally add the latest chat to the notifications list if it has unread messages
             if (chat.unreadCountSeller > 0 && notifications.length < 10) {
                  notifications.push({
                     id: doc.id,
@@ -459,7 +411,6 @@ async function calculateSellerNotifications() {
                     read: false, // Mark as unread since unreadCountSeller > 0
                     action: () => { 
                          showSection('notifications');
-                         // This automatically focuses on the chat list which is the primary UI for conversations
                     }
                  });
             }
@@ -470,10 +421,8 @@ async function calculateSellerNotifications() {
         
         sellerNotifications = notifications;
         
-        // Count unread order and review alerts that were not manually dismissed
         const unreadAlerts = notifications.filter(n => n.type.startsWith('order_') || n.type === 'new_review').filter(n => !n.read).length;
         
-        // Final unread count includes both Alerts and Chat Messages
         const totalUnreadCount = unreadAlerts + unreadChatCount;
         
         return { unreadCount: totalUnreadCount, recentNotifications: notifications };
@@ -586,7 +535,6 @@ async function markAllOrderAlertsAsRead() {
 }
 window.markAllOrderAlertsAsRead = markAllOrderAlertsAsRead;
 
-// --- STATISTICS ---
 async function calculateSellerStats() {
     if (!window.currentUser) return {
         totalEarnings: 0,
@@ -596,17 +544,14 @@ async function calculateSellerStats() {
     };
     
     try {
-        // Equipment count
         const equipmentSnapshot = await window.FirebaseDB.collection('equipment')
             .where('sellerId', '==', window.currentUser.uid)
             .get();
         
         const totalEquipment = equipmentSnapshot.size;
         
-        // Orders (Use the globally loaded completed orders)
         const totalOrders = allCompletedOrders.length;
         
-        // Earnings (Calculated from pre-loaded data)
         let totalEarnings = 0;
         let totalSettled = 0;
         let walletBalance = 0;
@@ -622,11 +567,9 @@ async function calculateSellerStats() {
             }
         });
 
-        // Update global variables
         totalSettledAmount = totalSettled;
         totalWalletBalance = walletBalance;
         
-        // Rating
         const reviewsSnapshot = await window.FirebaseDB.collection('reviews')
             .where('sellerId', '==', window.currentUser.uid)
             .get();
@@ -651,7 +594,6 @@ async function calculateSellerStats() {
     }
 }
 
-// --- ALL SELLER ORDERS (Completed/Returned) ---
 async function loadAllSellerOrders() {
     if (!window.currentUser) return;
     
@@ -670,7 +612,6 @@ async function loadAllSellerOrders() {
     }
 }
 
-// --- RECENT ORDERS ---
 async function loadRecentOrders() {
     if (!window.currentUser) return;
     
@@ -680,7 +621,7 @@ async function loadRecentOrders() {
         const ordersSnapshot = await ordersCollectionRef
             .where('sellerIds', 'array-contains', window.currentUser.uid)
             .orderBy('createdAt', 'desc')
-            .limit(10) // Limit to recent 10 overall for efficiency
+            .limit(10) 
             .get();
         
         const ordersTable = document.getElementById('recent-orders-table');
@@ -692,7 +633,6 @@ async function loadRecentOrders() {
         
         ordersSnapshot.forEach(doc => {
             const order = { id: doc.id, ...doc.data() };
-            // Filter to include ALL relevant statuses for the dashboard recent list
             if (order.sellerIds && order.sellerIds.includes(window.currentUser.uid)) {
                 ordersData.push(order);
                 recentOrders.push(order);
@@ -763,7 +703,6 @@ function createOrderRow(order) {
     `;
 }
 
-// --- CHARTS ---
 function initializeEarningsChart() {
     const ctx = document.getElementById('earningsChart')?.getContext('2d');
     
@@ -808,7 +747,6 @@ function initializeEarningsChart() {
     });
 }
 
-// --- EQUIPMENT MANAGEMENT ---
 async function loadEquipmentList() {
     if (!window.currentUser) return;
     
@@ -896,7 +834,6 @@ function createEquipmentCard(equipment) {
     `;
 }
 
-// --- SEARCH & FILTER ---
 function searchEquipment() {
     const searchTerm = document.getElementById('equipment-search')?.value?.toLowerCase() || '';
     const filteredEquipment = equipmentData.filter(equipment => 
@@ -946,7 +883,6 @@ function displayFilteredEquipment(equipmentList) {
     });
 }
 
-// --- ORDERS MANAGEMENT ---
 async function loadOrders() {
     if (!window.currentUser) return;
     
@@ -1109,14 +1045,12 @@ function filterByDate() {
 }
 
 function exportOrders() {
-    // 1. Define CSV headers and data fields
     const headers = [
         "Order ID", "Status", "Customer Name", "Customer Phone", 
         "Equipment Names", "Rental Value (Acre/Hour)", "Total Amount (Rupees)", 
         "Seller Payout (Net Rupees)", "Pincode", "Pickup Date", "Created At"
     ];
 
-    // 2. Map data to rows
     const csvRows = [headers.join(',')]; // Start with headers
 
     if (!ordersData || ordersData.length === 0) {
@@ -1125,19 +1059,15 @@ function exportOrders() {
     }
 
     ordersData.forEach(order => {
-        // Prepare data fields, replacing internal commas with a semicolon for better CSV compatibility
         
         const statusText = (order.status || 'pending').toUpperCase();
-        // Replace quotes with double quotes for CSV escaping
         const customerName = (order.customerName || 'N/A').replace(/"/g, '""');
         const equipmentNames = (order.equipmentNames || 'N/A').replace(/,/g, '; ').replace(/"/g, '""');
         
-        // Calculate total rental value/period, using semicolon as internal separator
         const rentalPeriod = order.items && order.items.length > 0 
             ? order.items.map(item => `${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'}`).join('; ')
             : 'N/A';
         
-        // Format currency fields as clean numeric strings for Excel/data manipulation
         const totalAmount = (order.totalAmount || 0).toFixed(2);
         const sellerPayout = (order.sellerNetEarnings || 0).toFixed(2);
         const pickupDate = order.pickupDate || 'N/A';
@@ -1157,7 +1087,6 @@ function exportOrders() {
             createdAt
         ];
         
-        // Escape content by wrapping in quotes if it contains commas
         csvRows.push(row.map(cell => {
              if (cell.includes(',')) {
                  return `"${cell}"`;
@@ -1166,7 +1095,6 @@ function exportOrders() {
         }).join(','));
     });
 
-    // 3. Create Blob and trigger download
     const csvString = csvRows.join('\n');
     const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -1183,9 +1111,8 @@ function exportOrders() {
     URL.revokeObjectURL(url);
     window.firebaseHelpers.showAlert('Orders exported successfully to CSV!', 'success');
 }
-window.exportOrders = exportOrders; // Ensure it remains globally accessible
+window.exportOrders = exportOrders; 
 
-// --- ADD EQUIPMENT ---
 document.getElementById('add-equipment-form')?.addEventListener('submit', async function(e) {
     e.preventDefault();
     
@@ -1314,7 +1241,6 @@ function addSpecField() {
 }
 window.addSpecField = addSpecField;
 
-// --- VIEW/EQUIPMENT DETAILS ---
 async function viewEquipmentDetails(equipmentId) {
     try {
         const doc = await window.FirebaseDB.collection('equipment').doc(equipmentId).get();
@@ -1381,7 +1307,6 @@ async function viewEquipmentDetails(equipmentId) {
     }
 }
 
-// --- EDIT EQUIPMENT ---
 async function editEquipment(equipmentId) {
     try {
         const doc = await window.FirebaseDB.collection('equipment').doc(equipmentId).get();
@@ -1511,7 +1436,6 @@ document.getElementById('edit-equipment-form')?.addEventListener('submit', async
     }
 });
 
-// --- DELETE EQUIPMENT ---
 async function deleteEquipment(equipmentId) {
     const modalHtml = `
         <div class="modal fade" id="confirm-delete-equipment-modal" tabindex="-1">
@@ -1553,7 +1477,6 @@ async function deleteEquipment(equipmentId) {
     };
 }
 
-// --- ORDER MANAGEMENT ---
 async function viewOrderDetails(orderId) {
     try {
         const orderRef = getPublicCollectionRef('orders').doc(orderId);
@@ -1759,7 +1682,6 @@ async function updateOrderStatus(orderId, newStatus) {
     };
 }
 
-// --- EARNINGS ---
 async function loadEarningsData() {
     if (!window.currentUser) return;
     
@@ -1768,10 +1690,8 @@ async function loadEarningsData() {
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
         
-        // Ensure all relevant orders are loaded for calculation
         await loadAllSellerOrders(); 
         
-        // Calculate stats again to update globals (totalWalletBalance, totalSettledAmount)
         await calculateSellerStats(); 
         
         let thisMonthEarnings = 0;
@@ -1783,7 +1703,6 @@ async function loadEarningsData() {
             const year = orderDate.getFullYear();
             
             if (order.sellerIds && order.sellerIds.includes(window.currentUser.uid) && (order.status === 'completed' || order.status === 'returned')) {
-                 // Use NET PAYOUT DUE (sellerNetEarnings) for charts and monthly summary
                  const amount = order.sellerNetEarnings || 0; 
                 
                 if (year === currentYear) {
@@ -1799,12 +1718,10 @@ async function loadEarningsData() {
             }
         });
         
-        // Update Wallet UI
         document.getElementById('wallet-balance').textContent = window.firebaseHelpers.formatCurrency(totalWalletBalance);
         document.getElementById('settled-amount').textContent = window.firebaseHelpers.formatCurrency(totalSettledAmount);
         document.getElementById('total-payout-due').textContent = window.firebaseHelpers.formatCurrency(totalSettledAmount + totalWalletBalance);
 
-        // Update Monthly Summary UI
         const monthEarningsEl = document.getElementById('month-earnings');
         if (monthEarningsEl) monthEarningsEl.textContent = window.firebaseHelpers.formatCurrency(thisMonthEarnings);
         
@@ -1822,13 +1739,11 @@ async function loadEarningsData() {
         updateDetailedEarningsChart(monthlyEarnings);
         await loadTopEquipment();
         
-        // NEW: Load Detailed Earnings Table (Default: All, No Date Filter)
         const dateInput = document.getElementById('daily-earnings-date-filter');
         if (dateInput && !dateInput.value) {
-            // Set date filter to today's date initially for clear daily breakdown
             dateInput.value = now.toISOString().split('T')[0];
         }
-        filterDetailedEarnings(); // Initial load of the detailed table
+        filterDetailedEarnings();
         
     } catch (error) {
         console.error('Error loading earnings data:', error);
@@ -1875,9 +1790,6 @@ function updateDetailedEarningsChart(monthlyEarnings) {
     });
 }
 
-/**
- * NEW: Filters and displays detailed daily earnings data.
- */
 window.filterDetailedEarnings = function() {
     const tableBody = document.getElementById('detailed-earnings-table');
     const statusFilter = document.getElementById('daily-earnings-status-filter')?.value || 'all';
@@ -1889,7 +1801,6 @@ window.filterDetailedEarnings = function() {
     let filteredOrders = allCompletedOrders;
 
     if (dateFilter) {
-        // Filter by specific date (day only)
         filteredOrders = filteredOrders.filter(order => {
             const orderDateStr = order.createdAt ? order.createdAt.toDate().toISOString().split('T')[0] : '';
             return orderDateStr === dateFilter;
@@ -1951,7 +1862,6 @@ async function loadTopEquipment() {
         const topEquipmentList = document.getElementById('top-equipment-list');
         if (!topEquipmentList) return;
         
-        // Map equipment names
         const equipmentSnapshot = await window.FirebaseDB.collection('equipment')
             .where('sellerId', '==', window.currentUser.uid)
             .get();
@@ -1964,7 +1874,6 @@ async function loadTopEquipment() {
             equipmentNames[doc.id] = doc.data().name;
         });
 
-        // Calculate earnings from the pre-loaded list
         allCompletedOrders.forEach(order => {
             order.items.forEach(item => {
                 if (item.sellerId === window.currentUser.uid && equipmentEarnings[item.id] !== undefined) {
@@ -2010,7 +1919,6 @@ async function loadTopEquipment() {
     }
 }
 
-// --- NOTIFICATIONS UI ---
 async function loadNotifications() {
     if (!window.currentUser) return;
     
@@ -2083,7 +1991,6 @@ async function loadNotifications() {
     }
 }
 
-// --- CHAT SYSTEM ---
 async function loadSellerConversations() {
     const chatListContainer = document.getElementById('active-chats-list');
     if (!chatListContainer) return;
@@ -2142,7 +2049,6 @@ function loadSellerChatMessages(chatId, customerName, orderId) {
     const chatDocRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations').doc(chatId);
     const messagesRef = chatDocRef.collection('messages');
 
-    // 1. Listen for Messages
     if (sellerChatUnsubscribe) sellerChatUnsubscribe();
 
     sellerChatUnsubscribe = messagesRef.orderBy('timestamp', 'asc').onSnapshot(snapshot => {
@@ -2175,7 +2081,6 @@ function loadSellerChatMessages(chatId, customerName, orderId) {
         chatDocRef.update({ unreadCountSeller: 0 });
     });
 
-    // 2. Listen for Customer Typing Status
     chatDocRef.onSnapshot(doc => {
         const data = doc.data();
         const indicator = document.getElementById('seller-typing-indicator');
@@ -2187,7 +2092,6 @@ function loadSellerChatMessages(chatId, customerName, orderId) {
         }
     });
 
-    // 3. Handle Seller Typing Input
     const input = document.getElementById('message-input');
     input.oninput = () => {
         chatDocRef.set({ typing: { seller: true } }, { merge: true });
@@ -2233,7 +2137,6 @@ async function sendMessage() {
     }
 }
 
-// --- REVIEWS ---
 async function loadReviews() {
     if (!window.currentUser) return;
     
@@ -2323,7 +2226,6 @@ async function loadReviews() {
     }
 }
 
-// --- PROFILE MANAGEMENT ---
 async function loadProfileData() {
     if (!sellerData) return;
     
@@ -2356,7 +2258,6 @@ async function loadProfileData() {
         })();
     }
     
-    // NEW: Load Bank Details Display
     const bankDetails = sellerData.bankDetails || {};
     document.getElementById('bank-holder-name').textContent = bankDetails.accountHolderName || 'N/A';
     document.getElementById('bank-name-display').textContent = bankDetails.bankName || 'N/A';
@@ -2366,7 +2267,6 @@ async function loadProfileData() {
         ? '******' + bankDetails.accountNumber.slice(-4) 
         : 'N/A';
     document.getElementById('bank-account-display').textContent = accDisplay;
-    // END NEW
     
     updateSellerInfo();
 }
@@ -2497,24 +2397,16 @@ async function deleteAccount() {
     }
 }
 
-// --- NEW BANK DETAILS LOGIC ---
-
-/**
- * Opens the bank details modal and pre-fills existing data.
- */
 window.openBankDetailsModal = function() {
     const modalElement = document.getElementById('bankDetailsModal');
     if (!modalElement) return;
 
     const bankDetails = sellerData.bankDetails || {};
     
-    // Clear previous lookup results
     document.getElementById('bank-name-input').value = bankDetails.bankName || '';
     document.getElementById('bank-branch-input').value = bankDetails.branchName || '';
     document.getElementById('ifsc-status-message').textContent = '';
     document.getElementById('account-match-status').textContent = '';
-
-    // Pre-fill fields
     document.getElementById('bank-ifsc').value = bankDetails.ifsc || '';
     document.getElementById('bank-holder-name-input').value = bankDetails.accountHolderName || sellerData.name || '';
     document.getElementById('bank-account-input').value = bankDetails.accountNumber || '';
@@ -2524,9 +2416,6 @@ window.openBankDetailsModal = function() {
     modal.show();
 }
 
-/**
- * Looks up bank and branch details using a public IFSC API.
- */
 window.lookupIfsc = async function() {
     const ifscInput = document.getElementById('bank-ifsc');
     const statusMessage = document.getElementById('ifsc-status-message');
@@ -2547,7 +2436,6 @@ window.lookupIfsc = async function() {
     bankNameInput.value = '';
     branchInput.value = '';
 
-    // Use the public API endpoint for Indian IFSC code lookup
     const apiUrl = `https://ifsc.razorpay.com/${ifsc}`;
     
     try {
@@ -2569,9 +2457,6 @@ window.lookupIfsc = async function() {
     }
 }
 
-/**
- * Saves the validated bank details to the seller's profile.
- */
 window.saveBankDetails = async function() {
     const form = document.getElementById('bank-details-form');
     const ifsc = document.getElementById('bank-ifsc').value.toUpperCase().trim();
@@ -2618,17 +2503,12 @@ window.saveBankDetails = async function() {
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
-        // If the account was previously pending (e.g., just registered) and now has bank details,
-        // we can set the seller status to 'pending_review' or similar to re-trigger admin notice.
-        // For simplicity and consistency with current model, we rely on the visibility of all required fields in Firestore.
-
         await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(updatePayload);
         
-        // Update local data
         sellerData.bankDetails = bankDetails;
         window.currentUser.bankDetails = bankDetails;
-        loadProfileData(); // Reload profile data to update display
-        updateSellerInfo(); // Re-check and update admin approval status
+        loadProfileData(); 
+        updateSellerInfo(); 
         
         window.firebaseHelpers.showAlert('Bank Details saved successfully!', 'success');
         
@@ -2641,7 +2521,6 @@ window.saveBankDetails = async function() {
     }
 }
 
-// --- IMAGE LIBRARY FUNCTIONS ---
 function loadLibraryImages() {
     const grid = document.getElementById('library-image-grid');
     if (!grid) return;
@@ -2711,7 +2590,6 @@ function resetImageSelection() {
     document.querySelectorAll('.image-option').forEach(el => el.classList.remove('selected'));
 }
 
-// --- EVENT LISTENERS ---
 document.addEventListener('DOMContentLoaded', function() {
     const pincodeInput = document.getElementById('profile-pincode');
     if (pincodeInput) {
@@ -2767,7 +2645,6 @@ document.getElementById('image-upload')?.addEventListener('change', function(e) 
     }
 });
 
-// --- LOGOUT ---
 async function logout() {
     try {
         await window.firebaseHelpers.signOut();
@@ -2777,9 +2654,8 @@ async function logout() {
         window.firebaseHelpers.showAlert('Error logging out', 'danger');
     }
 }
-window.logout = logout; // Expose globally for HTML
+window.logout = logout; 
 
-// Initialize if not called by script.js
 if (!window.loadSellerDashboard) {
      document.addEventListener('DOMContentLoaded', () => {
          window.loadSellerDashboard();
