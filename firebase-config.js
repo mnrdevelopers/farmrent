@@ -34,13 +34,16 @@ try {
         
         // Set default values for Remote Config keys
         // IMPORTANT: These keys must be configured in the Firebase Console
-        remoteConfig.defaultConfig = {
-            "imgbb_api_key": "", 
-            "razorpay_key_id": "", 
-            "post_office_api_url": "",
-            "geoapify_api_key": "",
-            // Removed admin_login_email and admin_login_password for enhanced security
-        };
+       remoteConfig.defaultConfig = {
+    "imgbb_api_key": "", 
+    "cashfree_client_id": "",
+    "cashfree_secret": "",
+    "post_office_api_url": "",
+    "geoapify_api_key": "",
+    "emailjs_service_id": "",
+    "emailjs_template_id": "",
+    "emailjs_public_key": ""
+};
         
         // Fetch and activate the configuration values
         remoteConfig.fetchAndActivate()
@@ -174,25 +177,119 @@ window.firebaseHelpers = {
      * Fetches the Razorpay Key ID from Firebase Remote Config.
      * @returns {Promise<string>} The Razorpay Key ID.
      */
-    getRazorpayKeyId: async () => {
-        if (!remoteConfig) {
-            window.firebaseHelpers.showAlert('Remote Config is not available. Check SDK inclusion.', 'warning');
-            return ""; 
+    // Get Cashfree Client ID from Remote Config
+getCashfreeClientId: async () => {
+    if (!remoteConfig) {
+        window.firebaseHelpers.showAlert('Remote Config is not available.', 'warning');
+        return "";
+    }
+    try {
+        const clientId = remoteConfig.getString('cashfree_client_id');
+        if (!clientId) {
+            window.firebaseHelpers.showAlert('Cashfree Client ID is missing in Remote Config.', 'danger');
         }
-        try {
-            // Get the value set in the Firebase console for 'razorpay_key_id'
-            const keyId = remoteConfig.getString('razorpay_key_id');
-            // Check if key is empty or still the placeholder value set in defaultConfig
-            if (!keyId || keyId === "rzp_test_XXXXXXXXXXXXXXXX") {
-                 window.firebaseHelpers.showAlert('Razorpay Key ID is missing or using placeholder in Remote Config. Check Firebase Console configuration.', 'danger');
-            }
-            return keyId;
-        } catch (error) {
-            console.error("Error retrieving Razorpay Key ID:", error);
-            window.firebaseHelpers.showAlert('Failed to retrieve Razorpay Key ID from Remote Config.', 'danger');
-            return ""; 
+        return clientId;
+    } catch (error) {
+        console.error("Error retrieving Cashfree Client ID:", error);
+        window.firebaseHelpers.showAlert('Failed to retrieve Cashfree Client ID.', 'danger');
+        return "";
+    }
+},
+
+// Get Cashfree Secret from Remote Config
+getCashfreeSecret: async () => {
+    if (!remoteConfig) {
+        window.firebaseHelpers.showAlert('Remote Config is not available.', 'warning');
+        return "";
+    }
+    try {
+        const secret = remoteConfig.getString('cashfree_secret');
+        if (!secret) {
+            window.firebaseHelpers.showAlert('Cashfree Secret is missing in Remote Config.', 'danger');
         }
-    },
+        return secret;
+    } catch (error) {
+        console.error("Error retrieving Cashfree Secret:", error);
+        window.firebaseHelpers.showAlert('Failed to retrieve Cashfree Secret.', 'danger');
+        return "";
+    }
+},
+
+// Get EmailJS configuration from Remote Config
+getEmailJsConfig: async () => {
+    if (!remoteConfig) {
+        console.warn('Remote Config not available for EmailJS.');
+        return null;
+    }
+    try {
+        return {
+            serviceId: remoteConfig.getString('emailjs_service_id'),
+            templateId: remoteConfig.getString('emailjs_template_id'),
+            publicKey: remoteConfig.getString('emailjs_public_key')
+        };
+    } catch (error) {
+        console.error("Error retrieving EmailJS config:", error);
+        return null;
+    }
+},
+
+// Send email using EmailJS
+sendEmail: async (templateParams) => {
+    try {
+        const emailConfig = await window.firebaseHelpers.getEmailJsConfig();
+        if (!emailConfig?.serviceId || !emailConfig?.templateId || !emailConfig?.publicKey) {
+            console.warn('EmailJS configuration incomplete');
+            return false;
+        }
+        
+        // Load EmailJS if not already loaded
+        if (typeof emailjs === 'undefined') {
+            await new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js';
+                script.onload = () => resolve();
+                script.onerror = () => reject(new Error('Failed to load EmailJS'));
+                document.head.appendChild(script);
+            });
+            
+            // Initialize EmailJS with public key
+            emailjs.init(emailConfig.publicKey);
+        }
+        
+        // Send email
+        const response = await emailjs.send(
+            emailConfig.serviceId,
+            emailConfig.templateId,
+            templateParams
+        );
+        
+        return response.status === 200;
+    } catch (error) {
+        console.error('Email sending error:', error);
+        return false;
+    }
+},
+
+// Send order confirmation email
+sendOrderConfirmationEmail: async (orderData) => {
+    const templateParams = {
+        to_email: orderData.customerEmail,
+        to_name: orderData.customerName,
+        order_id: orderData.orderId,
+        order_date: new Date().toLocaleDateString(),
+        equipment_list: orderData.equipmentNames,
+        total_amount: window.firebaseHelpers.formatCurrency(orderData.totalAmount),
+        pickup_date: orderData.pickupDate,
+        pickup_time: orderData.pickupTime,
+        seller_name: orderData.sellerBusinessNames,
+        seller_contact: 'Will be shared after confirmation',
+        pickup_address: orderData.sellerAddress || 'Seller will contact you with address details',
+        payment_status: orderData.paymentStatus,
+        payment_method: orderData.paymentMethod
+    };
+    
+    return await window.firebaseHelpers.sendEmail(templateParams);
+}
     
     /**
      * NEW: Fetches the Geoapify API Key from Firebase Remote Config.
