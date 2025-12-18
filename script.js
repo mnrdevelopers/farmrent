@@ -115,13 +115,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (path === 'checkout.html') {
         loadCheckoutPage();
         updateNavbarPincodeDisplay();
-        const paymentSelect = document.getElementById('payment-method-select');
-        if (paymentSelect) {
-            paymentSelect.onchange = function() {
-                const total = window.razorpayContext?.total || 0;
-                window.updatePaymentButtonUI(total);
-            };
-        }
     } else if (path === 'profile.html') {
         loadProfilePage();
         updateNavbarPincodeDisplay();
