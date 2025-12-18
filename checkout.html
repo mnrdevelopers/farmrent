@@ -165,22 +165,20 @@
                         
                         <hr>
                         
-                        <!-- NEW PAYMENT METHOD SELECTION -->
-                        <div class="mb-3">
-                            <label class="form-label">Select Payment Method</label>
-                            <select class="form-select" id="payment-method-select">
-                                <option value="razorpay">Pay Now (Razorpay - Recommended)</option>
-                                <option value="test_cop">Cash On Pickup (Test/Simulation ONLY)</option>
-                            </select>
-                            <div class="alert alert-info mt-2 p-2 small" id="payment-warning">
-                                <i class="fas fa-lock me-1"></i> Secure payments via Razorpay. Full payment confirms the rental booking.
-                            </div>
-                        </div>
-                        <!-- END NEW PAYMENT METHOD SELECTION -->
+                       <!-- NEW PAYMENT METHOD SELECTION -->
+<div class="mb-3">
+    <label class="form-label">Payment Method</label>
+    <div class="alert alert-primary p-3">
+        <i class="fas fa-lock me-2"></i>
+        <strong>Secure Online Payment Required</strong>
+        <p class="mb-0 small mt-1">All rentals require full payment upfront via Razorpay for booking confirmation. Self-pickup will be arranged after payment.</p>
+    </div>
+</div>
+<!-- END NEW PAYMENT METHOD SELECTION -->
 
                         <button class="btn btn-primary btn-lg w-100" id="pay-now-btn" onclick="processPayment()">
-                            <i class="fas fa-money-check-alt me-2"></i>Pay <span id="pay-button-amount">₹0</span> Now
-                        </button>
+    <i class="fas fa-lock me-2"></i>Pay Securely Now
+</button>
                     </div>
                 </div>
             </div>
