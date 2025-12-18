@@ -811,11 +811,19 @@
                             
                             <!-- Pincode and Location Fields -->
                             <div class="row">
-                                <div class="col-md-6 mb-3" id="pincode-input-group">
-                                    <label for="profile-pincode" class="form-label">Pincode (Primary Operating Area) *</label>
-                                    <input type="text" class="form-control" id="profile-pincode" pattern="[0-9]{6}" maxlength="6" required placeholder="e.g., 503001">
-                                    <small id="pincode-status-message" class="form-text text-muted"></small>
-                                </div>
+                               <div class="col-md-6 mb-3" id="pincode-input-group">
+    <label for="profile-pincode" class="form-label">Pincode (Primary Operating Area) *</label>
+    <div class="input-group">
+        <input type="text" class="form-control" id="profile-pincode" pattern="[0-9]{6}" maxlength="6" required placeholder="e.g., 503001">
+        <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('profile-pincode').focus()">
+            <i class="fas fa-edit"></i>
+        </button>
+    </div>
+    <small id="pincode-status-message" class="form-text text-muted">
+        <i class="fas fa-info-circle me-1"></i>
+        This is your primary service area pincode
+    </small>
+</div>
                                 <div class="col-md-6 mb-3">
                                     <label for="profile-village" class="form-label">Village/Post Office *</label>
                                     <select class="form-select" id="profile-village" required disabled>
