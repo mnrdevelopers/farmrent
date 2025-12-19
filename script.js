@@ -1,4 +1,583 @@
-let currentUser=null,allEquipmentData=[],selectedEquipment={},isAuthInitialized=!1,platformFeeRate=.05;const SELLER_COMMISSION_RATE=0;let customerPincode=null,availableCoins=0,coinsToApply=0;const CUSTOMER_NOTIFICATIONS_COLLECTION="customer_notifications";let lastClearTime=0,activeChatId=null,chatUnsubscribe=null,typingTimeout=null,chatBadgeUnsubscribe=null;function generateReferralCode(){return Math.random().toString(36).substring(2,10).toUpperCase()}async function lookupReferralCode(e){if(!e||8!==e.length||!window.FirebaseDB)return null;try{let t=await window.FirebaseDB.collection("users").where("referralCode","==",e).limit(1).get();if(!t.empty)return t.docs[0].id}catch(a){}return null}function getCustomerNotificationRef(e){if(!window.FirebaseDB)return null;let t="undefined"!=typeof __app_id?__app_id:"default-app-id";return window.FirebaseDB.collection("artifacts").doc(t).collection("users").doc(e).collection("customer_notifications").doc("readStatus")}async function loadLastClearTime(){if(!window.currentUser||!window.FirebaseDB){lastClearTime=0;return}try{let e=getCustomerNotificationRef(window.currentUser.uid),t=await e.get();lastClearTime=t.exists&&t.data().lastClearTime?t.data().lastClearTime.toMillis():0}catch(a){lastClearTime=0}}function getCartDocRef(e){if(!window.FirebaseDB)return null;let t="undefined"!=typeof __app_id?__app_id:"default-app-id";return window.FirebaseDB.collection("artifacts").doc(t).collection("users").doc(e).collection("cart").doc("currentCart")}async function getCartFromFirestore(){if(!window.currentUser||!window.FirebaseDB)return JSON.parse(localStorage.getItem("cart")||"[]");try{let e=getCartDocRef(window.currentUser.uid);if(!e)return[];let t=await e.get();if(t.exists)return t.data().items||[];return[]}catch(a){return JSON.parse(localStorage.getItem("cart")||"[]")}}async function updateCartInFirestore(e){if(window.currentUser&&window.FirebaseDB)try{let t=getCartDocRef(window.currentUser.uid);if(!t)return;await t.set({items:e,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:!0}),updateCartCount()}catch(a){localStorage.setItem("cart",JSON.stringify(e)),updateCartCount()}else localStorage.setItem("cart",JSON.stringify(e)),updateCartCount()}async function getPlatformFinancialSettings(){try{if(window.FirebaseDB||await new Promise(e=>{let t=setInterval(()=>{window.FirebaseDB&&(clearInterval(t),e())},100);setTimeout(()=>{clearInterval(t),e()},5e3)}),!window.FirebaseDB){platformFeeRate=.05;return}let e="undefined"!=typeof __app_id?__app_id:"default-app-id",t=window.FirebaseDB.collection("artifacts").doc(e).collection("public").doc("data").collection("settings").doc("platform"),a=await t.get();if(a.exists){let i=a.data();platformFeeRate=i.platformFee/100||.05}else platformFeeRate=.05}catch(r){platformFeeRate=.05}}async function getPostOfficeData(e){if(!window.firebaseHelpers.pincodeSystem.validatePincode(e))return[];try{let t=await window.firebaseHelpers.getPostOfficeApiUrl(),a=await fetch(`${t}${e}`);if(!a.ok)throw Error(`API returned status ${a.status}`);let i=await a.json();if(i&&i.length>0&&"Success"===i[0].Status)return i[0].PostOffice;return[]}catch(r){return[]}}async function populateLocationFields(e,t,a,i,r){let s=document.getElementById(e),n=document.getElementById(t),l=document.getElementById(a),o=document.getElementById(i),c=document.getElementById(r);if(!s||!n||!l||!o)return;n.innerHTML='<option value="">Loading...</option>',n.disabled=!0,l.value="",o.value="",c&&(c.textContent="Verifying Pincode..."),c&&c.classList.remove("text-danger","text-success","text-warning"),c&&c.classList.add("text-muted");let d=s.value;if(!window.firebaseHelpers.pincodeSystem.validatePincode(d)){n.innerHTML='<option value="">Enter Pincode Above</option>',c&&(c.textContent="");return}let u=await getPostOfficeData(d);if(u.length>0){let m=u[0];l.value=m.District||"",o.value=m.State||"",n.innerHTML='<option value="">Select your Village/Post Office *</option>';let p=[...new Set(u.map(e=>e.Name))];p.forEach(e=>{let t=document.createElement("option");t.value=e,t.textContent=e,n.appendChild(t)}),n.disabled=!1,c&&(c.textContent=`Location confirmed: ${l.value}, ${o.value}. Select your village.`,c.classList.remove("text-muted"),c.classList.add("text-success"))}else n.innerHTML='<option value="">Pincode not found or no post offices</option>',n.disabled=!0,c&&(c.textContent="Pincode not found. Please check and try again.",c.classList.remove("text-muted"),c.classList.add("text-danger"))}async function getCurrentLocationPincode(){let e=document.getElementById("location-status"),t=document.getElementById("pincode-input"),a=document.getElementById("location-access-btn");if(!navigator.geolocation){e&&(e.textContent="Geolocation is not supported by your browser.",e.classList.remove("text-muted"),e.classList.add("text-danger")),window.firebaseHelpers.showAlert("Location access is not supported. Please enter pincode manually.","warning");return}e&&(e.textContent="Requesting location permission...",e.classList.remove("text-danger","text-warning","text-success","text-info"),e.classList.add("text-muted")),a&&(a.disabled=!0,a.innerHTML='<i class="fas fa-spinner fa-spin me-2"></i> Detecting...');let i=await window.firebaseHelpers.getGeoapifyApiKey();if(!i){e&&(e.textContent="Location service temporarily unavailable.",e.classList.remove("text-muted"),e.classList.add("text-warning")),a&&(a.disabled=!1,a.innerHTML='<i class="fas fa-location-arrow me-2"></i> Use Current Location'),window.firebaseHelpers.showAlert("Location service is currently unavailable. Please enter pincode manually.","info");return}let r=async(e,t)=>{let a=`https://api.geoapify.com/v1/geocode/reverse?lat=${e}&lon=${t}&apiKey=${i}`;try{let r=await fetch(a);if(!r.ok)return null;let s=await r.json();if(s.features&&s.features.length>0&&s.features[0].properties.postcode)return s.features[0].properties.postcode;return null}catch(n){return null}};navigator.geolocation.getCurrentPosition(async i=>{let{latitude:s,longitude:n}=i.coords;e&&(e.textContent="Location found. Determining pincode...");let l=await r(s,n);l&&window.firebaseHelpers.pincodeSystem.validatePincode(l)?(e&&(e.textContent=`Location detected: ${l}`,e.classList.remove("text-muted"),e.classList.add("text-success")),t&&(t.value=l),setTimeout(async()=>{await savePincode(l),a&&(a.disabled=!1,a.innerHTML='<i class="fas fa-location-arrow me-2"></i> Use Current Location')},1e3)):(e&&(e.textContent="Could not determine Indian pincode. Please enter manually.",e.classList.remove("text-muted"),e.classList.add("text-warning")),a&&(a.disabled=!1,a.innerHTML='<i class="fas fa-location-arrow me-2"></i> Use Current Location'),window.firebaseHelpers.showAlert("Unable to detect Indian pincode. Please enter it manually.","info"))},t=>{let i="Location access denied or error occurred.";t.code===t.PERMISSION_DENIED?i="Location permission denied. Please enable location access or enter pincode manually.":t.code===t.POSITION_UNAVAILABLE?i="Location information is unavailable.":t.code===t.TIMEOUT&&(i="Location request timed out."),e&&(e.textContent=i,e.classList.remove("text-muted"),e.classList.add("text-danger")),a&&(a.disabled=!1,a.innerHTML='<i class="fas fa-location-arrow me-2"></i> Use Current Location'),window.firebaseHelpers.showAlert(i,"warning")},{enableHighAccuracy:!0,timeout:1e4,maximumAge:6e4})}async function checkAndPromptForPincode(){let e=window.firebaseHelpers.pincodeSystem.getCurrentPincode();window.customerPincode=e,updateHomepagePincodeDisplay(),updateNavbarPincodeDisplay();let t=window.location.pathname.split("/").pop();e||"index.html"!==t&&""!==t||setTimeout(()=>showPincodeModal(),500),e&&("index.html"===t||""===t||"browse.html"===t)&&loadFeaturedEquipment()}function showPincodeModal(){let e=document.getElementById("pincodeModal");if(!e)return;let t=document.getElementById("pincode-input");t&&(t.value=window.customerPincode||"");let a=document.getElementById("location-status");a&&(a.textContent="",a.className="text-muted mt-1");let i=document.getElementById("location-access-btn");i&&(i.disabled=!1,i.innerHTML='<i class="fas fa-location-arrow me-2"></i> Use Current Location'),setTimeout(renderRecentPincodes,100);let r=new bootstrap.Modal(e,{backdrop:"static",keyboard:!1});r.show();let s=document.getElementById("pincode-form");s&&!s.dataset.listener&&(s.addEventListener("submit",handlePincodeSubmit),s.dataset.listener="true"),setTimeout(()=>{t&&t.focus()},500)}async function handlePincodeSubmit(e){e.preventDefault();let t=document.getElementById("pincode-input"),a=t.value.trim();if(!window.firebaseHelpers.pincodeSystem.validatePincode(a)){window.firebaseHelpers.showAlert("Please enter a valid 6-digit Indian pincode.","danger"),t.focus(),t.select();return}let i=e.submitter,r=i.innerHTML;i.innerHTML='<i class="fas fa-spinner fa-spin me-2"></i> Checking...',i.disabled=!0;try{let s=await getPostOfficeData(a);if(0===s.length){window.firebaseHelpers.showAlert("This pincode was not found. Please check and try again.","danger"),t.focus(),t.select();return}await savePincode(a)}finally{i.innerHTML=r,i.disabled=!1}}async function savePincode(e){let t=await window.firebaseHelpers.pincodeSystem.checkPincodeCompatibility();await window.firebaseHelpers.pincodeSystem.setPincode(e),addToRecentPincodes(e);let a=await getPostOfficeData(e),i=e;a.length>0&&(i=`${a[0].District}, ${a[0].State}`),window.firebaseHelpers.showAlert(`Location set to ${i}. Showing local equipment.`,"success"),updateHomepagePincodeDisplay(),updateNavbarPincodeDisplay();let r=window.location.pathname.split("/").pop();"browse.html"===r?(updatePincodeDisplay(),loadAllEquipment()):"cart.html"===r?loadCartPage():"checkout.html"===r?loadCheckoutPage():loadFeaturedEquipment(),t.changed&&!t.allItemsCompatible&&window.firebaseHelpers.pincodeSystem.showPincodeChangeWarning(t);let s=bootstrap.Modal.getInstance(document.getElementById("pincodeModal"));s&&s.hide()}function skipPincode(){window.firebaseHelpers.pincodeSystem.clearPincode();let e=bootstrap.Modal.getInstance(document.getElementById("pincodeModal"));e&&e.hide(),window.firebaseHelpers.showAlert("Viewing equipment from all locations. Set your pincode to see local availability.","info"),updateHomepagePincodeDisplay(),updateNavbarPincodeDisplay();let t=window.location.pathname.split("/").pop();"browse.html"===t?(updatePincodeDisplay(),loadAllEquipment()):loadFeaturedEquipment()}function updateHomepagePincodeDisplay(){let e=document.getElementById("current-pincode-value"),t=document.getElementById("homepage-pincode-display"),a=window.customerPincode;if(e&&(e.textContent=a||"All Locations"),t){let i=t.querySelector("p strong");i&&(i.textContent=a||"All Locations");let r=t.querySelector("button");r&&(a?r.innerHTML='<i class="fas fa-map-marker-alt me-1"></i> Change Location':r.innerHTML='<i class="fas fa-map-marker-alt me-1"></i> Set Your Location')}}function updateNavbarPincodeDisplay(){let e=document.getElementById("current-pincode-value-nav");if(e){let t=window.customerPincode;t?(e.textContent=t,e.parentElement.title="Click to change location"):(e.textContent="Set Location",e.parentElement.title="Click to set your location")}}async function updateCartForNewPincode(){let e=`
+let currentUser = null;
+let allEquipmentData = [];
+let selectedEquipment = {};
+let isAuthInitialized = false;
+let platformFeeRate = 0.05; 
+const SELLER_COMMISSION_RATE = 0.00; // Hardcoded to 0% based on customer pick up
+let customerPincode = null;
+let availableCoins = 0;
+let coinsToApply = 0; 
+const CUSTOMER_NOTIFICATIONS_COLLECTION = 'customer_notifications';
+let lastClearTime = 0; 
+let activeChatId = null;
+let chatUnsubscribe = null;
+let typingTimeout = null;
+let chatBadgeUnsubscribe = null;
+
+function generateReferralCode() {
+    return Math.random().toString(36).substring(2, 10).toUpperCase();
+}
+
+async function lookupReferralCode(code) {
+     if (!code || code.length !== 8 || !window.FirebaseDB) return null;
+     try {
+         const snapshot = await window.FirebaseDB.collection('users')
+             .where('referralCode', '==', code)
+             .limit(1)
+             .get();
+         if (!snapshot.empty) {
+             return snapshot.docs[0].id;
+         }
+     } catch (e) {}
+     return null;
+}
+window.lookupReferralCode = lookupReferralCode;
+
+function getCustomerNotificationRef(userId) {
+    if (!window.FirebaseDB) return null;
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    return window.FirebaseDB.collection('artifacts').doc(appId)
+        .collection('users').doc(userId).collection(CUSTOMER_NOTIFICATIONS_COLLECTION).doc('readStatus');
+}
+
+async function loadLastClearTime() {
+    if (!window.currentUser || !window.FirebaseDB) {
+        lastClearTime = 0;
+        return;
+    }
+    try {
+        const docRef = getCustomerNotificationRef(window.currentUser.uid);
+        const doc = await docRef.get();
+        if (doc.exists && doc.data().lastClearTime) {
+            lastClearTime = doc.data().lastClearTime.toMillis();
+        } else {
+            lastClearTime = 0;
+        }
+    } catch (error) {
+        lastClearTime = 0;
+    }
+}
+
+function getCartDocRef(userId) {
+    if (!window.FirebaseDB) return null;
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    return window.FirebaseDB.collection('artifacts').doc(appId)
+        .collection('users').doc(userId).collection('cart').doc('currentCart');
+}
+
+async function getCartFromFirestore() {
+    if (window.currentUser && window.FirebaseDB) {
+        try {
+            const docRef = getCartDocRef(window.currentUser.uid);
+            if (!docRef) return [];
+            const doc = await docRef.get();
+            if (doc.exists) {
+                return doc.data().items || [];
+            }
+            return [];
+        } catch (error) {
+            return JSON.parse(localStorage.getItem('cart') || '[]');
+        }
+    } else {
+        return JSON.parse(localStorage.getItem('cart') || '[]');
+    }
+}
+window.getCartFromFirestore = getCartFromFirestore;
+
+async function updateCartInFirestore(cart) {
+    if (window.currentUser && window.FirebaseDB) {
+        try {
+            const docRef = getCartDocRef(window.currentUser.uid);
+            if (!docRef) return;
+            await docRef.set({
+                items: cart,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+            updateCartCount();
+        } catch (error) {
+            localStorage.setItem('cart', JSON.stringify(cart));
+            updateCartCount();
+        }
+    } else {
+        localStorage.setItem('cart', JSON.stringify(cart));
+        updateCartCount();
+    }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    await initializeAuth(); 
+    const path = window.location.pathname.split('/').pop();
+    if (path === 'browse.html') {
+        loadBrowsePageData();
+    } else if (path === 'cart.html') {
+        loadCartPage();
+        updateNavbarPincodeDisplay();
+    } else if (path === 'checkout.html') {
+        loadCheckoutPage();
+        updateNavbarPincodeDisplay();
+    } else if (path === 'profile.html') {
+        loadProfilePage();
+        updateNavbarPincodeDisplay();
+    } else if (path === 'orders.html') {
+        loadOrdersPage();
+        updateNavbarPincodeDisplay();
+    } else if (path === 'seller.html' || path === 'seller-pending.html') {
+        if (window.loadSellerDashboard) {
+            window.loadSellerDashboard();
+        }
+        updateNavbarPincodeDisplay();
+    } else if (path === 'index.html' || path === '') {
+        loadHomepageData();
+        checkAndPromptForPincode();
+    } else {
+        updateNavbarPincodeDisplay();
+    }
+    initializeEventListeners();
+    await getPlatformFinancialSettings(); // UPDATED: Renamed function
+    if (path !== 'seller.html' && path !== 'seller-pending.html' && path !== 'admin.html') {
+        setTimeout(() => {
+            if (document.getElementById('chat-widget-container')) {
+                renderChatWidget();
+            }
+        }, 1000);
+    }
+});
+
+// UPDATED: Function to reflect that it only gets the Platform Fee Rate now.
+async function getPlatformFinancialSettings() {
+    try {
+        if (!window.FirebaseDB) {
+            await new Promise((resolve) => {
+                const check = setInterval(() => {
+                    if (window.FirebaseDB) {
+                        clearInterval(check);
+                        resolve();
+                    }
+                }, 100);
+                setTimeout(() => {
+                    clearInterval(check);
+                    resolve();
+                }, 5000);
+            });
+        }
+        if (!window.FirebaseDB) {
+            platformFeeRate = 0.05;
+            return;
+        }
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const settingsRef = window.FirebaseDB.collection('artifacts').doc(appId)
+            .collection('public').doc('data').collection('settings').doc('platform');
+        const doc = await settingsRef.get();
+        if (doc.exists) {
+            const data = doc.data();
+            // platformFee is charged to the customer (already in use)
+            // Seller commission is intentionally excluded/set to 0% as per user request.
+            platformFeeRate = (data.platformFee / 100) || 0.05; 
+        } else {
+            platformFeeRate = 0.05;
+        }
+    } catch (error) {
+        platformFeeRate = 0.05;
+    }
+}
+
+async function getPostOfficeData(pincode) {
+    if (!window.firebaseHelpers.pincodeSystem.validatePincode(pincode)) {
+        return [];
+    }
+    try {
+        const apiUrl = await window.firebaseHelpers.getPostOfficeApiUrl(); 
+        const response = await fetch(`${apiUrl}${pincode}`);
+        if (!response.ok) {
+            throw new Error(`API returned status ${response.status}`);
+        }
+        const data = await response.json();
+        if (data && data.length > 0 && data[0].Status === 'Success') {
+            return data[0].PostOffice;
+        } else {
+            return [];
+        }
+    } catch (error) {
+        return [];
+    }
+}
+window.getPostOfficeData = getPostOfficeData;
+
+async function populateLocationFields(pincodeInputId, villageSelectId, cityInputId, stateInputId, statusElementId) {
+    const pincodeInput = document.getElementById(pincodeInputId);
+    const villageSelect = document.getElementById(villageSelectId);
+    const cityInput = document.getElementById(cityInputId);
+    const stateInput = document.getElementById(stateInputId);
+    const statusElement = document.getElementById(statusElementId);
+    
+    if (!pincodeInput || !villageSelect || !cityInput || !stateInput) return;
+    villageSelect.innerHTML = '<option value="">Loading...</option>';
+    villageSelect.disabled = true;
+    cityInput.value = '';
+    stateInput.value = '';
+    if (statusElement) statusElement.textContent = 'Verifying Pincode...';
+    if (statusElement) statusElement.classList.remove('text-danger', 'text-success', 'text-warning');
+    if (statusElement) statusElement.classList.add('text-muted');
+    const pincode = pincodeInput.value;
+    if (!window.firebaseHelpers.pincodeSystem.validatePincode(pincode)) {
+        villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
+        if (statusElement) statusElement.textContent = '';
+        return;
+    }
+    const postOffices = await getPostOfficeData(pincode);
+    if (postOffices.length > 0) {
+        const firstOffice = postOffices[0];
+        cityInput.value = firstOffice.District || '';
+        stateInput.value = firstOffice.State || '';
+        villageSelect.innerHTML = '<option value="">Select your Village/Post Office *</option>';
+        const uniquePostOffices = [...new Set(postOffices.map(office => office.Name))];
+        uniquePostOffices.forEach(name => {
+            const option = document.createElement('option');
+            option.value = name; 
+            option.textContent = name;
+            villageSelect.appendChild(option);
+        });
+        villageSelect.disabled = false;
+        if (statusElement) {
+            statusElement.textContent = `Location confirmed: ${cityInput.value}, ${stateInput.value}. Select your village.`;
+            statusElement.classList.remove('text-muted');
+            statusElement.classList.add('text-success');
+        }
+    } else {
+        villageSelect.innerHTML = '<option value="">Pincode not found or no post offices</option>';
+        villageSelect.disabled = true;
+        if (statusElement) {
+            statusElement.textContent = 'Pincode not found. Please check and try again.';
+            statusElement.classList.remove('text-muted');
+            statusElement.classList.add('text-danger');
+        }
+    }
+}
+window.populateLocationFields = populateLocationFields;
+
+async function getCurrentLocationPincode() {
+    const statusElement = document.getElementById('location-status');
+    const inputElement = document.getElementById('pincode-input');
+    const buttonElement = document.getElementById('location-access-btn');
+    
+    if (!navigator.geolocation) {
+        if (statusElement) {
+            statusElement.textContent = 'Geolocation is not supported by your browser.';
+            statusElement.classList.remove('text-muted');
+            statusElement.classList.add('text-danger');
+        }
+        window.firebaseHelpers.showAlert('Location access is not supported. Please enter pincode manually.', 'warning');
+        return;
+    }
+    
+    if (statusElement) {
+        statusElement.textContent = 'Requesting location permission...';
+        statusElement.classList.remove('text-danger', 'text-warning', 'text-success', 'text-info');
+        statusElement.classList.add('text-muted');
+    }
+    
+    if (buttonElement) {
+        buttonElement.disabled = true;
+        buttonElement.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Detecting...';
+    }
+    
+    const geoapifyKey = await window.firebaseHelpers.getGeoapifyApiKey();
+    if (!geoapifyKey) {
+        if (statusElement) {
+            statusElement.textContent = 'Location service temporarily unavailable.';
+            statusElement.classList.remove('text-muted');
+            statusElement.classList.add('text-warning');
+        }
+        if (buttonElement) {
+            buttonElement.disabled = false;
+            buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
+        }
+        window.firebaseHelpers.showAlert('Location service is currently unavailable. Please enter pincode manually.', 'info');
+        return;
+    }
+    
+    const reverseGeocode = async (lat, lon) => {
+        const url = `https://api.geoapify.com/v1/geocode/reverse?lat=${lat}&lon=${lon}&apiKey=${geoapifyKey}`;
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                return null;
+            }
+            const data = await response.json();
+            if (data.features && data.features.length > 0 && data.features[0].properties.postcode) {
+                return data.features[0].properties.postcode;
+            }
+            return null;
+        } catch (error) {
+            return null;
+        }
+    };
+
+    navigator.geolocation.getCurrentPosition(async (position) => {
+        const { latitude, longitude } = position.coords;
+        
+        if (statusElement) {
+            statusElement.textContent = 'Location found. Determining pincode...';
+        }
+        
+        const pincode = await reverseGeocode(latitude, longitude);
+        
+        if (pincode && window.firebaseHelpers.pincodeSystem.validatePincode(pincode)) {
+            if (statusElement) {
+                statusElement.textContent = `Location detected: ${pincode}`;
+                statusElement.classList.remove('text-muted');
+                statusElement.classList.add('text-success');
+            }
+            
+            if (inputElement) {
+                inputElement.value = pincode;
+            }
+            
+            // Auto-save after short delay
+            setTimeout(async () => {
+                await savePincode(pincode);
+                if (buttonElement) {
+                    buttonElement.disabled = false;
+                    buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
+                }
+            }, 1000);
+        } else {
+            if (statusElement) {
+                statusElement.textContent = 'Could not determine Indian pincode. Please enter manually.';
+                statusElement.classList.remove('text-muted');
+                statusElement.classList.add('text-warning');
+            }
+            if (buttonElement) {
+                buttonElement.disabled = false;
+                buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
+            }
+            window.firebaseHelpers.showAlert('Unable to detect Indian pincode. Please enter it manually.', 'info');
+        }
+    }, (error) => {
+        let message = 'Location access denied or error occurred.';
+        if (error.code === error.PERMISSION_DENIED) {
+            message = 'Location permission denied. Please enable location access or enter pincode manually.';
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+            message = 'Location information is unavailable.';
+        } else if (error.code === error.TIMEOUT) {
+            message = 'Location request timed out.';
+        }
+        
+        if (statusElement) {
+            statusElement.textContent = message;
+            statusElement.classList.remove('text-muted');
+            statusElement.classList.add('text-danger');
+        }
+        
+        if (buttonElement) {
+            buttonElement.disabled = false;
+            buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
+        }
+        
+        window.firebaseHelpers.showAlert(message, 'warning');
+    }, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000 // Cache for 1 minute
+    });
+}
+window.getCurrentLocationPincode = getCurrentLocationPincode;
+
+async function checkAndPromptForPincode() {
+    const finalPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
+    window.customerPincode = finalPincode;
+    updateHomepagePincodeDisplay();
+    updateNavbarPincodeDisplay();
+    const path = window.location.pathname.split('/').pop();
+    if (!finalPincode && (path === 'index.html' || path === '')) {
+        setTimeout(() => showPincodeModal(), 500); 
+    }
+    if (finalPincode && (path === 'index.html' || path === '' || path === 'browse.html')) {
+        loadFeaturedEquipment(); 
+    }
+}
+
+function showPincodeModal() {
+    const modalElement = document.getElementById('pincodeModal');
+    if (!modalElement) return;
+    
+    const pincodeInput = document.getElementById('pincode-input');
+    if (pincodeInput) pincodeInput.value = window.customerPincode || '';
+    
+    const statusElement = document.getElementById('location-status');
+    if (statusElement) {
+        statusElement.textContent = '';
+        statusElement.className = 'text-muted mt-1';
+    }
+    
+    const buttonElement = document.getElementById('location-access-btn');
+    if (buttonElement) {
+        buttonElement.disabled = false;
+        buttonElement.innerHTML = '<i class="fas fa-location-arrow me-2"></i> Use Current Location';
+    }
+    
+    // Render recent pincodes
+    setTimeout(renderRecentPincodes, 100);
+    
+    const modal = new bootstrap.Modal(modalElement, {
+        backdrop: 'static',
+        keyboard: false
+    });
+    modal.show();
+    
+    const form = document.getElementById('pincode-form');
+    if (form && !form.dataset.listener) {
+        form.addEventListener('submit', handlePincodeSubmit);
+        form.dataset.listener = 'true';
+    }
+    
+    // Auto-focus input
+    setTimeout(() => {
+        if (pincodeInput) pincodeInput.focus();
+    }, 500);
+}
+window.showPincodeModal = showPincodeModal;
+
+async function handlePincodeSubmit(e) {
+    e.preventDefault();
+    const pincodeInput = document.getElementById('pincode-input');
+    const pincode = pincodeInput.value.trim();
+    
+    if (!window.firebaseHelpers.pincodeSystem.validatePincode(pincode)) {
+        window.firebaseHelpers.showAlert('Please enter a valid 6-digit Indian pincode.', 'danger');
+        pincodeInput.focus();
+        pincodeInput.select();
+        return;
+    }
+    
+    // Show loading state
+    const submitBtn = e.submitter;
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Checking...';
+    submitBtn.disabled = true;
+    
+    try {
+        // Verify pincode exists
+        const postOffices = await getPostOfficeData(pincode);
+        if (postOffices.length === 0) {
+            window.firebaseHelpers.showAlert('This pincode was not found. Please check and try again.', 'danger');
+            pincodeInput.focus();
+            pincodeInput.select();
+            return;
+        }
+        
+        await savePincode(pincode);
+    } finally {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }
+}
+
+async function savePincode(pincode) {
+    const compatibilityResult = await window.firebaseHelpers.pincodeSystem.checkPincodeCompatibility();
+    await window.firebaseHelpers.pincodeSystem.setPincode(pincode);
+    
+    // Add to recent pincodes
+    addToRecentPincodes(pincode);
+    
+    // Get location info
+    const postOffices = await getPostOfficeData(pincode);
+    let locationInfo = pincode;
+    if (postOffices.length > 0) {
+        locationInfo = `${postOffices[0].District}, ${postOffices[0].State}`;
+    }
+    
+    // Professional success message
+    window.firebaseHelpers.showAlert(`Location set to ${locationInfo}. Showing local equipment.`, 'success');
+    
+    updateHomepagePincodeDisplay();
+    updateNavbarPincodeDisplay();
+    
+    const path = window.location.pathname.split('/').pop();
+    if (path === 'browse.html') {
+        updatePincodeDisplay();
+        loadAllEquipment();
+    } else if (path === 'cart.html') {
+        loadCartPage();
+    } else if (path === 'checkout.html') {
+        loadCheckoutPage();
+    } else {
+        loadFeaturedEquipment();
+    }
+    
+    if (compatibilityResult.changed && !compatibilityResult.allItemsCompatible) {
+        window.firebaseHelpers.pincodeSystem.showPincodeChangeWarning(compatibilityResult);
+    }
+    
+    // Close modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('pincodeModal'));
+    if (modal) modal.hide();
+}
+window.savePincode = savePincode;
+
+function skipPincode() {
+    window.firebaseHelpers.pincodeSystem.clearPincode();
+    const modal = bootstrap.Modal.getInstance(document.getElementById('pincodeModal'));
+    if (modal) modal.hide();
+    
+    window.firebaseHelpers.showAlert('Viewing equipment from all locations. Set your pincode to see local availability.', 'info');
+    
+    updateHomepagePincodeDisplay();
+    updateNavbarPincodeDisplay();
+    
+    const path = window.location.pathname.split('/').pop();
+    if (path === 'browse.html') {
+        updatePincodeDisplay();
+        loadAllEquipment();
+    } else {
+        loadFeaturedEquipment();
+    }
+}
+window.skipPincode = skipPincode;
+
+function updateHomepagePincodeDisplay() {
+    const pincodeValueElement = document.getElementById('current-pincode-value');
+    const homepageDisplay = document.getElementById('homepage-pincode-display');
+    
+    const pincode = window.customerPincode;
+    
+    if (pincodeValueElement) {
+        pincodeValueElement.textContent = pincode ? pincode : 'All Locations';
+    }
+    
+    if (homepageDisplay) {
+        const strongElement = homepageDisplay.querySelector('p strong');
+        if (strongElement) {
+            strongElement.textContent = pincode ? pincode : 'All Locations';
+        }
+        
+        const buttonElement = homepageDisplay.querySelector('button');
+        if (buttonElement) {
+            if (pincode) {
+                buttonElement.innerHTML = '<i class="fas fa-map-marker-alt me-1"></i> Change Location';
+            } else {
+                buttonElement.innerHTML = '<i class="fas fa-map-marker-alt me-1"></i> Set Your Location';
+            }
+        }
+    }
+}
+
+function updateNavbarPincodeDisplay() {
+    const navPincodeValueElement = document.getElementById('current-pincode-value-nav');
+    if (navPincodeValueElement) {
+        const pincode = window.customerPincode;
+        if (pincode) {
+            navPincodeValueElement.textContent = pincode;
+            navPincodeValueElement.parentElement.title = 'Click to change location';
+        } else {
+            navPincodeValueElement.textContent = 'Set Location';
+            navPincodeValueElement.parentElement.title = 'Click to set your location';
+        }
+    }
+}
+
+async function updateCartForNewPincode() {
+    const modalHtml = `
         <div class="modal fade" id="confirm-clear-cart-modal" tabindex="-1">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
@@ -16,7 +595,58 @@ let currentUser=null,allEquipmentData=[],selectedEquipment={},isAuthInitialized=
                 </div>
             </div>
         </div>
-    `;document.body.insertAdjacentHTML("beforeend",e);let t=document.getElementById("confirm-clear-cart-modal"),a=new bootstrap.Modal(t);a.show(),document.getElementById("confirm-clear-cart-btn").onclick=async()=>{a.hide(),await updateCartInFirestore([]),window.firebaseHelpers.showAlert("Cart cleared. Showing equipment for your new location.","success");let e=window.location.pathname.split("/").pop();"cart.html"===e?loadCartPage():"browse.html"===e&&loadAllEquipment(),t.remove()}}async function revertToPreviousPincode(){let e=localStorage.getItem("previousPincode");if(e){await savePincode(e),localStorage.removeItem("previousPincode");let t=document.getElementById("custom-warning-modal");if(t){let a=bootstrap.Modal.getInstance(t);a&&a.hide()}}}async function changePincodeToMatchEquipment(e){await savePincode(e);let t=document.getElementById("custom-warning-modal");if(t){let a=bootstrap.Modal.getInstance(t);a&&a.hide()}setTimeout(()=>{window.firebaseHelpers.showAlert('Location updated. Please click "Add to Cart" or "Rent Now" again.',"info")},500)}function showCustomWarningModal(e){let t=document.getElementById("custom-warning-modal");t&&t.remove();let a=`
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modalElement = document.getElementById('confirm-clear-cart-modal');
+    const modalInstance = new bootstrap.Modal(modalElement);
+    modalInstance.show();
+    
+    document.getElementById('confirm-clear-cart-btn').onclick = async () => {
+        modalInstance.hide();
+        await updateCartInFirestore([]);
+        window.firebaseHelpers.showAlert('Cart cleared. Showing equipment for your new location.', 'success');
+        const path = window.location.pathname.split('/').pop();
+        if (path === 'cart.html') {
+            loadCartPage();
+        } else if (path === 'browse.html') {
+            loadAllEquipment();
+        }
+        modalElement.remove();
+    };
+}
+window.updateCartForNewPincode = updateCartForNewPincode;
+
+async function revertToPreviousPincode() {
+    const oldPincode = localStorage.getItem('previousPincode');
+    if (oldPincode) {
+        await savePincode(oldPincode); 
+        localStorage.removeItem('previousPincode');
+        const customWarningModal = document.getElementById('custom-warning-modal');
+        if (customWarningModal) {
+            const modalInstance = bootstrap.Modal.getInstance(customWarningModal);
+            if (modalInstance) modalInstance.hide();
+        }
+    }
+}
+window.revertToPreviousPincode = revertToPreviousPincode;
+
+async function changePincodeToMatchEquipment(equipmentPincode) {
+    await savePincode(equipmentPincode);
+    const modalElement = document.getElementById('custom-warning-modal');
+    if (modalElement) {
+        const modalInstance = bootstrap.Modal.getInstance(modalElement);
+        if (modalInstance) modalInstance.hide();
+    }
+    setTimeout(() => {
+        window.firebaseHelpers.showAlert('Location updated. Please click "Add to Cart" or "Rent Now" again.', 'info');
+    }, 500);
+}
+window.changePincodeToMatchEquipment = changePincodeToMatchEquipment;
+
+function showCustomWarningModal(content) {
+    const existingModal = document.getElementById('custom-warning-modal');
+    if (existingModal) existingModal.remove();
+    const modalHtml = `
         <div class="modal fade" id="custom-warning-modal" tabindex="-1">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
@@ -25,21 +655,172 @@ let currentUser=null,allEquipmentData=[],selectedEquipment={},isAuthInitialized=
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
-                        ${e}
+                        ${content}
                     </div>
                 </div>
             </div>
         </div>
-    `;document.body.insertAdjacentHTML("beforeend",a),setTimeout(()=>{let e=document.getElementById("custom-warning-modal");if(e){let t=new bootstrap.Modal(e);t.show()}},0)}function initializeAuth(){if(window.firebaseHelpers&&window.FirebaseDB&&window.FirebaseAuth)initializeAuthInternal();else{let e=setInterval(()=>{window.firebaseHelpers&&window.FirebaseDB&&window.FirebaseAuth&&(clearInterval(e),initializeAuthInternal())},100);setTimeout(()=>{isAuthInitialized||(isAuthInitialized=!0,updateNavbarForLoggedOutUser())},1e4)}return new Promise(e=>{let t=setInterval(()=>{isAuthInitialized&&(clearInterval(t),e())},100)})}async function initializeAuthInternal(){try{window.FirebaseAuth.onAuthStateChanged(async e=>{if(e)try{let t=window.FirebaseDB.collection("users").doc(e.uid),a=await t.get();if(a.exists){window.currentUser={uid:e.uid,...a.data()};let i=window.currentUser,r=!1;void 0===i.coins&&(i.coins=0,r=!0),void 0===i.referralCode&&(i.referralCode=generateReferralCode(),r=!0),void 0===i.firstOrderPlaced&&(i.firstOrderPlaced=!1,r=!0),r&&(await t.set({coins:i.coins,referralCode:i.referralCode,firstOrderPlaced:i.firstOrderPlaced},{merge:!0}),window.currentUser={uid:e.uid,...a.data(),...i}),availableCoins=window.currentUser.coins,window.customerPincode=window.currentUser.pincode||localStorage.getItem("customerPincode")||null,await loadLastClearTime(),updateNavbarForLoggedInUser(window.currentUser),updateCartCount(),document.getElementById("chat-body")&&loadUserConversations();let s=window.location.pathname.split("/").pop();"browse.html"===s?(updatePincodeDisplay(),loadAllEquipment()):("index.html"===s||""===s)&&(updateHomepagePincodeDisplay(),loadFeaturedEquipment()),updateNavbarPincodeDisplay(),listenForUnreadChatMessages()}else await window.firebaseHelpers.signOut(),window.location.reload()}catch(n){await window.firebaseHelpers.signOut(),window.location.reload()}finally{isAuthInitialized=!0}else{window.currentUser=null,window.customerPincode=localStorage.getItem("customerPincode")||null,lastClearTime=0,updateNavbarForLoggedOutUser(),updateCartCount(),isAuthInitialized=!0;let l=window.location.pathname.split("/").pop();"browse.html"===l?(updatePincodeDisplay(),loadAllEquipment()):("index.html"===l||""===l)&&(updateHomepagePincodeDisplay(),loadFeaturedEquipment()),updateNavbarPincodeDisplay(),availableCoins=0,coinsToApply=0,chatBadgeUnsubscribe&&(chatBadgeUnsubscribe(),chatBadgeUnsubscribe=null),updateChatBadgeCount(0)}})}catch(e){isAuthInitialized=!0}}async function logout(){try{window.firebaseHelpers.pincodeSystem.clearPincode(),window.customerPincode=null,lastClearTime=0,availableCoins=0,coinsToApply=0,chatBadgeUnsubscribe&&(chatBadgeUnsubscribe(),chatBadgeUnsubscribe=null),await window.firebaseHelpers.signOut(),window.location.reload()}catch(e){window.firebaseHelpers.showAlert("Error logging out","danger")}}async function loadBrowsePageData(){window.customerPincode=window.firebaseHelpers.pincodeSystem.getCurrentPincode(),await updatePincodeDisplay(),await loadAllEquipment(),await loadCategoriesForFilter(),await updateCartCount();let e=window.location.hash.substring(1),t=e.match(/item=([^&]+)/);if(t){let a=t[1];showEquipmentDetailsModal(a),window.history.replaceState(null,null," ")}}async function updatePincodeDisplay(){let e=document.getElementById("pincode-alert-container");if(!e)return;let t=window.customerPincode;if(t){let a=t;try{let i=await getPostOfficeData(t);i.length>0&&(a=`${i[0].District}, ${i[0].State} (${t})`)}catch(r){}e.innerHTML=`
-            <div class="alert alert-success d-flex justify-content-between align-items-center mb-0">
-                <div>
-                    <i class="fas fa-map-marker-alt me-2"></i>
-                    <strong>Location:</strong> ${a}
-                    <small class="d-block text-muted">Showing equipment available in your area</small>
-                </div>
-                <a href="#" class="btn btn-sm btn-outline-success" onclick="showPincodeModal()">Change</a>
-            </div>
-        `}else e.innerHTML=`
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    setTimeout(() => {
+        const modalElement = document.getElementById('custom-warning-modal');
+        if (modalElement) {
+             const modal = new bootstrap.Modal(modalElement);
+             modal.show();
+        }
+    }, 0);
+}
+window.showCustomWarningModal = showCustomWarningModal;
+
+function initializeAuth() {
+    if (!window.firebaseHelpers || !window.FirebaseDB || !window.FirebaseAuth) {
+        const checkFirebase = setInterval(() => {
+            if (window.firebaseHelpers && window.FirebaseDB && window.FirebaseAuth) {
+                clearInterval(checkFirebase);
+                initializeAuthInternal();
+            }
+        }, 100);
+        setTimeout(() => {
+            if (!isAuthInitialized) {
+                isAuthInitialized = true;
+                updateNavbarForLoggedOutUser();
+            }
+        }, 10000);
+    } else {
+        initializeAuthInternal();
+    }
+    return new Promise(resolve => {
+        const check = setInterval(() => {
+            if (isAuthInitialized) {
+                clearInterval(check);
+                resolve();
+            }
+        }, 100);
+    });
+}
+
+async function initializeAuthInternal() {
+    try {
+        window.FirebaseAuth.onAuthStateChanged(async (user) => { 
+            if (user) {
+                try {
+                    const docRef = window.FirebaseDB.collection('users').doc(user.uid);
+                    const doc = await docRef.get();
+                    if (doc.exists) {
+                        window.currentUser = { uid: user.uid, ...doc.data() };
+                        const userData = window.currentUser;
+                        let needsUpdate = false;
+                        if (userData.coins === undefined) { userData.coins = 0; needsUpdate = true; }
+                        if (userData.referralCode === undefined) { userData.referralCode = generateReferralCode(); needsUpdate = true; }
+                        if (userData.firstOrderPlaced === undefined) { userData.firstOrderPlaced = false; needsUpdate = true; }
+                        if (needsUpdate) {
+                            await docRef.set({
+                                coins: userData.coins,
+                                referralCode: userData.referralCode,
+                                firstOrderPlaced: userData.firstOrderPlaced,
+                            }, { merge: true });
+                            window.currentUser = { uid: user.uid, ...doc.data(), ...userData };
+                        }
+                        availableCoins = window.currentUser.coins;
+                        window.customerPincode = window.currentUser.pincode || localStorage.getItem('customerPincode') || null;
+                        await loadLastClearTime();
+                        updateNavbarForLoggedInUser(window.currentUser);
+                        updateCartCount(); 
+                        if (document.getElementById('chat-body')) {
+                            loadUserConversations();
+                        }
+                        const path = window.location.pathname.split('/').pop();
+                        if (path === 'browse.html') {
+                            updatePincodeDisplay();
+                            loadAllEquipment();
+                        } else if (path === 'index.html' || path === '') {
+                            updateHomepagePincodeDisplay();
+                            loadFeaturedEquipment(); 
+                        }
+                        updateNavbarPincodeDisplay();
+                        listenForUnreadChatMessages();
+                    } else {
+                        await window.firebaseHelpers.signOut();
+                        window.location.reload(); 
+                    }
+                } catch (error) {
+                    await window.firebaseHelpers.signOut();
+                    window.location.reload(); 
+                } finally {
+                    isAuthInitialized = true;
+                }
+            } else {
+                window.currentUser = null; 
+                window.customerPincode = localStorage.getItem('customerPincode') || null;
+                lastClearTime = 0;
+                updateNavbarForLoggedOutUser();
+                updateCartCount();
+                isAuthInitialized = true;
+                const path = window.location.pathname.split('/').pop();
+                if (path === 'browse.html') {
+                    updatePincodeDisplay();
+                    loadAllEquipment();
+                } else if (path === 'index.html' || path === '') {
+                    updateHomepagePincodeDisplay();
+                    loadFeaturedEquipment(); 
+                }
+                updateNavbarPincodeDisplay();
+                availableCoins = 0;
+                coinsToApply = 0; 
+                if (chatBadgeUnsubscribe) {
+                     chatBadgeUnsubscribe();
+                     chatBadgeUnsubscribe = null;
+                }
+                updateChatBadgeCount(0);
+            }
+        });
+    } catch (error) {
+        isAuthInitialized = true; 
+    }
+}
+
+async function logout() {
+    try {
+        window.firebaseHelpers.pincodeSystem.clearPincode(); 
+        window.customerPincode = null; 
+        lastClearTime = 0; 
+        availableCoins = 0;
+        coinsToApply = 0; 
+        if (chatBadgeUnsubscribe) {
+             chatBadgeUnsubscribe();
+             chatBadgeUnsubscribe = null;
+        }
+        await window.firebaseHelpers.signOut();
+        window.location.reload();
+    } catch (error) {
+        window.firebaseHelpers.showAlert('Error logging out', 'danger');
+    }
+}
+window.logout = logout;
+
+async function loadBrowsePageData() {
+    window.customerPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode(); 
+    await updatePincodeDisplay(); 
+    await loadAllEquipment();
+    await loadCategoriesForFilter();
+    await updateCartCount(); 
+    const hash = window.location.hash.substring(1);
+    const itemIdMatch = hash.match(/item=([^&]+)/);
+    if (itemIdMatch) {
+        const itemId = itemIdMatch[1];
+        showEquipmentDetailsModal(itemId);
+        window.history.replaceState(null, null, ' ');
+    }
+}
+
+async function updatePincodeDisplay() {
+    const container = document.getElementById('pincode-alert-container');
+    if (!container) return;
+    
+    const pincode = window.customerPincode;
+    
+    if (!pincode) {
+        container.innerHTML = `
             <div class="alert alert-warning d-flex justify-content-between align-items-center mb-0">
                 <div>
                     <i class="fas fa-map-marker-alt me-2"></i>
@@ -47,10 +828,80 @@ let currentUser=null,allEquipmentData=[],selectedEquipment={},isAuthInitialized=
                 </div>
                 <a href="#" class="btn btn-sm btn-outline-warning text-dark" onclick="showPincodeModal()">Set Your Location</a>
             </div>
-        `}async function loadAllEquipment(){try{let e=document.getElementById("equipment-grid");e&&(e.innerHTML='<div class="col-12 text-center py-5"><div class="spinner-border text-primary loading-spinner"></div><p class="mt-3">Loading equipment listings...</p></div>');let t=window.FirebaseDB.collection("equipment").where("status","==","approved"),a=window.firebaseHelpers.pincodeSystem.getCurrentPincode();a&&(t=t.where("pincode","==",a));let i=await t.orderBy("createdAt","desc").get();allEquipmentData=[],i.forEach(e=>{allEquipmentData.push({id:e.id,...e.data()})}),filterEquipment()}catch(r){let s=document.getElementById("equipment-grid");s&&(s.innerHTML='<div class="col-12 text-center py-5 text-danger"><p>Error loading equipment listings. Please try again later.</p></div>')}}async function loadFeaturedEquipment(){try{let e=document.getElementById("featured-equipment");if(!e)return;e.innerHTML='<div class="col-12 text-center py-5"><div class="spinner-border text-primary loading-spinner"></div><p class="mt-3">Loading popular equipment...</p></div>';let t=window.FirebaseDB.collection("equipment").where("status","==","approved"),a=window.firebaseHelpers.pincodeSystem.getCurrentPincode();a&&(t=t.where("pincode","==",a));let i=await t.where("featured","==",!0).limit(6).get(),r=[];if(i.forEach(e=>{r.push({id:e.id,...e.data()})}),0===r.length&&a){e.innerHTML=`
+        `;
+    } else {
+        // Get location name for better display
+        let locationName = pincode;
+        try {
+            const postOffices = await getPostOfficeData(pincode);
+            if (postOffices.length > 0) {
+                locationName = `${postOffices[0].District}, ${postOffices[0].State} (${pincode})`;
+            }
+        } catch (error) {
+            // Fallback to just pincode
+        }
+        
+        container.innerHTML = `
+            <div class="alert alert-success d-flex justify-content-between align-items-center mb-0">
+                <div>
+                    <i class="fas fa-map-marker-alt me-2"></i>
+                    <strong>Location:</strong> ${locationName}
+                    <small class="d-block text-muted">Showing equipment available in your area</small>
+                </div>
+                <a href="#" class="btn btn-sm btn-outline-success" onclick="showPincodeModal()">Change</a>
+            </div>
+        `;
+    }
+}
+
+async function loadAllEquipment() {
+    try {
+        const container = document.getElementById('equipment-grid');
+        if (container) {
+            container.innerHTML = '<div class="col-12 text-center py-5"><div class="spinner-border text-primary loading-spinner"></div><p class="mt-3">Loading equipment listings...</p></div>';
+        }
+        let query = window.FirebaseDB.collection('equipment')
+            .where('status', '==', 'approved');
+        const pincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
+        if (pincode) {
+             query = query.where('pincode', '==', pincode);
+        }
+        const snapshot = await query
+            .orderBy('createdAt', 'desc')
+            .get();
+        allEquipmentData = [];
+        snapshot.forEach(doc => {
+            allEquipmentData.push({ id: doc.id, ...doc.data() });
+        });
+        filterEquipment();
+    } catch (error) {
+        const grid = document.getElementById('equipment-grid');
+        if (grid) grid.innerHTML = '<div class="col-12 text-center py-5 text-danger"><p>Error loading equipment listings. Please try again later.</p></div>';
+    }
+}
+
+async function loadFeaturedEquipment() {
+    try {
+        const container = document.getElementById('featured-equipment');
+        if (!container) return; 
+        container.innerHTML = '<div class="col-12 text-center py-5"><div class="spinner-border text-primary loading-spinner"></div><p class="mt-3">Loading popular equipment...</p></div>';
+        let query = window.FirebaseDB.collection('equipment').where('status', '==', 'approved');
+        const pincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
+        if (pincode) {
+            query = query.where('pincode', '==', pincode);
+        }
+        let featuredQuery = query.where('featured', '==', true);
+        let featuredSnapshot = await featuredQuery.limit(6).get();
+        let equipmentToShow = [];
+        featuredSnapshot.forEach(doc => {
+            equipmentToShow.push({ id: doc.id, ...doc.data() });
+        });
+        const limit = 6;
+        if (equipmentToShow.length === 0 && pincode) {
+             container.innerHTML = `
                 <div class="col-12 text-center py-5">
                     <i class="fas fa-map-marker-alt fa-3x text-muted mb-3"></i>
-                    <h4>No Equipment Found for Pincode ${a}</h4>
+                    <h4>No Equipment Found for Pincode ${pincode}</h4>
                     <p class="text-muted">Try changing your location or removing the filter to view general listings.</p>
                     <button class="btn btn-primary mt-3" onclick="showPincodeModal()">
                         <i class="fas fa-map-marker-alt me-2"></i>Change Location
@@ -59,159 +910,513 @@ let currentUser=null,allEquipmentData=[],selectedEquipment={},isAuthInitialized=
                         <i class="fas fa-globe me-2"></i>View All Listings
                     </button>
                 </div>
-            `;return}if(r.length<6){let s=r.map(e=>e.id),n=6-r.length,l=window.FirebaseDB.collection("equipment").where("status","==","approved").orderBy("createdAt","desc").limit(2*n);a&&(l=l.where("pincode","==",a));(await l.get()).forEach(e=>{let t={id:e.id,...e.data()};!s.includes(t.id)&&r.length<6&&r.push(t)}),r=r.slice(0,6)}if(e.innerHTML="",0===r.length){let o=a?` for Pincode ${a}`:"";e.innerHTML=`<div class="col-12 text-center py-5"><p>No equipment available to display right now${o}. Try changing your location filter or checking back later.</p></div>`;return}r.forEach(t=>{let a=document.createElement("div");a.className="col-lg-4 col-md-6 mb-4",a.innerHTML=createEquipmentCard(t,t.id),e.appendChild(a)})}catch(c){let d=document.getElementById("featured-equipment");d&&(d.innerHTML='<div class="col-12 text-center py-5 text-danger"><p>Error loading equipment. Please try again later.</p></div>')}}function createEquipmentCard(e,t,a=!1){let i=e.images&&e.images[0]?e.images[0]:"https://placehold.co/300x200/2B5C2B/FFFFFF?text=Equipment",r=window.firebaseHelpers.pincodeSystem.getCurrentPincode(),s=e.pincode,n=!r||s===r,l=!n&&r?`
+            `;
+            return;
+        } else if (equipmentToShow.length < limit) {
+            const featuredIds = equipmentToShow.map(e => e.id);
+            const fillCount = limit - equipmentToShow.length;
+            let regularQuery = window.FirebaseDB.collection('equipment')
+                .where('status', '==', 'approved')
+                .orderBy('createdAt', 'desc')
+                .limit(fillCount * 2);
+            if (pincode) {
+                regularQuery = regularQuery.where('pincode', '==', pincode);
+            }
+            let regularSnapshot = await regularQuery.get();
+            regularSnapshot.forEach(doc => {
+                const equipment = { id: doc.id, ...doc.data() };
+                if (!featuredIds.includes(equipment.id) && equipmentToShow.length < limit) {
+                    equipmentToShow.push(equipment);
+                }
+            });
+            equipmentToShow = equipmentToShow.slice(0, limit);
+        }
+        container.innerHTML = '';
+        if (equipmentToShow.length === 0) {
+            const pincodeText = pincode ? ` for Pincode ${pincode}` : '';
+            container.innerHTML = `<div class="col-12 text-center py-5"><p>No equipment available to display right now${pincodeText}. Try changing your location filter or checking back later.</p></div>`;
+            return;
+        }
+        equipmentToShow.forEach(equipment => {
+            const col = document.createElement('div');
+            col.className = 'col-lg-4 col-md-6 mb-4';
+            col.innerHTML = createEquipmentCard(equipment, equipment.id);
+            container.appendChild(col);
+        });
+    } catch (error) {
+        const featuredContainer = document.getElementById('featured-equipment');
+        if (featuredContainer) featuredContainer.innerHTML = '<div class="col-12 text-center py-5 text-danger"><p>Error loading equipment. Please try again later.</p></div>';
+    }
+}
+
+function createEquipmentCard(equipment, id, isBrowsePage = false) {
+    const imageUrl = equipment.images && equipment.images[0] ? equipment.images[0] : 'https://placehold.co/300x200/2B5C2B/FFFFFF?text=Equipment';
+    const currentPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
+    const equipmentPincode = equipment.pincode;
+    const pincodeMatches = currentPincode ? equipmentPincode === currentPincode : true; 
+    const pincodeWarning = !pincodeMatches && currentPincode ? `
         <div class="alert alert-warning p-2 mt-2 mb-2 small">
             <i class="fas fa-exclamation-triangle me-1"></i>
-            <small>Located in ${s} (Your filter: ${r})</small>
+            <small>Located in ${equipmentPincode} (Your filter: ${currentPincode})</small>
         </div>
-    `:"",o=`card equipment-card h-100 ${!n&&r?"border-warning":""}`,c=a?`<button class="btn btn-primary w-100" onclick="showEquipmentDetailsModal('${t}')">View Details</button>`:`<a href="item.html?id=${t}" class="btn btn-primary w-100">View Details</a>`,d=getStarRatingHtml(e.rating||0);return`
-        <div class="${o}">
-            ${!n&&r?'<div class="card-header bg-warning text-dark small py-1"><i class="fas fa-map-marker-alt me-1"></i>Different Location</div>':""}
+    ` : '';
+    const cardClass = `card equipment-card h-100 ${!pincodeMatches && currentPincode ? 'border-warning' : ''}`;
+    const actionButtonHtml = isBrowsePage 
+        ? `<button class="btn btn-primary w-100" onclick="showEquipmentDetailsModal('${id}')">View Details</button>`
+        : `<a href="item.html?id=${id}" class="btn btn-primary w-100">View Details</a>`;
+    const ratingHtml = getStarRatingHtml(equipment.rating || 0);
+    return `
+        <div class="${cardClass}">
+            ${!pincodeMatches && currentPincode ? '<div class="card-header bg-warning text-dark small py-1"><i class="fas fa-map-marker-alt me-1"></i>Different Location</div>' : ''}
             <div class="position-relative">
-                <img src="${i}" class="card-img-top" alt="${e.name}" style="height: 200px; object-fit: cover;">
-                <span class="category-badge">${e.category||"Equipment"}</span>
-                ${e.onSale||e.featured?'<span class="sale-badge position-absolute" style="top:15px; left:15px;">'+(e.featured?"Featured":"Special Offer")+"</span>":""}
+                <img src="${imageUrl}" class="card-img-top" alt="${equipment.name}" style="height: 200px; object-fit: cover;">
+                <span class="category-badge">${equipment.category || 'Equipment'}</span>
+                ${equipment.onSale || equipment.featured ? '<span class="sale-badge position-absolute" style="top:15px; left:15px;">' + (equipment.featured ? 'Featured' : 'Special Offer') + '</span>' : ''}
             </div>
             <div class="card-body d-flex flex-column">
-                <h5 class="card-title">${e.name}</h5>
-                ${d}
-                ${l}
+                <h5 class="card-title">${equipment.name}</h5>
+                ${ratingHtml}
+                ${pincodeWarning}
                 <div class="mt-auto">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <div class="price-tag">₹${e.pricePerAcre||0}/acre</div>
-                        <small class="text-muted">or ₹${e.pricePerHour||0}/hour</small>
+                        <div class="price-tag">₹${equipment.pricePerAcre || 0}/acre</div>
+                        <small class="text-muted">or ₹${equipment.pricePerHour || 0}/hour</small>
                     </div>
-                    <p class="mb-2 small text-muted"><i class="fas fa-map-marker-alt me-1"></i> Pincode: ${e.pincode||"N/A"}</p>
-                    ${c}
+                    <p class="mb-2 small text-muted"><i class="fas fa-map-marker-alt me-1"></i> Pincode: ${equipment.pincode || 'N/A'}</p>
+                    ${actionButtonHtml}
                 </div>
             </div>
         </div>
-    `}async function getSellerInfo(e){try{let t=await window.FirebaseDB.collection("users").doc(e).get();if(t.exists&&"seller"===t.data().role)return t.data();return null}catch(a){return null}}async function showEquipmentDetailsModal(e){try{let t=allEquipmentData.find(t=>t.id===e);if(!t){let a=await window.FirebaseDB.collection("equipment").doc(e).get();if(a.exists)t={id:a.id,...a.data()};else{window.firebaseHelpers.showAlert("Equipment details not found.","danger");return}}selectedEquipment=t;let i=await getSellerInfo(selectedEquipment.sellerId);selectedEquipment.sellerDetails=i,document.getElementById("equipmentModalTitle").textContent=selectedEquipment.name,document.getElementById("modal-content-area").innerHTML=buildModalContent(selectedEquipment,i);let r=document.getElementById("add-to-cart-btn");r&&(r.onclick=()=>addToCartModal());let s=document.getElementById("rent-now-btn");s&&(s.onclick=()=>rentNowModal());let n=document.getElementById("rental-duration-type"),l=document.getElementById("rental-duration-value");n&&l?(updateModalPrice(n.value,l.value),n.onchange=()=>updateModalPrice(n.value,l.value),l.oninput=()=>updateModalPrice(n.value,l.value)):selectedEquipment.rentalDetails={durationType:"acre",durationValue:1,calculatedPrice:selectedEquipment.pricePerAcre||0,pickupDate:null,pickupTime:null};let o=document.getElementById("pickup-date");if(o){let c=new Date().toISOString().split("T")[0];o.min=c,o.onchange=()=>updateRentalDetails()}let d=document.getElementById("pickup-time");d&&(d.onchange=()=>updateRentalDetails()),updateRentalDetails();let u=new bootstrap.Modal(document.getElementById("equipmentDetailsModal"));u.show()}catch(m){window.firebaseHelpers.showAlert("Could not load equipment details.","danger")}}function updateRentalDetails(){let e=document.getElementById("rental-duration-type")?.value,t=parseInt(document.getElementById("rental-duration-value")?.value)||0,a=("acre"===e?selectedEquipment.pricePerAcre||0:selectedEquipment.pricePerHour||0)*t;selectedEquipment.rentalDetails={durationType:e,durationValue:t,calculatedPrice:a,pickupDate:document.getElementById("pickup-date")?.value||null,pickupTime:document.getElementById("pickup-time")?.value||null},updateModalPrice(e,t)}function buildModalContent(e,t){let a=e.images&&e.images[0]?e.images[0]:"https://placehold.co/500x300/2B5C2B/FFFFFF?text=Equipment",i=e.availability?"Available Now":"Currently Rented",r=e.availability?"bg-success":"bg-danger",s=t?.name||e.sellerName||"Seller User",n=t?.businessName||e.businessName||"N/A",l=t?`${t.address||"Seller Address Missing"}, ${t.village||""}, ${t.city||""}, ${t.state||""}`:"Address details are missing. Contact Seller.";return`
+    `;
+}
+
+async function getSellerInfo(sellerId) {
+    try {
+        const doc = await window.FirebaseDB.collection('users').doc(sellerId).get();
+        if (doc.exists && doc.data().role === 'seller') {
+            return doc.data();
+        }
+        return null;
+    } catch (error) {
+        return null;
+    }
+}
+
+async function showEquipmentDetailsModal(id) {
+    try {
+        let equipment = allEquipmentData.find(e => e.id === id);
+        if (!equipment) {
+            const doc = await window.FirebaseDB.collection('equipment').doc(id).get();
+            if (doc.exists) {
+                equipment = { id: doc.id, ...doc.data() };
+            } else {
+                window.firebaseHelpers.showAlert('Equipment details not found.', 'danger');
+                return;
+            }
+        }
+        selectedEquipment = equipment;
+        const sellerInfo = await getSellerInfo(selectedEquipment.sellerId);
+        selectedEquipment.sellerDetails = sellerInfo;
+        document.getElementById('equipmentModalTitle').textContent = selectedEquipment.name;
+        document.getElementById('modal-content-area').innerHTML = buildModalContent(selectedEquipment, sellerInfo);
+        const addToCartBtn = document.getElementById('add-to-cart-btn');
+        if (addToCartBtn) addToCartBtn.onclick = () => addToCartModal();
+        const rentNowBtn = document.getElementById('rent-now-btn');
+        if (rentNowBtn) rentNowBtn.onclick = () => rentNowModal();
+        const durationType = document.getElementById('rental-duration-type');
+        const durationValue = document.getElementById('rental-duration-value');
+        if(durationType && durationValue) {
+             updateModalPrice(durationType.value, durationValue.value);
+             durationType.onchange = () => updateModalPrice(durationType.value, durationValue.value);
+             durationValue.oninput = () => updateModalPrice(durationType.value, durationValue.value);
+        } else {
+            selectedEquipment.rentalDetails = {
+                durationType: 'acre',
+                durationValue: 1,
+                calculatedPrice: selectedEquipment.pricePerAcre || 0,
+                pickupDate: null,
+                pickupTime: null,
+            };
+        }
+        const pickupDateInput = document.getElementById('pickup-date');
+        if (pickupDateInput) {
+            const today = new Date().toISOString().split('T')[0];
+            pickupDateInput.min = today;
+            pickupDateInput.onchange = () => updateRentalDetails();
+        }
+        const pickupTimeInput = document.getElementById('pickup-time');
+        if (pickupTimeInput) {
+             pickupTimeInput.onchange = () => updateRentalDetails();
+        }
+        updateRentalDetails();
+        const modal = new bootstrap.Modal(document.getElementById('equipmentDetailsModal'));
+        modal.show();
+    } catch (error) {
+        window.firebaseHelpers.showAlert('Could not load equipment details.', 'danger');
+    }
+}
+window.showEquipmentDetailsModal = showEquipmentDetailsModal;
+
+function updateRentalDetails() {
+    const durationType = document.getElementById('rental-duration-type')?.value;
+    const durationValue = parseInt(document.getElementById('rental-duration-value')?.value) || 0;
+    const calculatedPrice = (durationType === 'acre' ? (selectedEquipment.pricePerAcre || 0) : (selectedEquipment.pricePerHour || 0)) * durationValue;
+    selectedEquipment.rentalDetails = {
+        durationType: durationType,
+        durationValue: durationValue,
+        calculatedPrice: calculatedPrice,
+        pickupDate: document.getElementById('pickup-date')?.value || null,
+        pickupTime: document.getElementById('pickup-time')?.value || null,
+    };
+    updateModalPrice(durationType, durationValue);
+}
+
+function buildModalContent(equipment, sellerInfo) {
+    const imageUrl = equipment.images && equipment.images[0] ? equipment.images[0] : 'https://placehold.co/500x300/2B5C2B/FFFFFF?text=Equipment';
+    const statusText = equipment.availability ? 'Available Now' : 'Currently Rented';
+    const statusClass = equipment.availability ? 'bg-success' : 'bg-danger';
+    const sellerName = sellerInfo?.name || equipment.sellerName || 'Seller User';
+    const businessName = sellerInfo?.businessName || equipment.businessName || 'N/A';
+    const pickupAddress = sellerInfo 
+        ? `${sellerInfo.address || 'Seller Address Missing'}, ${sellerInfo.village || ''}, ${sellerInfo.city || ''}, ${sellerInfo.state || ''}`
+        : 'Address details are missing. Contact Seller.';
+    return `
         <div class="row">
             <div class="col-md-6">
-                <img src="${a}" class="img-fluid rounded mb-3" alt="${e.name}" style="height: 300px; width: 100%; object-fit: cover;">
-                ${e.images&&e.images.length>1?`
+                <img src="${imageUrl}" class="img-fluid rounded mb-3" alt="${equipment.name}" style="height: 300px; width: 100%; object-fit: cover;">
+                ${equipment.images && equipment.images.length > 1 ? `
                     <div class="d-flex gap-2 mb-3 overflow-auto">
-                        ${e.images.slice(1).map(e=>`
-                            <img src="${e}" class="img-thumbnail" style="width: 80px; height: 80px; object-fit: cover;">
-                        `).join("")}
+                        ${equipment.images.slice(1).map(img => `
+                            <img src="${img}" class="img-thumbnail" style="width: 80px; height: 80px; object-fit: cover;">
+                        `).join('')}
                     </div>
-                `:""}
+                ` : ''}
                 <h5 class="mt-4 text-warning"><i class="fas fa-user-tie me-2"></i>Seller Information</h5>
                 <ul class="list-unstyled">
-                    <li><strong>Business:</strong> ${n}</li>
-                    <li><strong>Contact Person:</strong> ${s}</li>
-                    <li><i class="fas fa-map-marker-alt me-2 text-danger"></i> <strong>Pickup Pincode:</strong> ${e.pincode||"N/A"}</li>
+                    <li><strong>Business:</strong> ${businessName}</li>
+                    <li><strong>Contact Person:</strong> ${sellerName}</li>
+                    <li><i class="fas fa-map-marker-alt me-2 text-danger"></i> <strong>Pickup Pincode:</strong> ${equipment.pincode || 'N/A'}</li>
                 </ul>
                 <h5 class="mt-4 text-warning"><i class="fas fa-map-marked-alt me-2"></i>Clear Pickup Address</h5>
                 <div class="alert alert-light border small">
-                    <strong>Full Address:</strong> ${l}
+                    <strong>Full Address:</strong> ${pickupAddress}
                 </div>
             </div>
             <div class="col-md-6">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <span class="badge ${r} text-white p-2">${i}</span>
-                    <span class="text-muted small">Listed by: <strong>${n}</strong></span>
+                    <span class="badge ${statusClass} text-white p-2">${statusText}</span>
+                    <span class="text-muted small">Listed by: <strong>${businessName}</strong></span>
                 </div>
-                <h3 class="text-primary mb-3">${window.firebaseHelpers.formatCurrency(e.pricePerAcre)}/Acre | ${window.firebaseHelpers.formatCurrency(e.pricePerHour)}/Hour</h3>
-                <p>${e.description}</p>
+                <h3 class="text-primary mb-3">${window.firebaseHelpers.formatCurrency(equipment.pricePerAcre)}/Acre | ${window.firebaseHelpers.formatCurrency(equipment.pricePerHour)}/Hour</h3>
+                <p>${equipment.description}</p>
                 <ul class="list-unstyled">
-                    <li><i class="fas fa-tags me-2 text-warning"></i> <strong>Category:</strong> ${e.category}</li>
-                    <li><i class="fas fa-list-ol me-2 text-warning"></i> <strong>Quantity:</strong> ${e.quantity}</li>
+                    <li><i class="fas fa-tags me-2 text-warning"></i> <strong>Category:</strong> ${equipment.category}</li>
+                    <li><i class="fas fa-list-ol me-2 text-warning"></i> <strong>Quantity:</strong> ${equipment.quantity}</li>
                 </ul>
-                ${e.specifications&&Object.keys(e.specifications).length>0?`
+                ${equipment.specifications && Object.keys(equipment.specifications).length > 0 ? `
                     <h5 class="mt-4">Specifications (Item Info)</h5>
                     <div class="row">
-                        ${Object.entries(e.specifications).map(([e,t])=>`
-                            <div class="col-6 mb-2"><strong>${e}:</strong> ${t}</div>
-                        `).join("")}
+                        ${Object.entries(equipment.specifications).map(([key, value]) => `
+                            <div class="col-6 mb-2"><strong>${key}:</strong> ${value}</div>
+                        `).join('')}
                     </div>
-                `:""}
+                ` : ''}
             </div>
         </div>
-    `}function updateModalPrice(e,t){let a=parseInt(t),i=document.getElementById("modal-total-price");if(isNaN(a)||a<=0){i&&(i.textContent="₹0"),updateRentalDetails();return}let r=0;r="acre"===e?(selectedEquipment.pricePerAcre||0)*a:(selectedEquipment.pricePerHour||0)*a,selectedEquipment.rentalDetails={...selectedEquipment.rentalDetails,calculatedPrice:r},i&&(i.textContent=window.firebaseHelpers.formatCurrency(r))}async function addToCartModal(){updateRentalDetails();let e=selectedEquipment,t=e.rentalDetails;if(!t||t.calculatedPrice<=0||!e.id||!t.durationType){window.firebaseHelpers.showAlert("Please select a valid rental duration.","warning");return}if(!t.pickupDate||!t.pickupTime){window.firebaseHelpers.showAlert("Please select the required **Pickup Date and Time**.","danger");return}let{durationType:a,durationValue:i,calculatedPrice:r,pickupDate:s,pickupTime:n}=t,l=await getCartFromFirestore(),o=e.pincode;if(!o){window.firebaseHelpers.showAlert("Equipment missing Pincode information. Cannot add to cart.","danger");return}let c=window.firebaseHelpers.pincodeSystem.getCurrentPincode();if(!c){window.firebaseHelpers.showAlert("Please set your location first to ensure equipment availability.","warning"),showPincodeModal();return}if(o!==c){let d=`
+    `;
+}
+
+function updateModalPrice(type, value) {
+    const duration = parseInt(value);
+    const priceElement = document.getElementById('modal-total-price');
+    if (isNaN(duration) || duration <= 0) {
+        if(priceElement) priceElement.textContent = '₹0';
+        updateRentalDetails(); 
+        return;
+    }
+    let price = 0;
+    if (type === 'acre') {
+        price = (selectedEquipment.pricePerAcre || 0) * duration;
+    } else {
+        price = (selectedEquipment.pricePerHour || 0) * duration;
+    }
+    selectedEquipment.rentalDetails = {
+        ...selectedEquipment.rentalDetails,
+        calculatedPrice: price
+    };
+    if(priceElement) priceElement.textContent = window.firebaseHelpers.formatCurrency(price);
+}
+
+async function addToCartModal() {
+    updateRentalDetails();
+    const item = selectedEquipment;
+    const rentalDetails = item.rentalDetails;
+    if (!rentalDetails || rentalDetails.calculatedPrice <= 0 || !item.id || !rentalDetails.durationType) {
+        window.firebaseHelpers.showAlert('Please select a valid rental duration.', 'warning');
+        return;
+    }
+    if (!rentalDetails.pickupDate || !rentalDetails.pickupTime) {
+        window.firebaseHelpers.showAlert('Please select the required **Pickup Date and Time**.', 'danger');
+        return;
+    }
+    const { durationType, durationValue, calculatedPrice, pickupDate, pickupTime } = rentalDetails;
+    let cart = await getCartFromFirestore(); 
+    const itemPincode = item.pincode;
+    if (!itemPincode) {
+        window.firebaseHelpers.showAlert('Equipment missing Pincode information. Cannot add to cart.', 'danger');
+        return;
+    }
+    const currentPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
+    if (!currentPincode) {
+        window.firebaseHelpers.showAlert('Please set your location first to ensure equipment availability.', 'warning');
+        showPincodeModal();
+        return;
+    }
+    if (itemPincode !== currentPincode) {
+        const warningHtml = `
             <div class="alert alert-warning">
                 <h6><i class="fas fa-map-marker-alt me-2"></i>Location Mismatch</h6>
-                <p>This equipment is located in Pincode <strong>${o}</strong>, 
-                but your current location filter is <strong>${c}</strong>.</p>
+                <p>This equipment is located in Pincode <strong>${itemPincode}</strong>, 
+                but your current location filter is <strong>${currentPincode}</strong>.</p>
                 <p class="mb-2"><small>Items must match your active location filter to proceed to checkout.</small></p>
                 <div class="d-flex gap-2 mt-2">
-                    <button class="btn btn-sm btn-warning" onclick="changePincodeToMatchEquipment('${o}')">
-                        Change My Location to ${o} & Continue
+                    <button class="btn btn-sm btn-warning" onclick="changePincodeToMatchEquipment('${itemPincode}')">
+                        Change My Location to ${itemPincode} & Continue
                     </button>
                     <button class="btn btn-sm btn-outline-secondary" onclick="bootstrap.Modal.getInstance(document.getElementById('custom-warning-modal')).hide();">
                         Cancel
                     </button>
                 </div>
             </div>
-        `;showCustomWarningModal(d);return}if(l.length>0){let u=l[0].pincode;if(u&&u!==c){window.firebaseHelpers.showAlert(`Cannot add equipment from Pincode ${o}. Your cart contains items from ${u}. Clear your cart to order from a different Pincode.`,"danger");return}}let m={id:e.id,name:e.name,sellerId:e.sellerId,businessName:e.businessName,price:r,pricePerAcre:e.pricePerAcre,pricePerHour:e.pricePerHour,rentalType:a,rentalValue:i,imageUrl:e.images&&e.images[0],pincode:o,pickupDate:s,pickupTime:n,sellerAddress:e.sellerDetails?`${e.sellerDetails.address}, ${e.sellerDetails.village}, ${e.sellerDetails.city}, ${e.sellerDetails.state}`:"Address Unavailable"},p=l.findIndex(t=>t.id===e.id);p>-1?l[p]=m:l.push(m),await updateCartInFirestore(l);let f=bootstrap.Modal.getInstance(document.getElementById("equipmentDetailsModal"));f&&f.hide(),window.firebaseHelpers.showAlert(`${e.name} added to cart!`,"success")}async function rentNowModal(){updateRentalDetails();let e=selectedEquipment,t=e.rentalDetails;if(!t||t.calculatedPrice<=0||!e.id){window.firebaseHelpers.showAlert("Please select a valid rental duration.","warning");return}if(!t.pickupDate||!t.pickupTime){window.firebaseHelpers.showAlert("Please select the required **Pickup Date and Time**.","danger");return}let{calculatedPrice:a,pickupDate:i,pickupTime:r}=t,s=e.pincode;if(!s){window.firebaseHelpers.showAlert("Equipment missing Pincode information. Cannot proceed to checkout.","danger");return}let n=window.firebaseHelpers.pincodeSystem.getCurrentPincode();if(!n){window.firebaseHelpers.showAlert("Location required! Please set your Pincode before proceeding to rent.","danger"),showPincodeModal();return}if(n!==s){window.firebaseHelpers.showAlert(`The selected equipment is in Pincode ${s}, but your current location filter is set to ${n}. Please resolve the location mismatch.`,"danger");let l=`
+        `;
+        showCustomWarningModal(warningHtml);
+        return;
+    }
+    if (cart.length > 0) {
+        const cartPincode = cart[0].pincode;
+        if (cartPincode && cartPincode !== currentPincode) { 
+             window.firebaseHelpers.showAlert(`Cannot add equipment from Pincode ${itemPincode}. Your cart contains items from ${cartPincode}. Clear your cart to order from a different Pincode.`, 'danger');
+             return;
+        }
+    }
+    const cartItem = {
+        id: item.id,
+        name: item.name,
+        sellerId: item.sellerId,
+        businessName: item.businessName,
+        price: calculatedPrice,
+        pricePerAcre: item.pricePerAcre, 
+        pricePerHour: item.pricePerHour,
+        rentalType: durationType,
+        rentalValue: durationValue,
+        imageUrl: item.images && item.images[0],
+        pincode: itemPincode,
+        pickupDate: pickupDate,
+        pickupTime: pickupTime,
+        sellerAddress: item.sellerDetails ? `${item.sellerDetails.address}, ${item.sellerDetails.village}, ${item.sellerDetails.city}, ${item.sellerDetails.state}` : 'Address Unavailable',
+    };
+    const existingIndex = cart.findIndex(i => i.id === item.id);
+    if (existingIndex > -1) {
+        cart[existingIndex] = cartItem;
+    } else {
+        cart.push(cartItem);
+    }
+    await updateCartInFirestore(cart); 
+    const modal = bootstrap.Modal.getInstance(document.getElementById('equipmentDetailsModal'));
+    if (modal) modal.hide();
+    window.firebaseHelpers.showAlert(`${item.name} added to cart!`, 'success');
+}
+window.addToCartModal = addToCartModal;
+
+async function rentNowModal() {
+    updateRentalDetails();
+    const item = selectedEquipment;
+    const rentalDetails = item.rentalDetails;
+    if (!rentalDetails || rentalDetails.calculatedPrice <= 0 || !item.id) {
+        window.firebaseHelpers.showAlert('Please select a valid rental duration.', 'warning');
+        return;
+    }
+    if (!rentalDetails.pickupDate || !rentalDetails.pickupTime) {
+        window.firebaseHelpers.showAlert('Please select the required **Pickup Date and Time**.', 'danger');
+        return;
+    }
+    const { calculatedPrice, pickupDate, pickupTime } = rentalDetails;
+    const itemPincode = item.pincode;
+    if (!itemPincode) {
+        window.firebaseHelpers.showAlert('Equipment missing Pincode information. Cannot proceed to checkout.', 'danger');
+        return;
+    }
+    const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
+    if (!userPincode) {
+        window.firebaseHelpers.showAlert('Location required! Please set your Pincode before proceeding to rent.', 'danger');
+        showPincodeModal();
+        return;
+    }
+    if (userPincode !== itemPincode) {
+        window.firebaseHelpers.showAlert(`The selected equipment is in Pincode ${itemPincode}, but your current location filter is set to ${userPincode}. Please resolve the location mismatch.`, 'danger');
+        const warningHtml = `
             <div class="alert alert-danger">
                 <h6><i class="fas fa-map-marker-alt me-2"></i>Checkout Blocked: Location Mismatch</h6>
-                <p>This equipment is located in Pincode <strong>${s}</strong>, 
-                but your current location filter is <strong>${n}</strong>.</p>
+                <p>This equipment is located in Pincode <strong>${itemPincode}</strong>, 
+                but your current location filter is <strong>${userPincode}</strong>.</p>
                 <p class="mb-2"><small>You must set your location to match the equipment location to rent now.</small></p>
                 <div class="d-flex gap-2 mt-2">
-                    <button class="btn btn-sm btn-warning" onclick="changePincodeToMatchEquipment('${s}'); window.location.href='checkout.html'">
-                        Change My Location to ${s} & Checkout
+                    <button class="btn btn-sm btn-warning" onclick="changePincodeToMatchEquipment('${itemPincode}'); window.location.href='checkout.html'">
+                        Change My Location to ${itemPincode} & Checkout
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="bootstrap.Modal.getInstance(document.getElementById('custom-warning-modal')).hide();">
                         Cancel
                     </button>
                 </div>
             </div>
-        `;showCustomWarningModal(l);return}let o=[{id:e.id,name:e.name,sellerId:e.sellerId,businessName:e.businessName,price:a,pricePerAcre:e.pricePerAcre,pricePerHour:e.pricePerHour,rentalType:t.durationType,rentalValue:t.durationValue,imageUrl:e.images&&e.images[0],pincode:s,pickupDate:i,pickupTime:r,sellerAddress:e.sellerDetails?`${e.sellerDetails.address}, ${e.sellerDetails.village}, ${e.sellerDetails.city}, ${e.sellerDetails.state}`:"Address Unavailable"}];await updateCartInFirestore(o);let c=bootstrap.Modal.getInstance(document.getElementById("equipmentDetailsModal"));c&&c.hide(),window.location.href="checkout.html"}async function loadCartPage(){await new Promise(e=>{let t=setInterval(()=>{isAuthInitialized&&(clearInterval(t),e())},100)}),await getPlatformFinancialSettings();let e=await getCartFromFirestore();await checkCartPincodeCompatibility(e),displayCartItems(e)}async function checkCartPincodeCompatibility(e){let t=document.getElementById("cart-pincode-warning"),a=document.getElementById("checkout-btn");if(!t||!a||(t.innerHTML="",a.disabled=!1,0===e.length))return;let i=window.firebaseHelpers.pincodeSystem.getCurrentPincode(),r={};e.forEach(e=>{let t=e.pincode||"Unknown";r[t]||(r[t]=[]),r[t].push(e)});let s=Object.keys(r).filter(e=>"Unknown"!==e);if(s.length>1){t.innerHTML=`
+        `;
+        showCustomWarningModal(warningHtml);
+        return;
+    }
+    const singleItemCart = [
+        {
+            id: item.id,
+            name: item.name,
+            sellerId: item.sellerId,
+            businessName: item.businessName,
+            price: calculatedPrice,
+            pricePerAcre: item.pricePerAcre, 
+            pricePerHour: item.pricePerHour,
+            rentalType: rentalDetails.durationType,
+            rentalValue: rentalDetails.durationValue,
+            imageUrl: item.images && item.images[0],
+            pincode: itemPincode,
+            pickupDate: pickupDate,
+            pickupTime: pickupTime,
+            sellerAddress: item.sellerDetails ? `${item.sellerDetails.address}, ${item.sellerDetails.village}, ${item.sellerDetails.city}, ${item.sellerDetails.state}` : 'Address Unavailable',
+        }
+    ];
+    await updateCartInFirestore(singleItemCart); 
+    const modal = bootstrap.Modal.getInstance(document.getElementById('equipmentDetailsModal'));
+    if (modal) modal.hide();
+    window.location.href = 'checkout.html';
+}
+window.rentNowModal = rentNowModal;
+
+async function loadCartPage() {
+    await new Promise(resolve => {
+        const checkAuth = setInterval(() => {
+            if (isAuthInitialized) {
+                clearInterval(checkAuth);
+                resolve();
+            }
+        }, 100);
+    });
+    await getPlatformFinancialSettings(); // UPDATED: Renamed function
+    const cart = await getCartFromFirestore(); 
+    await checkCartPincodeCompatibility(cart);
+    displayCartItems(cart); 
+}
+
+async function checkCartPincodeCompatibility(cart) {
+    const warningContainer = document.getElementById('cart-pincode-warning');
+    const checkoutBtn = document.getElementById('checkout-btn');
+    if (!warningContainer || !checkoutBtn) return;
+    warningContainer.innerHTML = '';
+    checkoutBtn.disabled = false;
+    if (cart.length === 0) return;
+    const currentPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
+    const itemsByPincode = {};
+    cart.forEach(item => {
+        const pincode = item.pincode || 'Unknown';
+        if (!itemsByPincode[pincode]) {
+            itemsByPincode[pincode] = [];
+        }
+        itemsByPincode[pincode].push(item);
+    });
+    const pincodes = Object.keys(itemsByPincode).filter(p => p !== 'Unknown');
+    if (pincodes.length > 1) {
+        warningContainer.innerHTML = `
             <div class="alert alert-danger">
                 <h6><i class="fas fa-exclamation-circle me-2"></i>Cart Contains Mixed Locations</h6>
                 <p>Your cart has equipment from different locations:</p>
                 <ul class="mb-2">
-                    ${s.map(e=>`<li>${r[e].length} item(s) from Pincode ${e}</li>`).join("")}
+                    ${pincodes.map(pincode => 
+                        `<li>${itemsByPincode[pincode].length} item(s) from Pincode ${pincode}</li>`
+                    ).join('')}
                 </ul>
                 <p><strong>You can only checkout items from one location at a time.</strong></p>
                 <button class="btn btn-sm btn-danger" onclick="resolveMixedPincodeCart()">
                     <i class="fas fa-sync-alt me-1"></i>Resolve Location Conflict
                 </button>
             </div>
-        `,a.disabled=!0;return}let n=s[0];if(n&&i&&n!==i){t.innerHTML=`
+        `;
+        checkoutBtn.disabled = true;
+        return;
+    }
+    const cartPincode = pincodes[0];
+    if (cartPincode && currentPincode && cartPincode !== currentPincode) {
+        warningContainer.innerHTML = `
             <div class="alert alert-warning">
                 <h6><i class="fas fa-map-marker-alt me-2"></i>Location Mismatch</h6>
-                <p>Your cart items are from <strong>Pincode ${n}</strong>, 
-                but your current location filter is <strong>${i}</strong>.</p>
+                <p>Your cart items are from <strong>Pincode ${cartPincode}</strong>, 
+                but your current location filter is <strong>${currentPincode}</strong>.</p>
                 <div class="d-flex gap-2 mt-2">
-                    <button class="btn btn-sm btn-warning" onclick="changePincodeToMatchCart('${n}')">
-                        Change My Location to ${n}
+                    <button class="btn btn-sm btn-warning" onclick="changePincodeToMatchCart('${cartPincode}')">
+                        Change My Location to ${cartPincode}
                     </button>
                     <button class="btn btn-sm btn-outline-danger" onclick="clearCartForCurrentLocation()">
-                        Clear Cart & Shop in ${i}
+                        Clear Cart & Shop in ${currentPincode}
                     </button>
                 </div>
             </div>
-        `,a.disabled=!0;return}if(n&&!i){t.innerHTML=`
+        `;
+        checkoutBtn.disabled = true;
+        return;
+    } else if (cartPincode && !currentPincode) {
+        warningContainer.innerHTML = `
             <div class="alert alert-info">
                 <h6><i class="fas fa-info-circle me-2"></i>Location Required</h6>
-                <p>Your cart is for <strong>Pincode ${n}</strong>. Please set your location to match to proceed.</p>
+                <p>Your cart is for <strong>Pincode ${cartPincode}</strong>. Please set your location to match to proceed.</p>
                 <button class="btn btn-sm btn-primary" onclick="showPincodeModal()">
                     <i class="fas fa-map-marker-alt me-1"></i>Set Location
                 </button>
             </div>
-        `,a.disabled=!0;return}if(!n&&e.length>0){t.innerHTML=`
+        `;
+        checkoutBtn.disabled = true;
+        return;
+    } else if (!cartPincode && cart.length > 0) {
+        warningContainer.innerHTML = `
             <div class="alert alert-danger">
                 <h6><i class="fas fa-exclamation-circle me-2"></i>Data Error</h6>
                 <p>Some items in your cart are missing location data. Please remove and re-add them.</p>
             </div>
-        `,a.disabled=!0;return}}async function resolveMixedPincodeCart(){let e=await getCartFromFirestore(),t={};e.forEach(e=>{let a=e.pincode||"Unknown";t[a]||(t[a]=[]),t[a].push(e)});let a=Object.entries(t).map(([e,t])=>`
+        `;
+        checkoutBtn.disabled = true;
+        return;
+    }
+}
+
+async function resolveMixedPincodeCart() {
+    const cart = await getCartFromFirestore();
+    const itemsByPincode = {};
+    cart.forEach(item => {
+        const pincode = item.pincode || 'Unknown';
+        if (!itemsByPincode[pincode]) {
+            itemsByPincode[pincode] = [];
+        }
+        itemsByPincode[pincode].push(item);
+    });
+    const optionsHtml = Object.entries(itemsByPincode).map(([pincode, items]) => `
         <div class="form-check mb-2">
             <input class="form-check-input" type="radio" name="selectedPincode" 
-                    id="pincode-${e}" value="${e}">
-            <label class="form-check-label" for="pincode-${e}">
-                <strong>Pincode ${e}</strong> - ${t.length} item(s)
-                <br><small>${t.map(e=>e.name).join(", ")}</small>
+                    id="pincode-${pincode}" value="${pincode}">
+            <label class="form-check-label" for="pincode-${pincode}">
+                <strong>Pincode ${pincode}</strong> - ${items.length} item(s)
+                <br><small>${items.map(item => item.name).join(', ')}</small>
             </label>
         </div>
-    `).join(""),i=`
+    `).join('');
+    const modalContent = `
         <h5>Resolve Location Conflict</h5>
         <p>Your cart contains items from multiple locations. Please choose which location to keep:</p>
         <div id="pincode-options" class="my-3">
-            ${a}
+            ${optionsHtml}
         </div>
         <div class="alert alert-info">
             <i class="fas fa-info-circle me-2"></i>
@@ -223,18 +1428,128 @@ let currentUser=null,allEquipmentData=[],selectedEquipment={},isAuthInitialized=
                 Keep Selected Location
             </button>
         </div>
-    `;showCustomWarningModal(i),setTimeout(()=>{let t=document.getElementById("confirm-pincode-choice");t&&(t.onclick=async()=>{let t=document.querySelector('input[name="selectedPincode"]:checked');if(t){let a=t.value,i=e.filter(e=>e.pincode===a);await updateCartInFirestore(i),await savePincode(a),loadCartPage();let r=bootstrap.Modal.getInstance(document.getElementById("custom-warning-modal"));r&&r.hide()}else window.firebaseHelpers.showAlert("Please select a pincode to resolve the conflict.","warning")})},100)}async function changePincodeToMatchCart(e){await savePincode(e),loadCartPage()}async function clearCartForCurrentLocation(){await updateCartForNewPincode(),loadCartPage()}async function startCheckout(){if(!window.currentUser){window.firebaseHelpers.showAlert("Please log in before proceeding to checkout.","warning"),setTimeout(()=>{window.location.href="customer-auth.html"},1500);return}let e=window.firebaseHelpers.pincodeSystem.getCurrentPincode(),t=await getCartFromFirestore();if(0===t.length){window.firebaseHelpers.showAlert("Your cart is empty. Please add items to proceed.","warning"),setTimeout(()=>{window.location.href="browse.html"},2e3);return}let a=t.some(e=>!e.pickupDate||!e.pickupTime);if(a){window.firebaseHelpers.showAlert("Please set the required **Pickup Date and Time** for all items in your cart.","danger");return}if(!e){window.firebaseHelpers.showAlert("Location required! Please set your Pincode to finalize the rental location.","danger"),showPincodeModal();return}let i=t[0]?.pincode;if(i!==e){window.firebaseHelpers.showAlert(`Your cart items are from Pincode ${i}, but your current Pincode is ${e}. Please resolve the location mismatch in your cart.`,"danger"),setTimeout(()=>{window.location.href="cart.html"},1500);return}window.location.href="checkout.html"}async function loadCheckoutPage(){await new Promise(e=>{let t=setInterval(()=>{isAuthInitialized&&(clearInterval(t),e())},100)}),await getPlatformFinancialSettings();let e=await window.firebaseHelpers.getCurrentUser(),t=await getCartFromFirestore();if(!e||0===t.length){e?(window.firebaseHelpers.showAlert("Your cart is empty. Please add items to proceed.","warning"),setTimeout(()=>{window.location.href="browse.html"},2e3)):(window.firebaseHelpers.showAlert("You must be logged in to checkout.","danger"),setTimeout(()=>{window.location.href="customer-auth.html"},2e3));return}try{let a=await window.FirebaseDB.collection("users").doc(e.uid).get();if(a.exists){let i=a.data();window.currentUser={uid:e.uid,email:e.email,...i},availableCoins=i.coins||0}}catch(r){availableCoins=window.currentUser?.coins||0}let s=window.firebaseHelpers.pincodeSystem.getCurrentPincode(),n=document.querySelector(".checkout-summary");if(!s||t[0].pincode!==s){let l="Location Mismatch: ";s?l+=`Cart items (${t[0].pincode}) don't match your location (${s}).`:l+="Please set your location.";let o=`
+    `;
+    showCustomWarningModal(modalContent);
+    setTimeout(() => {
+        const confirmBtn = document.getElementById('confirm-pincode-choice');
+        if (confirmBtn) {
+            confirmBtn.onclick = async () => {
+                const selected = document.querySelector('input[name="selectedPincode"]:checked');
+                if (selected) {
+                    const selectedPincode = selected.value;
+                    const newCart = cart.filter(item => item.pincode === selectedPincode);
+                    await updateCartInFirestore(newCart);
+                    await savePincode(selectedPincode); 
+                    loadCartPage();
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('custom-warning-modal'));
+                    if (modal) modal.hide();
+                } else {
+                    window.firebaseHelpers.showAlert('Please select a pincode to resolve the conflict.', 'warning');
+                }
+            };
+        }
+    }, 100);
+}
+window.resolveMixedPincodeCart = resolveMixedPincodeCart;
+
+async function changePincodeToMatchCart(cartPincode) {
+    await savePincode(cartPincode);
+    loadCartPage();
+}
+window.changePincodeToMatchCart = changePincodeToMatchCart;
+
+async function clearCartForCurrentLocation() {
+    await updateCartForNewPincode();
+    loadCartPage();
+}
+window.clearCartForCurrentLocation = clearCartForCurrentLocation;
+
+async function startCheckout() {
+    if (!window.currentUser) {
+        window.firebaseHelpers.showAlert('Please log in before proceeding to checkout.', 'warning');
+        setTimeout(() => { window.location.href = 'customer-auth.html'; }, 1500);
+        return;
+    }
+    const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
+    const cart = await getCartFromFirestore();
+    if (cart.length === 0) {
+        window.firebaseHelpers.showAlert('Your cart is empty. Please add items to proceed.', 'warning');
+        setTimeout(() => { window.location.href = 'browse.html'; }, 2000);
+        return;
+    }
+    const missingDetails = cart.some(item => !item.pickupDate || !item.pickupTime);
+    if (missingDetails) {
+        window.firebaseHelpers.showAlert('Please set the required **Pickup Date and Time** for all items in your cart.', 'danger');
+        return;
+    }
+    if (!userPincode) {
+        window.firebaseHelpers.showAlert('Location required! Please set your Pincode to finalize the rental location.', 'danger');
+        showPincodeModal();
+        return;
+    }
+    const cartPincode = cart[0]?.pincode; 
+    if (cartPincode !== userPincode) {
+        window.firebaseHelpers.showAlert(`Your cart items are from Pincode ${cartPincode}, but your current Pincode is ${userPincode}. Please resolve the location mismatch in your cart.`, 'danger');
+        setTimeout(() => { window.location.href = 'cart.html'; }, 1500);
+        return;
+    }
+    window.location.href = 'checkout.html';
+}
+window.startCheckout = startCheckout;
+
+async function loadCheckoutPage() {
+    await new Promise(resolve => {
+        const checkAuth = setInterval(() => {
+            if (isAuthInitialized) {
+                clearInterval(checkAuth);
+                resolve();
+            }
+        }, 100);
+    });
+    await getPlatformFinancialSettings(); // UPDATED: Renamed function
+    const user = await window.firebaseHelpers.getCurrentUser();
+    const cart = await getCartFromFirestore(); 
+    if (!user || cart.length === 0) {
+        if (!user) {
+            window.firebaseHelpers.showAlert('You must be logged in to checkout.', 'danger');
+            setTimeout(() => { window.location.href = 'customer-auth.html'; }, 2000);
+        } else {
+            window.firebaseHelpers.showAlert('Your cart is empty. Please add items to proceed.', 'warning');
+            setTimeout(() => { window.location.href = 'browse.html'; }, 2000);
+        }
+        return;
+    }
+    try {
+        const userDoc = await window.FirebaseDB.collection('users').doc(user.uid).get();
+        if (userDoc.exists) {
+            const userData = userDoc.data();
+            window.currentUser = { uid: user.uid, email: user.email, ...userData };
+            availableCoins = userData.coins || 0;
+        }
+    } catch (e) {
+        availableCoins = window.currentUser?.coins || 0;
+    }
+    const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
+    const checkoutSummaryElement = document.querySelector('.checkout-summary');
+    if (!userPincode || cart[0].pincode !== userPincode) {
+        let message = 'Location Mismatch: ';
+        if (!userPincode) {
+            message += 'Please set your location.';
+        } else {
+            message += `Cart items (${cart[0].pincode}) don't match your location (${userPincode}).`;
+        }
+        const warningHtml = `
             <div class="alert alert-danger p-4">
                 <h6><i class="fas fa-exclamation-triangle me-2"></i>Checkout Blocked</h6>
-                <p>${l}</p>
+                <p>${message}</p>
                 <div class="d-flex gap-2 mt-3">
-                    ${s?`
-                        <button class="btn btn-sm btn-warning" onclick="changePincodeToMatchCart('${t[0].pincode}')">
-                            Change Location to ${t[0].pincode}
-                        </button>
-                    `:`
+                    ${!userPincode ? `
                         <button class="btn btn-sm btn-primary" onclick="showPincodeModal()">
                             <i class="fas fa-map-marker-alt me-2"></i>Set Location Now
+                        </button>
+                    ` : `
+                        <button class="btn btn-sm btn-warning" onclick="changePincodeToMatchCart('${cart[0].pincode}')">
+                            Change Location to ${cart[0].pincode}
                         </button>
                     `}
                     <button class="btn btn-sm btn-outline-secondary" onclick="window.location.href='cart.html'">
@@ -242,7 +1557,52 @@ let currentUser=null,allEquipmentData=[],selectedEquipment={},isAuthInitialized=
                     </button>
                 </div>
             </div>
-        `;n&&(n.innerHTML=o);let c=document.getElementById("pay-now-btn");c&&(c.disabled=!0);let d=document.getElementById("pay-button-amount");d&&(d.textContent="Error");return}let u=document.getElementById("customer-name");u&&(u.value=window.currentUser?.name||"");let m=document.getElementById("customer-email");m&&(m.value=window.currentUser?.email||"");let p=document.getElementById("customer-phone");p&&(p.value=window.currentUser?.mobile||"");let f=document.getElementById("coin-balance-display");if(f&&(f.textContent=`${availableCoins||0} Coins`),window.razorpayContext={items:t,orderPickupDate:t[0]?.pickupDate,orderPickupTime:t[0]?.pickupTime,orderPincode:t[0]?.pincode||"N/A"},window.currentUser&&!window.currentUser.firstOrderPlaced&&0===coinsToApply){let g=0;t.forEach(e=>{g+=e.price});let h=Math.floor(.5*g),b=availableCoins||0;coinsToApply=Math.min(50,b,h);let y=document.getElementById("coins-to-apply");y&&(y.value=coinsToApply)}displayCheckoutSummary(t)}function updateNavbarForLoggedInUser(e){let t=document.getElementById("navbar-auth");if(!t)return;let a="";"customer"===e.role&&(a=`
+        `;
+        if (checkoutSummaryElement) {
+            checkoutSummaryElement.innerHTML = warningHtml;
+        }
+        const payBtn = document.getElementById('pay-now-btn');
+        if (payBtn) payBtn.disabled = true;
+        const payAmount = document.getElementById('pay-button-amount');
+        if (payAmount) payAmount.textContent = 'Error';
+        return;
+    }
+    const customerNameInput = document.getElementById('customer-name');
+    if (customerNameInput) customerNameInput.value = window.currentUser?.name || '';
+    const customerEmailInput = document.getElementById('customer-email');
+    if (customerEmailInput) customerEmailInput.value = window.currentUser?.email || '';
+    const customerPhoneInput = document.getElementById('customer-phone');
+    if (customerPhoneInput) customerPhoneInput.value = window.currentUser?.mobile || '';
+    const coinBalanceDisplay = document.getElementById('coin-balance-display');
+    if (coinBalanceDisplay) coinBalanceDisplay.textContent = `${availableCoins || 0} Coins`;
+    window.razorpayContext = {
+        items: cart,
+        orderPickupDate: cart[0]?.pickupDate,
+        orderPickupTime: cart[0]?.pickupTime,
+        orderPincode: cart[0]?.pincode || 'N/A'
+    };
+    if (window.currentUser && !window.currentUser.firstOrderPlaced && coinsToApply === 0) {
+        let subtotalCalc = 0;
+        cart.forEach(item => {
+            subtotalCalc += item.price;
+        });
+        const maxFirstOrderDiscount = Math.floor(subtotalCalc * 0.5);
+        const userAvailableCoins = availableCoins || 0;
+        coinsToApply = Math.min(50, userAvailableCoins, maxFirstOrderDiscount);
+        const coinsInput = document.getElementById('coins-to-apply');
+        if (coinsInput) coinsInput.value = coinsToApply;
+    }
+    displayCheckoutSummary(cart);
+}
+
+function updateNavbarForLoggedInUser(userData) {
+    const navbarAuth = document.getElementById('navbar-auth');
+    if (!navbarAuth) {
+         return; 
+    }
+    let notificationsHtml = '';
+    if (userData.role === 'customer') {
+        notificationsHtml = `
             <li class="nav-item dropdown">
                 <a class="nav-link dropdown-toggle" href="#" id="notificationDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                     <i class="fas fa-bell"></i>
@@ -257,48 +1617,210 @@ let currentUser=null,allEquipmentData=[],selectedEquipment={},isAuthInitialized=
                     </a></li>
                 </ul>
             </li>
-        `,checkCustomerNotifications());let i=`
-        ${a}
+        `;
+        checkCustomerNotifications();
+    }
+    let dropdownHtml = `
+        ${notificationsHtml}
         <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
-                <i class="fas fa-user-circle me-1"></i> ${e.name||"User"}
+                <i class="fas fa-user-circle me-1"></i> ${userData.name || 'User'}
             </a>
             <ul class="dropdown-menu">
                 <li><a class="dropdown-item" href="profile.html"><i class="fas fa-user me-2"></i>Profile</a></li>
                 <li><a class="dropdown-item" href="orders.html"><i class="fas fa-clipboard-list me-2"></i>My Orders</a></li>
-    `;"seller"===e.role&&(i+='<li><a class="dropdown-item" href="seller.html"><i class="fas fa-store me-2"></i>Seller Dashboard</a></li>'),"admin"===e.role&&(i+='<li><a class="dropdown-item" href="admin.html"><i class="fas fa-user-shield me-2"></i>Admin Panel</a></li>'),i+=`
+    `;
+    if (userData.role === 'seller') {
+        dropdownHtml += '<li><a class="dropdown-item" href="seller.html"><i class="fas fa-store me-2"></i>Seller Dashboard</a></li>';
+    }
+    if (userData.role === 'admin') {
+        dropdownHtml += '<li><a class="dropdown-item" href="admin.html"><i class="fas fa-user-shield me-2"></i>Admin Panel</a></li>';
+    }
+    dropdownHtml += `
                 <li><hr class="dropdown-divider"></li>
                 <li><a class="dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
             </ul>
         </li>
-    `,t.innerHTML="",t.insertAdjacentHTML("afterbegin",i)}async function markCustomerNotificationsAsRead(){if(window.currentUser&&window.FirebaseDB&&"customer"===window.currentUser.role)try{let e=getCustomerNotificationRef(window.currentUser.uid);await e.set({lastClearTime:firebase.firestore.FieldValue.serverTimestamp()},{merge:!0}),lastClearTime=Date.now();let t=document.getElementById("customer-notification-count");t&&(t.textContent="");let a=document.getElementById("customer-notifications-list");a&&(a.innerHTML='<li><h6 class="dropdown-header">Alerts & Updates</h6></li><li><a class="dropdown-item text-center text-muted" href="#">All caught up! (Database Updated)</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center" href="orders.html">View All Orders</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()"><i class="fas fa-check-double me-1"></i> Clear Alerts</a></li>');let i=document.getElementById("notificationDropdown"),r=bootstrap.Dropdown.getInstance(i);r&&r.hide(),window.firebaseHelpers.showAlert("Notifications cleared and status saved to database.","success")}catch(s){window.firebaseHelpers.showAlert("Failed to save read status. Please try again.","danger")}}async function checkCustomerNotifications(){if(window.currentUser&&"customer"===window.currentUser.role&&window.FirebaseDB)try{await loadLastClearTime();let e="undefined"!=typeof __app_id?__app_id:"default-app-id",t=window.FirebaseDB.collection("artifacts").doc(e).collection("public").doc("data").collection("orders"),a=await t.where("userId","==",window.currentUser.uid).orderBy("updatedAt","desc").limit(10).get(),i=[],r=0,s=0,n=lastClearTime;a.forEach(e=>{let t=e.data(),a="",s="fas fa-info-circle",l="bg-warning";if("pending"===t.status)a=`Order #${e.id.substring(0,8)} is pending seller confirmation.`,s="fas fa-clock",l="bg-warning";else if("active"===t.status)a=`Order #${e.id.substring(0,8)} confirmed! Ready for pickup.`,s="fas fa-check-circle",l="bg-success";else if("cancelled"===t.status||"rejected"===t.status)a=`Order #${e.id.substring(0,8)} has been cancelled/rejected.`,s="fas fa-ban",l="bg-danger";else{if("returned"!==t.status)return;a=`Order #${e.id.substring(0,8)} equipment returned. Final review pending.`,s="fas fa-undo-alt",l="bg-info"}let o=t.updatedAt?.toMillis()||t.createdAt?.toMillis()||0,c=o>n;c&&r++,i.push({id:e.id,message:a,icon:s,badgeClass:l,date:t.updatedAt||t.createdAt,status:t.status,isUnread:c})});let l=await window.FirebaseDB.collection("artifacts").doc(e).collection("public").doc("data").collection("conversations").where("customerId","==",window.currentUser.uid).get();l.forEach(e=>{let t=e.data();s+=t.unreadCountCustomer||0,t.unreadCountCustomer>0&&i.push({id:e.id,type:"new_chat_message",message:`New message from ${t.sellerBusinessName}: ${t.lastMessage.substring(0,20)}...`,icon:"fas fa-comment-dots",badgeClass:"bg-info",date:t.updatedAt,status:"chat_unread",isUnread:!0})}),i.sort((e,t)=>(t.date?.toMillis()||0)-(e.date?.toMillis()||0));let o=r+s,c=document.getElementById("customer-notification-count"),d=document.getElementById("customer-notifications-list"),u=i.slice(0,5);c&&(c.textContent=window.currentUser&&o>0?o:""),d&&(d.innerHTML='<li><h6 class="dropdown-header">Alerts & Updates</h6></li>'),0===u.length?d&&(d.innerHTML+='<li><a class="dropdown-item text-center text-muted" href="#">No recent alerts.</a></li>'):u.forEach(e=>{let t=e.date?window.firebaseHelpers.formatTimeAgo(e.date):"N/A",a=e.isUnread?"fw-bold":"text-muted";if("chat_unread"===e.status){let i=e.id.split("_"),r=i[0],s=i[1],n=e.message.split(":")[0].replace("New message from ","").trim(),l=`openOrderChat('${r}', '${s}', '${n}')`;d&&(d.innerHTML+=`
+    `;
+    navbarAuth.innerHTML = ''; // Clear existing content before inserting
+    navbarAuth.insertAdjacentHTML('afterbegin', dropdownHtml);
+}
+
+async function markCustomerNotificationsAsRead() {
+    if (!window.currentUser || !window.FirebaseDB || window.currentUser.role !== 'customer') return;
+    try {
+        const docRef = getCustomerNotificationRef(window.currentUser.uid);
+        await docRef.set({
+            lastClearTime: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        lastClearTime = Date.now();
+        const countElement = document.getElementById('customer-notification-count');
+        if (countElement) {
+            countElement.textContent = '';
+        }
+        const listElement = document.getElementById('customer-notifications-list');
+        if (listElement) {
+             listElement.innerHTML = '<li><h6 class="dropdown-header">Alerts & Updates</h6></li><li><a class="dropdown-item text-center text-muted" href="#">All caught up! (Database Updated)</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center" href="orders.html">View All Orders</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()"><i class="fas fa-check-double me-1"></i> Clear Alerts</a></li>';
+        }
+        const dropdownToggle = document.getElementById('notificationDropdown');
+        const dropdown = bootstrap.Dropdown.getInstance(dropdownToggle);
+        if (dropdown) {
+            dropdown.hide();
+        }
+        window.firebaseHelpers.showAlert('Notifications cleared and status saved to database.', 'success');
+    } catch (error) {
+        window.firebaseHelpers.showAlert('Failed to save read status. Please try again.', 'danger');
+    }
+}
+window.markCustomerNotificationsAsRead = markCustomerNotificationsAsRead;
+
+async function checkCustomerNotifications() {
+    if (!window.currentUser || window.currentUser.role !== 'customer' || !window.FirebaseDB) return;
+    try {
+        await loadLastClearTime(); 
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
+        const ordersSnapshot = await ordersCollectionRef
+            .where('userId', '==', window.currentUser.uid)
+            .orderBy('updatedAt', 'desc')
+            .limit(10)
+            .get();
+        const notifications = [];
+        let orderUnreadCount = 0; 
+        let chatUnreadCount = 0;
+        const unreadThreshold = lastClearTime;
+        ordersSnapshot.forEach(doc => {
+            const order = doc.data();
+            let message = '';
+            let icon = 'fas fa-info-circle';
+            let badgeClass = 'bg-warning';
+            if (order.status === 'pending') {
+                message = `Order #${doc.id.substring(0, 8)} is pending seller confirmation.`;
+                icon = 'fas fa-clock';
+                badgeClass = 'bg-warning';
+            } else if (order.status === 'active') {
+                message = `Order #${doc.id.substring(0, 8)} confirmed! Ready for pickup.`;
+                icon = 'fas fa-check-circle';
+                badgeClass = 'bg-success';
+            } else if (order.status === 'cancelled' || order.status === 'rejected') {
+                message = `Order #${doc.id.substring(0, 8)} has been cancelled/rejected.`;
+                icon = 'fas fa-ban';
+                badgeClass = 'bg-danger';
+            } else if (order.status === 'returned') {
+                message = `Order #${doc.id.substring(0, 8)} equipment returned. Final review pending.`;
+                icon = 'fas fa-undo-alt';
+                badgeClass = 'bg-info';
+            } else {
+                return;
+            }
+            const orderTimestamp = order.updatedAt?.toMillis() || order.createdAt?.toMillis() || 0; 
+            const isAlert = orderTimestamp > unreadThreshold;
+            if (isAlert) {
+                 orderUnreadCount++;
+            }
+            notifications.push({
+                id: doc.id,
+                message,
+                icon,
+                badgeClass,
+                date: order.updatedAt || order.createdAt,
+                status: order.status,
+                isUnread: isAlert
+            });
+        });
+        const conversationsSnapshot = await window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations')
+            .where('customerId', '==', window.currentUser.uid)
+            .get();
+        conversationsSnapshot.forEach(doc => {
+            const chat = doc.data();
+            chatUnreadCount += chat.unreadCountCustomer || 0;
+            if (chat.unreadCountCustomer > 0) {
+                 notifications.push({
+                    id: doc.id,
+                    type: 'new_chat_message',
+                    message: `New message from ${chat.sellerBusinessName}: ${chat.lastMessage.substring(0, 20)}...`,
+                    icon: 'fas fa-comment-dots',
+                    badgeClass: 'bg-info',
+                    date: chat.updatedAt,
+                    status: 'chat_unread',
+                    isUnread: true 
+                 });
+            }
+        });
+        notifications.sort((a, b) => (b.date?.toMillis() || 0) - (a.date?.toMillis() || 0));
+        const totalUnreadCount = orderUnreadCount + chatUnreadCount;
+        const countElement = document.getElementById('customer-notification-count');
+        const listElement = document.getElementById('customer-notifications-list');
+        const criticalNotifications = notifications.slice(0, 5); 
+        if (countElement) {
+             countElement.textContent = window.currentUser && totalUnreadCount > 0 ? totalUnreadCount : '';
+        }
+        if (listElement) listElement.innerHTML = '<li><h6 class="dropdown-header">Alerts & Updates</h6></li>';
+        if (criticalNotifications.length === 0) {
+             if (listElement) listElement.innerHTML += '<li><a class="dropdown-item text-center text-muted" href="#">No recent alerts.</a></li>';
+        } else {
+            criticalNotifications.forEach(notif => {
+                const timeAgo = notif.date ? window.firebaseHelpers.formatTimeAgo(notif.date) : 'N/A';
+                const unreadClass = notif.isUnread ? 'fw-bold' : 'text-muted'; 
+                if (notif.status === 'chat_unread') {
+                    const parts = notif.id.split('_');
+                    const orderId = parts[0];
+                    const sellerId = parts[1];
+                    const sellerName = notif.message.split(':')[0].replace('New message from ', '').trim();
+                    const chatAction = `openOrderChat('${orderId}', '${sellerId}', '${sellerName}')`;
+                    if (listElement) listElement.innerHTML += `
                         <li>
-                            <a class="dropdown-item d-flex justify-content-between align-items-center ${a}" href="#" onclick="${l}" title="${e.message}">
+                            <a class="dropdown-item d-flex justify-content-between align-items-center ${unreadClass}" href="#" onclick="${chatAction}" title="${notif.message}">
                                 <div>
-                                    <span class="badge ${e.badgeClass} me-2"><i class="${e.icon}"></i></span>
-                                    ${e.message.substring(0,30)}...
+                                    <span class="badge ${notif.badgeClass} me-2"><i class="${notif.icon}"></i></span>
+                                    ${notif.message.substring(0, 30)}...
                                 </div>
-                                <small class="text-muted ms-2">${t}</small>
+                                <small class="text-muted ms-2">${timeAgo}</small>
                             </a>
                         </li>
-                    `);return}d&&(d.innerHTML+=`
+                    `;
+                    return;
+                }
+                if (listElement) listElement.innerHTML += `
                     <li>
-                        <a class="dropdown-item d-flex justify-content-between align-items-center ${a}" href="orders.html" title="${e.message}">
+                        <a class="dropdown-item d-flex justify-content-between align-items-center ${unreadClass}" href="orders.html" title="${notif.message}">
                             <div>
-                                <span class="badge ${e.badgeClass} me-2"><i class="${e.icon}"></i></span>
-                                ${e.message.substring(0,30)}...
+                                <span class="badge ${notif.badgeClass} me-2"><i class="${notif.icon}"></i></span>
+                                ${notif.message.substring(0, 30)}...
                             </div>
-                            <small class="text-muted ms-2">${t}</small>
+                            <small class="text-muted ms-2">${timeAgo}</small>
                         </a>
                     </li>
-                `)}),d&&(d.innerHTML+=`
+                `;
+            });
+        }
+        if (listElement) {
+             listElement.innerHTML += `
                 <li><hr class="dropdown-divider"></li>
                 <li><a class="dropdown-item text-center" href="orders.html">View All Orders</a></li>
                 <li><hr class="dropdown-divider"></li>
                 <li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()">
                     <i class="fas fa-check-double me-1"></i> Clear Alerts
                 </a></li>
-            `)}catch(m){let p=document.getElementById("customer-notification-count");p&&(p.textContent="");let f=document.getElementById("customer-notifications-list");f&&(f.innerHTML='<li><h6 class="dropdown-header">Alerts & Updates</h6></li><li><a class="dropdown-item text-center text-danger" href="#">Error loading alerts.</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()"><i class="fas fa-check-double me-1"></i> Clear Alerts</a></li>')}}function updateNavbarForLoggedOutUser(){let e=document.getElementById("navbar-auth");e&&(e.innerHTML=`
+            `;
+        }
+    } catch (error) {
+        const countElement = document.getElementById('customer-notification-count');
+        if (countElement) countElement.textContent = '';
+        const listElement = document.getElementById('customer-notifications-list');
+        if (listElement) {
+             listElement.innerHTML = '<li><h6 class="dropdown-header">Alerts & Updates</h6></li><li><a class="dropdown-item text-center text-danger" href="#">Error loading alerts.</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-center text-primary small" href="#" onclick="markCustomerNotificationsAsRead()"><i class="fas fa-check-double me-1"></i> Clear Alerts</a></li>';
+        }
+    }
+}
+
+function updateNavbarForLoggedOutUser() {
+    const navbarAuth = document.getElementById('navbar-auth');
+    if (!navbarAuth) {
+         return; 
+    }
+    // FIX: Update Login button to point to central auth page
+    navbarAuth.innerHTML = `
         <li class="nav-item dropdown" id="role-dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="roleDropdown" role="button" data-bs-toggle="dropdown">
                 <i class="fas fa-user-tag me-1"></i> Sign Up As
@@ -314,75 +1836,252 @@ let currentUser=null,allEquipmentData=[],selectedEquipment={},isAuthInitialized=
                 <i class="fas fa-sign-in-alt me-1"></i> Login
             </a>
         </li>
-    `)}async function loadHomepageData(){try{await loadCategories(),await loadFeaturedEquipment(),await loadStats(),loadHowItWorks(),await loadTestimonials(),await loadPopularEquipmentFooter(),updateHomepagePincodeDisplay()}catch(e){}}async function loadNavbarCategories(){try{let e=await window.FirebaseDB.collection("equipment").where("status","==","approved").get(),t={};e.forEach(e=>{let a=e.data();if(a.category){let i=a.category.charAt(0).toUpperCase()+a.category.slice(1);t[i]||(t[i]={name:i,icon:getCategoryIcon(a.category),count:0}),t[i].count++}});let a=Object.values(t);a.sort((e,t)=>e.name.localeCompare(t.name));let i=document.getElementById("navbar-categories-menu");if(!i)return;if(i.innerHTML="",0===a.length){i.innerHTML='<li><a class="dropdown-item disabled">No categories found</a></li>';return}a.slice(0,8).forEach(e=>{let t=document.createElement("li");t.innerHTML=`
-                <a class="dropdown-item d-flex align-items-center" href="browse.html?category=${e.name.toLowerCase()}">
-                    <i class="${e.icon||"fas fa-tools"} me-2"></i>
-                    ${e.name}
-                    <span class="badge bg-primary ms-auto">${e.count}</span>
+    `;
+}
+
+async function loadHomepageData() {
+    try {
+        await loadCategories();
+        await loadFeaturedEquipment();
+        await loadStats();
+        loadHowItWorks();
+        await loadTestimonials();
+        await loadPopularEquipmentFooter();
+        updateHomepagePincodeDisplay();
+    } catch (error) {}
+}
+
+async function loadNavbarCategories() {
+    try {
+        const equipmentSnapshot = await window.FirebaseDB.collection('equipment')
+            .where('status', '==', 'approved')
+            .get();
+        const categoryMap = {};
+        equipmentSnapshot.forEach(doc => {
+            const equipment = doc.data();
+            if (equipment.category) {
+                const categoryName = equipment.category.charAt(0).toUpperCase() + equipment.category.slice(1);
+                if (!categoryMap[categoryName]) {
+                    categoryMap[categoryName] = {
+                        name: categoryName,
+                        icon: getCategoryIcon(equipment.category),
+                        count: 0
+                    };
+                }
+                categoryMap[categoryName].count++;
+            }
+        });
+        const categories = Object.values(categoryMap);
+        categories.sort((a, b) => a.name.localeCompare(b.name));
+        const navbarMenu = document.getElementById('navbar-categories-menu');
+        if (!navbarMenu) return; 
+        navbarMenu.innerHTML = '';
+        if (categories.length === 0) {
+            navbarMenu.innerHTML = '<li><a class="dropdown-item disabled">No categories found</a></li>';
+            return;
+        }
+        categories.slice(0, 8).forEach(category => {
+            const listItem = document.createElement('li');
+            listItem.innerHTML = `
+                <a class="dropdown-item d-flex align-items-center" href="browse.html?category=${category.name.toLowerCase()}">
+                    <i class="${category.icon || 'fas fa-tools'} me-2"></i>
+                    ${category.name}
+                    <span class="badge bg-primary ms-auto">${category.count}</span>
                 </a>
-            `,i.appendChild(t)});let r=document.createElement("li");r.innerHTML=`
+            `;
+            navbarMenu.appendChild(listItem);
+        });
+        const viewAllItem = document.createElement('li');
+        viewAllItem.innerHTML = `
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item text-center text-primary" href="browse.html">
                 <i class="fas fa-eye me-2"></i>View All Categories
             </a></li>
-        `,i.appendChild(r)}catch(s){let n=document.getElementById("navbar-categories-menu");n&&(n.innerHTML='<li><a class="dropdown-item disabled text-danger">Error loading categories</a></li>')}}async function loadCategories(){try{let e=await window.FirebaseDB.collection("equipment").where("status","==","approved").get(),t={};e.forEach(e=>{let a=e.data();if(a.category){let i=a.category.charAt(0).toUpperCase()+a.category.slice(1);t[i]||(t[i]={name:i,icon:getCategoryIcon(a.category),count:0}),t[i].count++}});let a=Object.values(t);a.sort((e,t)=>e.name.localeCompare(t.name));let i=document.getElementById("categories-container");if(!i)return;if(i.innerHTML="",0===a.length){i.innerHTML='<div class="col-12 text-center"><p>No equipment or categories found.</p></div>';return}a.slice(0,6).forEach(e=>{let t=document.createElement("div");t.className="col-md-4 col-sm-6 mb-4",t.innerHTML=`
+        `;
+        navbarMenu.appendChild(viewAllItem);
+    } catch (error) {
+        const navbarMenu = document.getElementById('navbar-categories-menu');
+        if (navbarMenu) {
+            navbarMenu.innerHTML = '<li><a class="dropdown-item disabled text-danger">Error loading categories</a></li>';
+        }
+    }
+}
+
+async function loadCategories() {
+    try {
+        const equipmentSnapshot = await window.FirebaseDB.collection('equipment')
+            .where('status', '==', 'approved')
+            .get();
+        const categoryMap = {};
+        equipmentSnapshot.forEach(doc => {
+            const equipment = doc.data();
+            if (equipment.category) {
+                const categoryName = equipment.category.charAt(0).toUpperCase() + equipment.category.slice(1);
+                if (!categoryMap[categoryName]) {
+                    categoryMap[categoryName] = {
+                        name: categoryName,
+                        icon: getCategoryIcon(equipment.category),
+                        count: 0
+                    };
+                }
+                categoryMap[categoryName].count++;
+            }
+        });
+        const categories = Object.values(categoryMap);
+        categories.sort((a, b) => a.name.localeCompare(b.name));
+        const container = document.getElementById('categories-container');
+        if (!container) return; 
+        container.innerHTML = '';
+        if (categories.length === 0) {
+            container.innerHTML = '<div class="col-12 text-center"><p>No equipment or categories found.</p></div>';
+            return;
+        }
+        categories.slice(0, 6).forEach(category => {
+            const col = document.createElement('div');
+            col.className = 'col-md-4 col-sm-6 mb-4';
+            col.innerHTML = `
                 <div class="card category-card text-center p-4 h-100">
                     <div class="category-icon">
-                        <i class="${e.icon||"fas fa-question-circle"}"></i>
+                        <i class="${category.icon || 'fas fa-question-circle'}"></i>
                     </div>
-                    <h5>${e.name}</h5>
-                    <p class="text-muted">${e.count} items available</p>
-                    <a href="browse.html?category=${e.name.toLowerCase()}" class="btn btn-outline-primary mt-auto">View Equipment</a>
+                    <h5>${category.name}</h5>
+                    <p class="text-muted">${category.count} items available</p>
+                    <a href="browse.html?category=${category.name.toLowerCase()}" class="btn btn-outline-primary mt-auto">View Equipment</a>
                 </div>
-            `,i.appendChild(t)})}catch(r){}}async function loadStats(){try{let e=document.getElementById("stats-container");if(!e)return;let t=await window.FirebaseDB.collection("stats").doc("platform").get(),a=t.exists?t.data():{happyFarmers:500,districtsCovered:25,acresServed:5e4,supportHours:"24/7"};e.innerHTML=`
+            `;
+            container.appendChild(col);
+        });
+    } catch (error) {}
+}
+
+async function loadStats() {
+    try {
+        const container = document.getElementById('stats-container');
+        if (!container) return; 
+        const statsSnapshot = await window.FirebaseDB.collection('stats').doc('platform').get();
+        const stats = statsSnapshot.exists ? statsSnapshot.data() : {
+            happyFarmers: 500,
+            districtsCovered: 25,
+            acresServed: 50000,
+            supportHours: '24/7'
+        };
+        container.innerHTML = `
             <div class="col-md-3 col-6">
                 <div class="stat-item">
-                    <div class="stat-number">${a.happyFarmers}+</div>
+                    <div class="stat-number">${stats.happyFarmers}+</div>
                     <div class="stat-label">Happy Farmers</div>
                 </div>
             </div>
             <div class="col-md-3 col-6">
                 <div class="stat-item">
-                    <div class="stat-number">${a.districtsCovered}+</div>
+                    <div class="stat-number">${stats.districtsCovered}+</div>
                     <div class="stat-label">Districts Covered</div>
                 </div>
             </div>
             <div class="col-md-3 col-6">
                 <div class="stat-item">
-                    <div class="stat-number">${a.acresServed}+</div>
+                    <div class="stat-number">${stats.acresServed}+</div>
                     <div class="stat-label">Acres Served</div>
                 </div>
             </div>
             <div class="col-md-3 col-6">
                 <div class="stat-item">
-                    <div class="stat-number">${a.supportHours}</div>
+                    <div class="stat-number">${stats.supportHours}</div>
                     <div class="stat-label">Farmer Support</div>
                 </div>
             </div>
-        `}catch(i){}}function loadHowItWorks(){let e=document.getElementById("how-it-works-container");if(!e)return;e.innerHTML=[{icon:"fas fa-search",title:"Browse & Select",description:"Choose from our wide range of farming equipment. Filter by type, capacity, or location."},{icon:"fas fa-calendar-check",title:"Book Date & Confirm",description:"Select rental acres/hours, **set your required pickup date/time**, add to cart, and confirm your booking with easy payment options."},{icon:"fas fa-hand-paper",title:"Pickup & Use",description:"Self-pickup the equipment from the seller's location on your selected date/time. Fully serviced and ready for your farming needs."}].map(e=>`
+        `;
+    } catch (error) {}
+}
+
+function loadHowItWorks() {
+    const container = document.getElementById('how-it-works-container');
+    if (!container) return;
+    const steps = [
+        {
+            icon: 'fas fa-search',
+            title: 'Browse & Select',
+            description: 'Choose from our wide range of farming equipment. Filter by type, capacity, or location.'
+        },
+        {
+            icon: 'fas fa-calendar-check',
+            title: 'Book Date & Confirm',
+            description: 'Select rental acres/hours, **set your required pickup date/time**, add to cart, and confirm your booking with easy payment options.'
+        },
+        {
+            icon: 'fas fa-hand-paper',
+            title: 'Pickup & Use',
+            description: 'Self-pickup the equipment from the seller\'s location on your selected date/time. Fully serviced and ready for your farming needs.'
+        }
+    ];
+    container.innerHTML = steps.map(step => `
         <div class="col-md-4">
             <div class="process-step">
                 <div class="step-icon">
-                    <i class="${e.icon}"></i>
+                    <i class="${step.icon}"></i>
                 </div>
-                <h4>${e.title}</h4>
-                <p>${e.description}</p>
+                <h4>${step.title}</h4>
+                <p>${step.description}</p>
             </div>
         </div>
-    `).join("");let t=e.querySelectorAll(".process-step");if(t.length>=3){let a=t[2].querySelector(".step-icon");a&&(a.style.background="linear-gradient(135deg, #1e4a1e, var(--farm-green))")}}async function loadTestimonials(){try{let e=document.getElementById("testimonials-container");if(!e)return;let t=await window.FirebaseDB.collection("testimonials").where("approved","==",!0).limit(3).get();if(t.empty){e.innerHTML=getDefaultTestimonials();return}e.innerHTML="",t.forEach(t=>{let a=t.data(),i=document.createElement("div");i.className="col-md-4 mb-4",i.innerHTML=createTestimonialCard(a),e.appendChild(i)})}catch(a){let i=document.getElementById("testimonials-container");i&&(i.innerHTML=getDefaultTestimonials())}}function createTestimonialCard(e){let t=e.customerName?e.customerName.split(" ").map(e=>e[0]).join("").toUpperCase():"CU";return`
+    `).join('');
+    const processSteps = container.querySelectorAll('.process-step');
+    if (processSteps.length >= 3) {
+        const thirdStepIcon = processSteps[2].querySelector('.step-icon');
+        if (thirdStepIcon) {
+            thirdStepIcon.style.background = 'linear-gradient(135deg, #1e4a1e, var(--farm-green))';
+        }
+    }
+}
+
+async function loadTestimonials() {
+    try {
+        const container = document.getElementById('testimonials-container');
+        if (!container) return; 
+        const snapshot = await window.FirebaseDB.collection('testimonials')
+            .where('approved', '==', true)
+            .limit(3)
+            .get();
+        if (snapshot.empty) {
+            container.innerHTML = getDefaultTestimonials();
+            return;
+        }
+        container.innerHTML = '';
+        snapshot.forEach(doc => {
+            const testimonial = doc.data();
+            const col = document.createElement('div');
+            col.className = 'col-md-4 mb-4';
+            col.innerHTML = createTestimonialCard(testimonial);
+            container.appendChild(col);
+        });
+    } catch (error) {
+        const container = document.getElementById('testimonials-container');
+        if (container) {
+            container.innerHTML = getDefaultTestimonials();
+        }
+    }
+}
+
+function createTestimonialCard(testimonial) {
+    const initials = testimonial.customerName ? testimonial.customerName.split(' ').map(n => n[0]).join('').toUpperCase() : 'CU';
+    return `
         <div class="testimonial-card h-100">
             <div class="testimonial-text">
-                "${e.comment}"
+                "${testimonial.comment}"
             </div>
             <div class="client-info">
-                <div class="client-avatar">${t}</div>
+                <div class="client-avatar">${initials}</div>
                 <div>
-                    <h5 class="mb-0">${e.customerName||"Customer"}</h5>
-                    <small class="text-muted">${e.location||"Farm Owner"}</small>
+                    <h5 class="mb-0">${testimonial.customerName || 'Customer'}</h5>
+                    <small class="text-muted">${testimonial.location || 'Farm Owner'}</small>
                 </div>
             </div>
         </div>
-    `}function getDefaultTestimonials(){return`
+    `;
+}
+
+function getDefaultTestimonials() {
+    return `
         <div class="col-md-4">
             <div class="testimonial-card">
                 <div class="testimonial-text">
@@ -425,211 +2124,907 @@ let currentUser=null,allEquipmentData=[],selectedEquipment={},isAuthInitialized=
                 </div>
             </div>
         </div>
-    `}async function loadPopularEquipmentFooter(){try{let e=document.getElementById("popular-equipment-footer");if(!e)return;let t=await window.FirebaseDB.collection("equipment").where("status","==","approved").orderBy("rentalCount","desc").limit(4).get();if(t.empty){e.innerHTML=`
+    `;
+}
+
+async function loadPopularEquipmentFooter() {
+    try {
+        const container = document.getElementById('popular-equipment-footer');
+        if (!container) return; 
+        const snapshot = await window.FirebaseDB.collection('equipment')
+            .where('status', '==', 'approved')
+            .orderBy('rentalCount', 'desc')
+            .limit(4)
+            .get();
+        if (snapshot.empty) {
+            container.innerHTML = `
                 <li><a href="browse.html?category=tractor" class="text-decoration-none text-light">Tractors</a></li>
                 <li><a href="browse.html?category=harvester" class="text-decoration-none text-light">Harvesters</a></li>
                 <li><a href="browse.html?category=spray" class="text-decoration-none text-light">Spray Machines</a></li>
                 <li><a href="browse.html?category=drone" class="text-decoration-none text-light">Agricultural Drones</a></li>
-            `;return}let a="";t.forEach(e=>{let t=e.data();a+=`<li><a href="item.html?id=${e.id}" class="text-decoration-none text-light">${t.name}</a></li>`}),e.innerHTML=a}catch(i){}}async function subscribeNewsletter(){let e=document.getElementById("newsletter-email"),t=e.value.trim();if(!t||!validateEmail(t)){window.firebaseHelpers.showAlert("Please enter a valid email address","warning");return}try{let a="undefined"!=typeof __app_id?__app_id:"default-app-id",i=window.FirebaseDB.collection("artifacts").doc(a).collection("public").doc("data").collection("newsletterSubscriptions");await i.add({email:t,subscribedAt:firebase.firestore.FieldValue.serverTimestamp(),active:!0}),window.firebaseHelpers.showAlert("Successfully subscribed to newsletter!","success"),e.value=""}catch(r){window.firebaseHelpers.showAlert("Error subscribing. Please try again.","danger")}}function validateEmail(e){return/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)}function initializeEventListeners(){loadNavbarCategories(),document.querySelectorAll('a[href^="#"]').forEach(e=>{e.addEventListener("click",function(e){let t=this.getAttribute("href");if("#"===t)return;e.preventDefault();let a=document.querySelector(t);a&&a.scrollIntoView({behavior:"smooth",block:"start"})})});let e=window.location.pathname.split("/").pop();if("auth.html"===e){let t=document.getElementById("pincode");t&&t.addEventListener("input",()=>{document.getElementById("signupCity").value="",document.getElementById("signupState").value="";let e=document.getElementById("signupVillage");e&&(e.innerHTML='<option value="">Enter Pincode Above</option>',e.disabled=!0),6===t.value.length&&window.populateLocationFields("pincode","signupVillage","signupCity","signupState","location-lookup-status")})}else if("profile.html"===e){let a=document.getElementById("profile-pincode");a&&a.addEventListener("input",()=>{if(window.currentUser&&"seller"===window.currentUser.role&&window.currentUser.pincode)return;document.getElementById("profile-city").value="",document.getElementById("profile-state").value="";let e=document.getElementById("profile-village");e&&(e.innerHTML='<option value="">Enter Pincode Above</option>',e.disabled=!0),6===a.value.length&&window.populateLocationFields("profile-pincode","profile-village","profile-city","profile-state","pincode-status-message")})}}async function loadCategoriesForFilter(){try{let e=await window.FirebaseDB.collection("equipment").where("status","==","approved").get(),t=new Set;e.forEach(e=>{let a=e.data();a.category&&t.add(a.category.toLowerCase())});let a=document.getElementById("category-filter");if(a){a.innerHTML='<option value="all">All Categories</option>';let i=Array.from(t).sort();i.forEach(e=>{let t=document.createElement("option");t.value=e,t.textContent=e.charAt(0).toUpperCase()+e.slice(1),a.appendChild(t)})}}catch(r){}}function getCategoryIcon(e){let t={tractor:"fas fa-tractor",harvester:"fas fa-dragon",cultivator:"fas fa-seedling",drone:"fas fa-helicopter",spray:"fas fa-spray-can",crane:"fas fa-crane",jcb:"fas fa-truck-pickup","grass-cutter":"fas fa-cut",trolley:"fas fa-truck-moving","water-tanker":"fas fa-truck-water",default:"fas fa-tools"};return t[e.toLowerCase()]||t.default}function filterEquipment(){let e=document.getElementById("search-input")?.value?.toLowerCase()||"",t=document.getElementById("category-filter")?.value||"all",a=document.getElementById("sort-by")?.value||"latest",i=allEquipmentData.filter(a=>{let i=a.name.toLowerCase().includes(e)||a.location.toLowerCase().includes(e)||a.description.toLowerCase().includes(e),r="all"===t||a.category.toLowerCase()===t;return i&&r});switch(a){case"price_asc":i.sort((e,t)=>(e.pricePerAcre||0)-(t.pricePerAcre||0));break;case"price_desc":i.sort((e,t)=>(t.pricePerAcre||0)-(e.pricePerAcre||0));break;default:i.sort((e,t)=>(t.createdAt?.toDate()||0)-(e.createdAt?.toDate()||0))}displayEquipmentGrid(i)}function displayEquipmentGrid(e){let t=document.getElementById("equipment-grid");if(!t)return;t.innerHTML="";let a=window.customerPincode||"N/A";if(0===e.length){let i="N/A"!==a?` in your Pincode area (${a})`:" without a location filter applied";t.innerHTML=`
+            `;
+            return;
+        }
+        let html = '';
+        snapshot.forEach(doc => {
+            const equipment = doc.data();
+            html += `<li><a href="item.html?id=${doc.id}" class="text-decoration-none text-light">${equipment.name}</a></li>`;
+        });
+        container.innerHTML = html;
+    } catch (error) {}
+}
+
+async function subscribeNewsletter() {
+    const emailInput = document.getElementById('newsletter-email');
+    const email = emailInput.value.trim();
+    if (!email || !validateEmail(email)) {
+        window.firebaseHelpers.showAlert('Please enter a valid email address', 'warning');
+        return;
+    }
+    try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const newsletterRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('newsletterSubscriptions');
+        await newsletterRef.add({
+            email: email,
+            subscribedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            active: true
+        });
+        window.firebaseHelpers.showAlert('Successfully subscribed to newsletter!', 'success');
+        emailInput.value = '';
+    } catch (error) {
+        window.firebaseHelpers.showAlert('Error subscribing. Please try again.', 'danger');
+    }
+}
+window.subscribeNewsletter = subscribeNewsletter;
+
+function validateEmail(email) {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(email);
+}
+
+function initializeEventListeners() {
+    loadNavbarCategories();
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            const href = this.getAttribute('href');
+            if (href === "#") return;
+            e.preventDefault();
+            const target = document.querySelector(href);
+            if (target) {
+                target.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }
+        });
+    });
+    const path = window.location.pathname.split('/').pop();
+    if (path === 'auth.html') {
+        const pincodeInput = document.getElementById('pincode');
+        if (pincodeInput) {
+            pincodeInput.addEventListener('input', () => {
+                document.getElementById('signupCity').value = '';
+                document.getElementById('signupState').value = '';
+                const villageSelect = document.getElementById('signupVillage');
+                if(villageSelect) {
+                    villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
+                    villageSelect.disabled = true;
+                }
+                if (pincodeInput.value.length === 6) {
+                    window.populateLocationFields('pincode', 'signupVillage', 'signupCity', 'signupState', 'location-lookup-status');
+                }
+            });
+        }
+    } else if (path === 'profile.html') {
+        const pincodeInput = document.getElementById('profile-pincode');
+        if (pincodeInput) {
+            pincodeInput.addEventListener('input', () => {
+                if (window.currentUser && window.currentUser.role === 'seller' && window.currentUser.pincode) {
+                    return;
+                }
+                document.getElementById('profile-city').value = '';
+                document.getElementById('profile-state').value = '';
+                const villageSelect = document.getElementById('profile-village');
+                if(villageSelect) {
+                    villageSelect.innerHTML = '<option value="">Enter Pincode Above</option>';
+                    villageSelect.disabled = true;
+                }
+                if (pincodeInput.value.length === 6) {
+                    window.populateLocationFields('profile-pincode', 'profile-village', 'profile-city', 'profile-state', 'pincode-status-message');
+                }
+            });
+        }
+    } 
+}
+
+async function loadCategoriesForFilter() {
+    try {
+        const equipmentSnapshot = await window.FirebaseDB.collection('equipment')
+            .where('status', '==', 'approved')
+            .get();
+        const categorySet = new Set();
+        equipmentSnapshot.forEach(doc => {
+            const equipment = doc.data();
+            if (equipment.category) {
+                categorySet.add(equipment.category.toLowerCase());
+            }
+        });
+        const filterSelect = document.getElementById('category-filter');
+        if (filterSelect) {
+            filterSelect.innerHTML = '<option value="all">All Categories</option>';
+            const sortedCategories = Array.from(categorySet).sort();
+            sortedCategories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category.charAt(0).toUpperCase() + category.slice(1); 
+                filterSelect.appendChild(option);
+            });
+        }
+    } catch (error) {}
+}
+
+function getCategoryIcon(categoryName) {
+    const icons = {
+        'tractor': 'fas fa-tractor',
+        'harvester': 'fas fa-dragon',
+        'cultivator': 'fas fa-seedling',
+        'drone': 'fas fa-helicopter',
+        'spray': 'fas fa-spray-can',
+        'crane': 'fas fa-crane',
+        'jcb': 'fas fa-truck-pickup',
+        'grass-cutter': 'fas fa-cut',
+        'trolley': 'fas fa-truck-moving',
+        'water-tanker': 'fas fa-truck-water',
+        'default': 'fas fa-tools'
+    };
+    return icons[categoryName.toLowerCase()] || icons.default;
+}
+
+function filterEquipment() {
+    const searchTerm = document.getElementById('search-input')?.value?.toLowerCase() || '';
+    const categoryFilter = document.getElementById('category-filter')?.value || 'all';
+    const sortBy = document.getElementById('sort-by')?.value || 'latest';
+    let filteredList = allEquipmentData.filter(equipment => {
+        const matchesSearch = equipment.name.toLowerCase().includes(searchTerm) || 
+                              equipment.location.toLowerCase().includes(searchTerm) ||
+                              equipment.description.toLowerCase().includes(searchTerm);
+        const matchesCategory = categoryFilter === 'all' || equipment.category.toLowerCase() === categoryFilter;
+        return matchesSearch && matchesCategory;
+    });
+    switch (sortBy) {
+        case 'price_asc':
+            filteredList.sort((a, b) => (a.pricePerAcre || 0) - (b.pricePerAcre || 0));
+            break;
+        case 'price_desc':
+            filteredList.sort((a, b) => (b.pricePerAcre || 0) - (a.pricePerAcre || 0));
+            break;
+        case 'latest':
+        default:
+            filteredList.sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+            break;
+    }
+    displayEquipmentGrid(filteredList);
+}
+window.filterEquipment = filterEquipment;
+
+function displayEquipmentGrid(equipmentList) {
+    const container = document.getElementById('equipment-grid');
+    if (!container) return;
+    container.innerHTML = '';
+    const pincode = window.customerPincode || 'N/A';
+    if (equipmentList.length === 0) {
+        const pincodeText = pincode !== 'N/A' ? ` in your Pincode area (${pincode})` : ' without a location filter applied';
+        container.innerHTML = `
             <div class="col-12 text-center py-5">
                 <i class="fas fa-search-minus fa-3x text-muted mb-3"></i>
-                <p class="mt-3">No equipment found${i}.</p>
+                <p class="mt-3">No equipment found${pincodeText}.</p>
                 <p class="text-muted small">Try selecting "All Locations" or changing your Pincode.</p>
                 <a href="#" class="btn btn-primary mt-3" onclick="showPincodeModal()">Set/Change Pincode Now</a>
             </div>
-        `;return}e.forEach(e=>{let a=document.createElement("div");a.className="col-lg-4 col-md-6 mb-4",a.innerHTML=createEquipmentCard(e,e.id,!0),t.appendChild(a)})}async function displayCartItems(e){!window.currentUser&&e.length>0&&window.firebaseHelpers.showAlert("You are viewing a non-persistent cart. Log in to save your cart items.","info");let t=document.getElementById("cart-items-container"),a=document.getElementById("cart-loading");if(a&&(a.style.display="none"),t&&(t.innerHTML=""),0===e.length){t&&(t.innerHTML=`
+        `;
+        return;
+    }
+    equipmentList.forEach(equipment => {
+        const col = document.createElement('div');
+        col.className = 'col-lg-4 col-md-6 mb-4';
+        col.innerHTML = createEquipmentCard(equipment, equipment.id, true); 
+        container.appendChild(col);
+    });
+}
+
+async function displayCartItems(cart) { 
+    if (!window.currentUser && cart.length > 0) {
+        window.firebaseHelpers.showAlert('You are viewing a non-persistent cart. Log in to save your cart items.', 'info');
+    }
+    const container = document.getElementById('cart-items-container');
+    const loadingElement = document.getElementById('cart-loading');
+    if (loadingElement) loadingElement.style.display = 'none';
+    if(container) container.innerHTML = '';
+    if (cart.length === 0) {
+        if(container) container.innerHTML = `
             <div class="text-center py-5">
                 <i class="fas fa-shopping-basket fa-3x text-muted mb-3"></i>
                 <h4>Your cart is empty</h4>
                 <p class="text-muted">Browse our equipment to find something to rent!</p>
                 <a href="browse.html" class="btn btn-primary mt-3">Start Browsing</a>
             </div>
-        `),updateCartSummary(0,0,0,!0);return}let i=0,r=document.getElementById("checkout-btn"),s=r&&r.disabled;e.forEach((e,a)=>{i+=e.price,t&&(t.innerHTML+=`
+        `;
+        updateCartSummary(0, 0, 0, true); 
+        return;
+    }
+    let subtotal = 0;
+    const checkoutBtn = document.getElementById('checkout-btn');
+    const isDisabled = checkoutBtn && checkoutBtn.disabled;
+    cart.forEach((item, index) => {
+        subtotal += item.price;
+        if(container) container.innerHTML += `
             <div class="d-flex align-items-center py-3 border-bottom">
-                <img src="${e.imageUrl||"https://placehold.co/80x80"}" class="rounded me-3" style="width: 80px; height: 80px; object-fit: cover;">
+                <img src="${item.imageUrl || 'https://placehold.co/80x80'}" class="rounded me-3" style="width: 80px; height: 80px; object-fit: cover;">
                 <div class="flex-grow-1">
-                    <h5 class="mb-0">${e.name}</h5>
-                    <p class="mb-0 small text-muted">Seller: ${e.businessName} (Pincode: ${e.pincode||"N/A"})</p>
+                    <h5 class="mb-0">${item.name}</h5>
+                    <p class="mb-0 small text-muted">Seller: ${item.businessName} (Pincode: ${item.pincode || 'N/A'})</p>
                     <p class="mb-0 small text-primary">
-                        ${e.rentalValue} ${"acre"===e.rentalType?"Acre(s)":"Hour(s)"}
-                        (@ ${window.firebaseHelpers.formatCurrency("acre"===e.rentalType?e.pricePerAcre:e.pricePerHour)}/${e.rentalType})
+                        ${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'}
+                        (@ ${window.firebaseHelpers.formatCurrency(item.rentalType === 'acre' ? item.pricePerAcre : item.pricePerHour)}/${item.rentalType})
                     </p>
                     <p class="mb-0 small text-danger">
-                        <i class="fas fa-calendar-check me-1"></i> Pickup: ${e.pickupDate} at ${e.pickupTime}
+                        <i class="fas fa-calendar-check me-1"></i> Pickup: ${item.pickupDate} at ${item.pickupTime}
                     </p>
                 </div>
                 <div class="text-end">
-                    <strong class="text-success h5">${window.firebaseHelpers.formatCurrency(e.price)}</strong>
-                    <button class="btn btn-sm btn-outline-danger d-block mt-2" onclick="removeItemFromCart(${a})">
+                    <strong class="text-success h5">${window.firebaseHelpers.formatCurrency(item.price)}</strong>
+                    <button class="btn btn-sm btn-outline-danger d-block mt-2" onclick="removeItemFromCart(${index})">
                         <i class="fas fa-trash"></i> Remove
                     </button>
                 </div>
             </div>
-        `)});let n=i*platformFeeRate,l=i+n;updateCartSummary(i,n,l,s)}async function removeItemFromCart(e){let t=await getCartFromFirestore();t.splice(e,1),await updateCartInFirestore(t),window.firebaseHelpers.showAlert("Item removed from cart.","info"),loadCartPage()}function updateCartSummary(e,t,a,i){let r=document.getElementById("cart-subtotal");r&&(r.textContent=window.firebaseHelpers.formatCurrency(e));let s=document.getElementById("cart-discount");s&&(s.textContent=window.firebaseHelpers.formatCurrency(0));let n=document.getElementById("cart-fees");n&&(n.textContent=window.firebaseHelpers.formatCurrency(t));let l=document.getElementById("cart-total");l&&(l.textContent=window.firebaseHelpers.formatCurrency(a));let o=document.getElementById("checkout-btn");o&&(o.disabled=i||0===a)}function displayCheckoutSummary(e){let t=document.getElementById("checkout-item-list");if(!t)return;t.innerHTML="";let a=0;e.forEach(e=>{a+=Number(e.price)||0});let i=document.getElementById("rental-details"),r=e[0];i&&r&&(i.value=`${r.rentalValue} ${"acre"===r.rentalType?"Acre(s)":"Hour(s)"} | Pickup: ${r.pickupDate} @ ${r.pickupTime}`),window.razorpayContext={...window.razorpayContext,orderPickupDate:r?.pickupDate,orderPickupTime:r?.pickupTime,items:e,subtotal:a};let s=e.length>0?e[0].pincode:"N/A";e.forEach(e=>{t.innerHTML+=`
+        `;
+    });
+    const fees = subtotal * platformFeeRate; 
+    const total = subtotal + fees;
+    updateCartSummary(subtotal, fees, total, isDisabled);
+}
+
+async function removeItemFromCart(index) {
+    let cart = await getCartFromFirestore(); 
+    cart.splice(index, 1);
+    await updateCartInFirestore(cart); 
+    window.firebaseHelpers.showAlert('Item removed from cart.', 'info');
+    loadCartPage();
+}
+window.removeItemFromCart = removeItemFromCart;
+
+function updateCartSummary(subtotal, fees, total, isDisabled) {
+    const subtotalEl = document.getElementById('cart-subtotal');
+    if (subtotalEl) subtotalEl.textContent = window.firebaseHelpers.formatCurrency(subtotal);
+    const discountEl = document.getElementById('cart-discount');
+    if (discountEl) discountEl.textContent = window.firebaseHelpers.formatCurrency(0); 
+    const feesEl = document.getElementById('cart-fees');
+    if (feesEl) feesEl.textContent = window.firebaseHelpers.formatCurrency(fees);
+    const totalEl = document.getElementById('cart-total');
+    if (totalEl) totalEl.textContent = window.firebaseHelpers.formatCurrency(total);
+    const checkoutEl = document.getElementById('checkout-btn');
+    if (checkoutEl) checkoutEl.disabled = isDisabled || total === 0;
+}
+
+function displayCheckoutSummary(cart) {
+    const listContainer = document.getElementById('checkout-item-list');
+    if (!listContainer) return;
+    listContainer.innerHTML = '';
+    let subtotal = 0;
+    cart.forEach(item => {
+        subtotal += Number(item.price) || 0;
+    });
+    const pickupDateInput = document.getElementById('rental-details');
+    const firstItem = cart[0];
+    if (pickupDateInput && firstItem) {
+        pickupDateInput.value = `${firstItem.rentalValue} ${firstItem.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'} | Pickup: ${firstItem.pickupDate} @ ${firstItem.pickupTime}`;
+    }
+    window.razorpayContext = {
+        ...window.razorpayContext,
+        orderPickupDate: firstItem?.pickupDate,
+        orderPickupTime: firstItem?.pickupTime,
+        items: cart,
+        subtotal: subtotal
+    };
+    const orderPincode = cart.length > 0 ? cart[0].pincode : 'N/A';
+    cart.forEach(item => {
+        listContainer.innerHTML += `
             <div class="order-item-card d-flex justify-content-between align-items-center">
                 <div>
-                    <strong>${e.name}</strong>
+                    <strong>${item.name}</strong>
                     <div class="small text-muted">
-                        ${e.rentalValue} ${e.rentalType} | By: ${e.businessName} (Pincode: ${e.pincode})
-                        <br><i class="fas fa-calendar-check me-1"></i> Pickup: ${e.pickupDate} @ ${e.pickupTime}
-                        <br><i class="fas fa-map-marked-alt me-1"></i> Address: ${e.sellerAddress}
+                        ${item.rentalValue} ${item.rentalType} | By: ${item.businessName} (Pincode: ${item.pincode})
+                        <br><i class="fas fa-calendar-check me-1"></i> Pickup: ${item.pickupDate} @ ${item.pickupTime}
+                        <br><i class="fas fa-map-marked-alt me-1"></i> Address: ${item.sellerAddress}
                     </div>
                 </div>
-                <strong class="text-success">${window.firebaseHelpers.formatCurrency(e.price)}</strong>
+                <strong class="text-success">${window.firebaseHelpers.formatCurrency(item.price)}</strong>
             </div>
-        `});let n=Math.floor(.5*a),l=Math.min(coinsToApply,availableCoins,n),o=l,c=a*platformFeeRate,d=a-o+c;if(d<1){let u=Math.abs(d-1);l=Math.max(0,l-Math.ceil(u));let m=l;d=a-m+c}d=Math.max(1,d),coinsToApply=l,window.razorpayContext={...window.razorpayContext,subtotal:a,fees:c,total:d,orderPincode:s,discount:o,coinsUsed:coinsToApply};let p=document.getElementById("checkout-fees-label");p&&(p.textContent=`Platform Fee (${(100*platformFeeRate).toFixed(0)}%):`);let f=document.getElementById("coins-to-apply");f&&(f.value=coinsToApply);let g=document.getElementById("checkout-discount");g&&(g.textContent=`-${window.firebaseHelpers.formatCurrency(o)}`);let h=document.getElementById("checkout-subtotal");h&&(h.textContent=window.firebaseHelpers.formatCurrency(a));let b=document.getElementById("checkout-fees");b&&(b.textContent=window.firebaseHelpers.formatCurrency(c));let y=document.getElementById("checkout-total");y&&(y.textContent=window.firebaseHelpers.formatCurrency(d)),window.updatePaymentButtonUI(d)}async function processPayment(){let e=document.getElementById("checkout-form");if(!e.checkValidity()){e.reportValidity(),window.firebaseHelpers.showAlert("Please fill all required customer details.","warning");return}let t=window.firebaseHelpers.pincodeSystem.getCurrentPincode();if(!t){window.firebaseHelpers.showAlert("Critical Error: Customer Pincode is not set. Cannot proceed.","danger");let a=document.getElementById("pay-now-btn");a&&(a.disabled=!0);return}let{total:i,orderPickupDate:r,orderPickupTime:s,discount:n,coinsUsed:l}=window.razorpayContext,o=Math.round(100*i);if(o<100){window.firebaseHelpers.showAlert("Total amount must be at least ₹1 to proceed with payment.","warning");return}let c={name:document.getElementById("customer-name").value,email:document.getElementById("customer-email").value,phone:document.getElementById("customer-phone").value,address:"Self-Pickup Confirmed",notes:document.getElementById("additional-notes").value,isPickup:!0,pickupDate:r,pickupTime:s},d=window.firebaseHelpers.generateId(),u=await window.firebaseHelpers.getRazorpayKeyId();if(!u){window.firebaseHelpers.showAlert("Payment gateway configuration error. Please try again later.","danger");return}if("undefined"==typeof Razorpay){window.firebaseHelpers.showAlert("Payment system is loading. Please wait a moment and try again.","warning");return}let m={key:u,amount:o,currency:"INR",name:"FarmRent",description:"Rental Equipment Booking",handler:async function(e){await placeOrderInFirestore(d,c,e.razorpay_payment_id,i,"paid","Razorpay",n,l)},prefill:{name:c.name,email:c.email,contact:c.phone},theme:{color:"#2B5C2B"},modal:{ondismiss:function(){window.firebaseHelpers.showAlert("Payment cancelled. Your booking is not confirmed.","info")}}};try{let p=new Razorpay(m);p.on("payment.failed",function(e){let t=e.error?`${e.error.description} (Code: ${e.error.code})`:"Payment failed. Please try again.";window.firebaseHelpers.showAlert("Payment failed: "+t,"danger")}),p.open()}catch(f){window.firebaseHelpers.showAlert("Error initializing payment: "+f.message,"danger")}}async function loadProfilePage(){let e=await window.firebaseHelpers.getCurrentUser();if(!e){window.firebaseHelpers.showAlert("You must be logged in to view your profile.","danger"),setTimeout(()=>{window.location.href="customer-auth.html"},2e3);return}let t=window.FirebaseDB.collection("users").doc(e.uid),a=await t.get();if(a.exists){let i=a.data(),r=!1;void 0===i.coins&&(i.coins=0,r=!0),void 0===i.referralCode&&(i.referralCode=generateReferralCode(),r=!0),void 0===i.firstOrderPlaced&&(i.firstOrderPlaced=!1,r=!0),r&&await t.set({coins:i.coins,referralCode:i.referralCode,firstOrderPlaced:i.firstOrderPlaced},{merge:!0}),window.currentUser={...e,...i},availableCoins=window.currentUser.coins}let s=document.getElementById("profile-name");s&&(s.value=e.name||"");let n=document.getElementById("profile-email");n&&(n.value=e.email||"");let l=document.getElementById("profile-phone");l&&(l.value=e.mobile||"");let o=document.getElementById("profile-address");o&&(o.value=e.address||"");let c=document.getElementById("profile-city");c&&(c.value=e.city||"");let d=document.getElementById("profile-state");d&&(d.value=e.state||"");let u=document.getElementById("profile-pincode");u&&(u.value=e.pincode||"");let m=document.getElementById("profile-user-name");m&&(m.textContent=e.name||"User");let p=document.getElementById("profile-coin-balance");p&&(p.textContent=`${availableCoins||0} Coins`);let f=document.getElementById("referral-code-display"),g=document.getElementById("referral-link-display"),h=window.currentUser.referralCode||generateReferralCode();f&&(f.value=h),g&&(g.value=window.getReferralLink(h));let b="seller"===e.role,y=!!e.pincode;if(b&&y){let v=document.getElementById("profile-pincode");v&&(v.readOnly=!0,v.classList.add("bg-light","text-muted"));let w=document.getElementById("pincode-input-group");w&&!w.querySelector(".alert")&&(w.innerHTML+=`
+        `;
+    });
+    const maxDiscountAllowed = Math.floor(subtotal * 0.5);
+    let requestedCoins = coinsToApply;
+    let effectiveCoinsUsed = Math.min(requestedCoins, availableCoins, maxDiscountAllowed);
+    const totalDiscount = effectiveCoinsUsed;
+    const fees = subtotal * platformFeeRate;
+    let total = subtotal - totalDiscount + fees;
+    if (total < 1) {
+        const excessDiscount = Math.abs(total - 1);
+        effectiveCoinsUsed = Math.max(0, effectiveCoinsUsed - Math.ceil(excessDiscount));
+        const adjustedDiscount = effectiveCoinsUsed;
+        total = subtotal - adjustedDiscount + fees;
+    }
+    total = Math.max(1, total);
+    coinsToApply = effectiveCoinsUsed;
+    window.razorpayContext = { 
+        ...window.razorpayContext,
+        subtotal, 
+        fees, 
+        total, 
+        orderPincode, 
+        discount: totalDiscount, 
+        coinsUsed: coinsToApply
+    }; 
+    const feeLabelElement = document.getElementById('checkout-fees-label');
+    if (feeLabelElement) {
+        feeLabelElement.textContent = `Platform Fee (${(platformFeeRate * 100).toFixed(0)}%):`;
+    }
+    const coinInput = document.getElementById('coins-to-apply');
+    if (coinInput) coinInput.value = coinsToApply;
+    const discountEl = document.getElementById('checkout-discount');
+    if (discountEl) discountEl.textContent = `-${window.firebaseHelpers.formatCurrency(totalDiscount)}`;
+    const subtotalEl = document.getElementById('checkout-subtotal');
+    if (subtotalEl) subtotalEl.textContent = window.firebaseHelpers.formatCurrency(subtotal);
+    const feesEl = document.getElementById('checkout-fees');
+    if (feesEl) feesEl.textContent = window.firebaseHelpers.formatCurrency(fees);
+    const totalEl = document.getElementById('checkout-total');
+    if (totalEl) totalEl.textContent = window.firebaseHelpers.formatCurrency(total);
+    window.updatePaymentButtonUI(total);
+}
+
+async function processPayment() {
+    const form = document.getElementById('checkout-form');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        window.firebaseHelpers.showAlert('Please fill all required customer details.', 'warning');
+        return;
+    }
+    
+    const userPincode = window.firebaseHelpers.pincodeSystem.getCurrentPincode();
+    if (!userPincode) {
+        window.firebaseHelpers.showAlert('Critical Error: Customer Pincode is not set. Cannot proceed.', 'danger');
+        const payBtn = document.getElementById('pay-now-btn');
+        if (payBtn) payBtn.disabled = true;
+        return;
+    }
+    
+    const isPickup = true;
+    const { total, orderPickupDate, orderPickupTime, discount, coinsUsed } = window.razorpayContext;
+    const totalInPaise = Math.round(total * 100);
+    
+    // Prevent payment if total is less than 1 rupee (edge case with coins)
+    if (totalInPaise < 100) { // Minimum 1 rupee
+        window.firebaseHelpers.showAlert('Total amount must be at least ₹1 to proceed with payment.', 'warning');
+        return;
+    }
+    
+    const customerData = {
+        name: document.getElementById('customer-name').value,
+        email: document.getElementById('customer-email').value,
+        phone: document.getElementById('customer-phone').value,
+        address: 'Self-Pickup Confirmed',
+        notes: document.getElementById('additional-notes').value,
+        isPickup: isPickup,
+        pickupDate: orderPickupDate,
+        pickupTime: orderPickupTime,
+    };
+    
+    const orderId = window.firebaseHelpers.generateId();
+    
+    // Get Razorpay key
+    const keyId = await window.firebaseHelpers.getRazorpayKeyId();
+    if (!keyId) {
+        window.firebaseHelpers.showAlert('Payment gateway configuration error. Please try again later.', 'danger');
+        return;
+    }
+    
+    // Check if Razorpay is loaded
+    if (typeof Razorpay === 'undefined') {
+        window.firebaseHelpers.showAlert('Payment system is loading. Please wait a moment and try again.', 'warning');
+        return;
+    }
+    
+    const options = {
+        key: keyId,
+        amount: totalInPaise,
+        currency: "INR",
+        name: "FarmRent",
+        description: "Rental Equipment Booking",
+        handler: async function (response) {
+            await placeOrderInFirestore(orderId, customerData, response.razorpay_payment_id, total, 'paid', 'Razorpay', discount, coinsUsed);
+        },
+        prefill: {
+            name: customerData.name,
+            email: customerData.email,
+            contact: customerData.phone
+        },
+        theme: {
+            color: "#2B5C2B"
+        },
+        modal: {
+            ondismiss: function() {
+                window.firebaseHelpers.showAlert('Payment cancelled. Your booking is not confirmed.', 'info');
+            }
+        }
+    };
+    
+    try {
+        const rzp = new Razorpay(options);
+        rzp.on('payment.failed', function (response) {
+            const errorMsg = response.error ? 
+                `${response.error.description} (Code: ${response.error.code})` : 
+                'Payment failed. Please try again.';
+            window.firebaseHelpers.showAlert('Payment failed: ' + errorMsg, 'danger');
+        });
+        rzp.open();
+    } catch (error) {
+        window.firebaseHelpers.showAlert('Error initializing payment: ' + error.message, 'danger');
+    }
+}
+
+async function loadProfilePage() {
+    const user = await window.firebaseHelpers.getCurrentUser();
+    if (!user) {
+        window.firebaseHelpers.showAlert('You must be logged in to view your profile.', 'danger');
+        setTimeout(() => { window.location.href = 'customer-auth.html'; }, 2000);
+        return;
+    }
+    const userDocRef = window.FirebaseDB.collection('users').doc(user.uid);
+    const userDoc = await userDocRef.get();
+    if (userDoc.exists) {
+        const userData = userDoc.data();
+        let needsUpdate = false;
+        if (userData.coins === undefined) { userData.coins = 0; needsUpdate = true; }
+        if (userData.referralCode === undefined) { userData.referralCode = generateReferralCode(); needsUpdate = true; }
+        if (userData.firstOrderPlaced === undefined) { userData.firstOrderPlaced = false; needsUpdate = true; }
+        if (needsUpdate) {
+            await userDocRef.set({
+                coins: userData.coins,
+                referralCode: userData.referralCode,
+                firstOrderPlaced: userData.firstOrderPlaced,
+            }, { merge: true });
+        }
+        window.currentUser = { ...user, ...userData };
+        availableCoins = window.currentUser.coins;
+    }
+    const profileNameEl = document.getElementById('profile-name');
+    if (profileNameEl) profileNameEl.value = user.name || '';
+    const profileEmailEl = document.getElementById('profile-email');
+    if (profileEmailEl) profileEmailEl.value = user.email || '';
+    const profilePhoneEl = document.getElementById('profile-phone');
+    if (profilePhoneEl) profilePhoneEl.value = user.mobile || '';
+    const profileAddressEl = document.getElementById('profile-address');
+    if (profileAddressEl) profileAddressEl.value = user.address || '';
+    const profileCityEl = document.getElementById('profile-city');
+    if (profileCityEl) profileCityEl.value = user.city || '';
+    const profileStateEl = document.getElementById('profile-state');
+    if (profileStateEl) profileStateEl.value = user.state || '';
+    const profilePincodeEl = document.getElementById('profile-pincode');
+    if (profilePincodeEl) profilePincodeEl.value = user.pincode || '';
+    const profileUserNameEl = document.getElementById('profile-user-name');
+    if (profileUserNameEl) profileUserNameEl.textContent = user.name || 'User';
+    const profileCoinBalanceEl = document.getElementById('profile-coin-balance');
+    if (profileCoinBalanceEl) profileCoinBalanceEl.textContent = `${availableCoins || 0} Coins`;
+    const referralCodeDisplayEl = document.getElementById('referral-code-display');
+    const referralLinkDisplayEl = document.getElementById('referral-link-display');
+    const referralCode = window.currentUser.referralCode || generateReferralCode();
+    if (referralCodeDisplayEl) referralCodeDisplayEl.value = referralCode;
+    if (referralLinkDisplayEl) referralLinkDisplayEl.value = window.getReferralLink(referralCode);
+    const isSeller = user.role === 'seller';
+    const hasPincode = !!user.pincode;
+    if (isSeller && hasPincode) {
+        const pincodeInput = document.getElementById('profile-pincode');
+        if (pincodeInput) {
+            pincodeInput.readOnly = true;
+            pincodeInput.classList.add('bg-light', 'text-muted');
+        }
+        const pincodeGroup = document.getElementById('pincode-input-group');
+        if (pincodeGroup) {
+            if (!pincodeGroup.querySelector('.alert')) {
+                pincodeGroup.innerHTML += `
                     <div class="alert alert-warning p-2 mt-2 small">
                         <i class="fas fa-lock me-1"></i> Your Seller Pincode is permanent for consistency. Contact support to change location.
                     </div>
-                `)}e.pincode&&(async()=>{await populateLocationFields("profile-pincode","profile-village","profile-city","profile-state","pincode-status-message");let t=document.getElementById("profile-village");t&&e.village&&setTimeout(()=>{t.value=e.village},500)})();let C=document.getElementById("join-date");C&&(e.createdAt&&e.createdAt.toDate?C.textContent=e.createdAt.toDate().toLocaleDateString():e.createdAt&&(C.textContent=new Date(e.createdAt).toLocaleDateString()));let $=document.getElementById("profile-form");$&&$.addEventListener("submit",handleProfileUpdate)}async function handleProfileUpdate(e){if(e.preventDefault(),!window.currentUser)return;let t=document.getElementById("profile-pincode").value.trim(),a=document.getElementById("profile-village");if(!t||!window.firebaseHelpers.pincodeSystem.validatePincode(t)){window.firebaseHelpers.showAlert("Please enter a valid 6-digit Pincode.","danger");return}if(a&&!a.value){window.firebaseHelpers.showAlert("Please select your Village/Post Office.","danger");return}if(!document.getElementById("profile-city").value||!document.getElementById("profile-state").value){window.firebaseHelpers.showAlert("Pincode lookup failed. Please try again or verify your Pincode.","danger");return}let i={name:document.getElementById("profile-name").value,mobile:document.getElementById("profile-phone").value,address:document.getElementById("profile-address").value,city:document.getElementById("profile-city").value,state:document.getElementById("profile-state").value,village:a?a.value:"",pincode:t,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};"seller"===window.currentUser.role&&window.currentUser.pincode&&(i.pincode=window.currentUser.pincode);try{await window.FirebaseDB.collection("users").doc(window.currentUser.uid).update(i),window.firebaseHelpers.showAlert("Profile updated successfully!","success"),window.currentUser={...window.currentUser,...i},await window.firebaseHelpers.pincodeSystem.setPincode(i.pincode);let r=window.location.pathname.split("/").pop();"browse.html"===r&&(updatePincodeDisplay(),loadAllEquipment())}catch(s){window.firebaseHelpers.showAlert("Error updating profile. Please try again.","danger")}}async function loadOrdersPage(){let e=await window.firebaseHelpers.getCurrentUser();if(!e){window.firebaseHelpers.showAlert("You must be logged in to view your orders.","danger"),setTimeout(()=>{window.location.href="customer-auth.html"},2e3);return}let t=document.getElementById("loading");t&&(t.style.display="block");try{let a="undefined"!=typeof __app_id?__app_id:"default-app-id",i=window.FirebaseDB.collection("artifacts").doc(a).collection("public").doc("data").collection("orders"),r=await i.where("userId","==",e.uid).orderBy("createdAt","desc").get(),s=document.getElementById("orders-list");if(s&&(s.innerHTML=""),r.empty){s&&(s.innerHTML=`
+                `;
+            }
+        }
+    }
+    if (user.pincode) {
+        (async () => {
+             await populateLocationFields('profile-pincode', 'profile-village', 'profile-city', 'profile-state', 'pincode-status-message');
+             const villageSelect = document.getElementById('profile-village');
+             if (villageSelect && user.village) {
+                 setTimeout(() => {
+                    villageSelect.value = user.village; 
+                 }, 500);
+             }
+        })();
+    }
+    const joinDateEl = document.getElementById('join-date');
+    if (joinDateEl) {
+        if (user.createdAt && user.createdAt.toDate) {
+            joinDateEl.textContent = user.createdAt.toDate().toLocaleDateString();
+        } else if (user.createdAt) {
+            joinDateEl.textContent = new Date(user.createdAt).toLocaleDateString();
+        }
+    }
+    const profileForm = document.getElementById('profile-form');
+    if (profileForm) profileForm.addEventListener('submit', handleProfileUpdate);
+}
+
+async function handleProfileUpdate(e) {
+    e.preventDefault();
+    if (!window.currentUser) return;
+    const pincodeInput = document.getElementById('profile-pincode').value.trim();
+    const villageSelect = document.getElementById('profile-village');
+    if (!pincodeInput || !window.firebaseHelpers.pincodeSystem.validatePincode(pincodeInput)) {
+        window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
+        return;
+    }
+    if (villageSelect && !villageSelect.value) {
+        window.firebaseHelpers.showAlert('Please select your Village/Post Office.', 'danger');
+        return;
+    }
+    if (!document.getElementById('profile-city').value || !document.getElementById('profile-state').value) {
+        window.firebaseHelpers.showAlert('Pincode lookup failed. Please try again or verify your Pincode.', 'danger');
+        return;
+    }
+    const updates = {
+        name: document.getElementById('profile-name').value,
+        mobile: document.getElementById('profile-phone').value,
+        address: document.getElementById('profile-address').value,
+        city: document.getElementById('profile-city').value,
+        state: document.getElementById('profile-state').value, 
+        village: villageSelect ? villageSelect.value : '', 
+        pincode: pincodeInput,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    if (window.currentUser.role === 'seller' && window.currentUser.pincode) {
+        updates.pincode = window.currentUser.pincode;
+    }
+    try {
+        await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(updates);
+        window.firebaseHelpers.showAlert('Profile updated successfully!', 'success');
+        window.currentUser = { ...window.currentUser, ...updates };
+        await window.firebaseHelpers.pincodeSystem.setPincode(updates.pincode); 
+        const path = window.location.pathname.split('/').pop();
+        if (path === 'browse.html') {
+             updatePincodeDisplay();
+             loadAllEquipment();
+        }
+    } catch (error) {
+        window.firebaseHelpers.showAlert('Error updating profile. Please try again.', 'danger');
+    }
+}
+
+async function loadOrdersPage() {
+    const user = await window.firebaseHelpers.getCurrentUser();
+    if (!user) {
+        window.firebaseHelpers.showAlert('You must be logged in to view your orders.', 'danger');
+        setTimeout(() => { window.location.href = 'customer-auth.html'; }, 2000);
+        return;
+    }
+    const loadingEl = document.getElementById('loading');
+    if(loadingEl) loadingEl.style.display = 'block';
+    try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
+        const ordersSnapshot = await ordersCollectionRef
+            .where('userId', '==', user.uid)
+            .orderBy('createdAt', 'desc')
+            .get();
+        const container = document.getElementById('orders-list');
+        if (container) container.innerHTML = '';
+        if (ordersSnapshot.empty) {
+            if (container) container.innerHTML = `
                 <div class="col-12 text-center py-5">
                     <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
                     <h4>You have no rental history</h4>
                     <p>Start browsing to place your first order.</p>
                     <a href="browse.html" class="btn btn-primary mt-3">Browse Equipment</a>
                 </div>
-            `);return}r.forEach(e=>{let t={id:e.id,...e.data()};s&&(s.innerHTML+=createOrderCard(t))})}catch(n){let l=document.getElementById("orders-list");l&&(l.innerHTML=`
+            `;
+            return;
+        }
+        ordersSnapshot.forEach(doc => {
+            const order = { id: doc.id, ...doc.data() };
+            if (container) container.innerHTML += createOrderCard(order);
+        });
+    } catch (error) {
+        const container = document.getElementById('orders-list');
+        if (container) container.innerHTML = `
             <div class="col-12 text-center py-5 text-danger">
                 <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
                 <h4>Error loading orders</h4>
                 <p>Please try again later.</p>
             </div>
-        `)}finally{t&&(t.style.display="none")}}function createOrderCard(e){let t=`order-status-${e.status||"pending"}`,a=(e.status||"pending").charAt(0).toUpperCase()+(e.status||"pending").slice(1),i=window.firebaseHelpers.formatDate(e.createdAt),r=e.pickupDate||"N/A",s=e.pickupTime||"N/A",n=e.coinsUsed>0?`<div class="text-danger small">Coins Used: ${e.coinsUsed} (${window.firebaseHelpers.formatCurrency(e.discount)})</div>`:"",l="";"completed"!==e.status||e.isReviewed?e.isReviewed&&(l=`
+        `;
+    } finally {
+        if(loadingEl) loadingEl.style.display = 'none';
+    }
+}
+
+function createOrderCard(order) {
+    const statusClass = `order-status-${order.status || 'pending'}`;
+    const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
+    const date = window.firebaseHelpers.formatDate(order.createdAt);
+    const deliveryType = '<span class="badge bg-warning text-dark me-2"><i class="fas fa-hand-paper me-1"></i>Self-Pickup</span>';
+    const pickupDate = order.pickupDate || 'N/A';
+    const pickupTime = order.pickupTime || 'N/A';
+    const discountCoins = order.coinsUsed > 0 ? `<div class="text-danger small">Coins Used: ${order.coinsUsed} (${window.firebaseHelpers.formatCurrency(order.discount)})</div>` : '';
+    let reviewButton = '';
+    if (order.status === 'completed' && !order.isReviewed) {
+        reviewButton = `
+            <button class="btn btn-sm btn-warning ms-2" onclick="openReviewModal('${order.id}', '${order.sellerIds || ''}')">
+                <i class="fas fa-star me-1"></i> Rate
+            </button>
+        `;
+    } else if (order.isReviewed) {
+        reviewButton = `
             <button class="btn btn-sm btn-outline-success ms-2" disabled>
                 <i class="fas fa-check-circle me-1"></i> Reviewed
             </button>
-        `):l=`
-            <button class="btn btn-sm btn-warning ms-2" onclick="openReviewModal('${e.id}', '${e.sellerIds||""}')">
-                <i class="fas fa-star me-1"></i> Rate
-            </button>
-        `;let o="";if(["pending","active","pickedup","returned","completed"].includes(e.status)){let c=e.sellerIds?e.sellerIds[0]:"",d=e.sellerBusinessNames?e.sellerBusinessNames.split(",")[0]:"Seller";c&&(o=`
-                <button class="btn btn-sm btn-primary ms-2" onclick="openOrderChat('${e.id}', '${c}', '${d.trim()}')">
+        `;
+    }
+    let chatButton = '';
+    if (['pending', 'active', 'pickedup', 'returned', 'completed'].includes(order.status)) {
+        const sellerId = order.sellerIds ? order.sellerIds[0] : '';
+        const sellerName = order.sellerBusinessNames ? order.sellerBusinessNames.split(',')[0] : 'Seller';
+        if (sellerId) {
+            chatButton = `
+                <button class="btn btn-sm btn-primary ms-2" onclick="openOrderChat('${order.id}', '${sellerId}', '${sellerName.trim()}')">
                     <i class="fas fa-comments me-1"></i> Chat
                 </button>
-            `)}return`
+            `;
+        }
+    }
+    return `
         <div class="col-lg-12 mb-4">
             <div class="card order-card shadow-sm">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <div>
-                        <h5 class="mb-0">Order #${e.id.substring(0,8)}</h5>
-                        <small class="text-muted">Placed on: ${i}</small>
+                        <h5 class="mb-0">Order #${order.id.substring(0, 8)}</h5>
+                        <small class="text-muted">Placed on: ${date}</small>
                     </div>
                     <div>
-                        <span class="badge bg-warning text-dark me-2"><i class="fas fa-hand-paper me-1"></i>Self-Pickup</span>
-                        <span class="status-badge ${t}">${a}</span>
+                        ${deliveryType}
+                        <span class="status-badge ${statusClass}">${statusText}</span>
                     </div>
                 </div>
                 <div class="card-body">
                     <h6>Equipment Rented:</h6>
                     <ul class="list-unstyled mb-3">
-                        ${e.items.map(e=>`
+                        ${order.items.map(item => `
                             <li class="d-flex align-items-center mb-1">
-                                <img src="${e.imageUrl||"https://placehold.co/40x40"}" class="rounded me-2" style="width: 40px; height: 40px; object-fit: cover;">
+                                <img src="${item.imageUrl || 'https://placehold.co/40x40'}" class="rounded me-2" style="width: 40px; height: 40px; object-fit: cover;">
                                 <div>
-                                    <strong>${e.name}</strong> - ${e.rentalValue} ${"acre"===e.rentalType?"Acre(s)":"Hour(s)"}
-                                    <small class="text-muted d-block">Seller: ${e.businessName} (Pincode: ${e.pincode||"N/A"})</small>
+                                    <strong>${item.name}</strong> - ${item.rentalValue} ${item.rentalType === 'acre' ? 'Acre(s)' : 'Hour(s)'}
+                                    <small class="text-muted d-block">Seller: ${item.businessName} (Pincode: ${item.pincode || 'N/A'})</small>
                                 </div>
                             </li>
-                        `).join("")}
+                        `).join('')}
                     </ul>
                     <div class="row border-top pt-2">
                         <div class="col-md-6">
-                            <strong>Total Amount:</strong> <span class="text-primary">${window.firebaseHelpers.formatCurrency(e.totalAmount||0)}</span>
-                            ${n}
+                            <strong>Total Amount:</strong> <span class="text-primary">${window.firebaseHelpers.formatCurrency(order.totalAmount || 0)}</span>
+                            ${discountCoins}
                         </div>
                         <div class="col-md-6 text-md-end">
-                            <strong>Pickup Pincode:</strong> ${e.orderPincode||"N/A"}
+                            <strong>Pickup Pincode:</strong> ${order.orderPincode || 'N/A'}
                         </div>
                         <div class="col-12 mt-2">
                             <span class="badge bg-danger text-white"><i class="fas fa-calendar-check me-1"></i> Pickup Date/Time:</span> 
-                            <strong>${r} at ${s}</strong>
+                            <strong>${pickupDate} at ${pickupTime}</strong>
                         </div>
                     </div>
-                    ${createOrderTrackerHtml(e.status,!0)} 
+                    ${createOrderTrackerHtml(order.status, true)} 
                 </div>
                 <div class="card-footer text-end">
-                    ${"pending"===e.status?`
-                        <button class="btn btn-sm btn-danger" onclick="cancelOrder('${e.id}')">Cancel Order</button>
-                    `:""}
-                    <button class="btn btn-sm btn-outline-primary" onclick="viewOrderDetailsModal('${e.id}')">View Details & Track</button>
-                    ${o}
-                    ${l}
+                    ${order.status === 'pending' ? `
+                        <button class="btn btn-sm btn-danger" onclick="cancelOrder('${order.id}')">Cancel Order</button>
+                    ` : ''}
+                    <button class="btn btn-sm btn-outline-primary" onclick="viewOrderDetailsModal('${order.id}')">View Details & Track</button>
+                    ${chatButton}
+                    ${reviewButton}
                 </div>
             </div>
         </div>
-    `}function createOrderTrackerHtml(e,t=!1){let a={pending:{progress:0,index:0,showCancel:!0},active:{progress:25,index:1,showCancel:!0},pickedup:{progress:50,index:2,showCancel:!1},returned:{progress:75,index:3,showCancel:!1},completed:{progress:100,index:4,showCancel:!1},cancelled:{progress:0,index:-1,showCancel:!1},rejected:{progress:0,index:-1,showCancel:!1}},i=a[e]||a.pending,r="completed"===e||"cancelled"===e||"rejected"===e;if(r&&"completed"!==e)return`
+    `;
+}
+
+function createOrderTrackerHtml(status, isMini = false) {
+    const steps = [
+        { key: 'pending', text: 'Order Placed', icon: 'fas fa-clipboard-list' },
+        { key: 'active', text: 'Seller Confirmed', icon: 'fas fa-check-circle' },
+        { key: 'pickedup', text: 'Customer Picked Up', icon: 'fas fa-truck-loading' },
+        { key: 'returned', text: 'Equipment Returned', icon: 'fas fa-undo-alt' },
+        { key: 'completed', text: 'Rental Completed', icon: 'fas fa-flag-checkered' }
+    ];
+    const statusMap = {
+        'pending': { progress: 0, index: 0, showCancel: true },
+        'active': { progress: 25, index: 1, showCancel: true },
+        'pickedup': { progress: 50, index: 2, showCancel: false },
+        'returned': { progress: 75, index: 3, showCancel: false },
+        'completed': { progress: 100, index: 4, showCancel: false },
+        'cancelled': { progress: 0, index: -1, showCancel: false },
+        'rejected': { progress: 0, index: -1, showCancel: false }
+    };
+    const currentStep = statusMap[status] || statusMap['pending'];
+    const isTerminal = status === 'completed' || status === 'cancelled' || status === 'rejected';
+    if (isTerminal && status !== 'completed') {
+        const message = status === 'cancelled' 
+            ? 'Order Cancelled' 
+            : 'Order Rejected by Seller';
+        const icon = status === 'cancelled' ? 'fas fa-ban' : 'fas fa-times-circle';
+        return `
             <div class="alert alert-danger text-center mt-3 mb-0 p-3">
-                <i class="${"cancelled"===e?"fas fa-ban":"fas fa-times-circle"} me-2"></i> <strong>${"cancelled"===e?"Order Cancelled":"Order Rejected by Seller"}</strong>. 
-                ${"cancelled"===e?"Cancellation requested.":"Contact seller for details."}
+                <i class="${icon} me-2"></i> <strong>${message}</strong>. 
+                ${status === 'cancelled' ? 'Cancellation requested.' : 'Contact seller for details.'}
             </div>
-        `;let s=i.progress,n=[{key:"pending",text:"Order Placed",icon:"fas fa-clipboard-list"},{key:"active",text:"Seller Confirmed",icon:"fas fa-check-circle"},{key:"pickedup",text:"Customer Picked Up",icon:"fas fa-truck-loading"},{key:"returned",text:"Equipment Returned",icon:"fas fa-undo-alt"},{key:"completed",text:"Rental Completed",icon:"fas fa-flag-checkered"}].map((t,a)=>{let s="";return a<i.index?s="completed":a!==i.index||r?a===i.index&&"completed"===e&&(s="completed"):s="active",`
-            <div class="tracker-step ${s}">
+        `;
+    }
+    const progressBarWidth = currentStep.progress; 
+    const trackerHtml = steps.map((step, index) => {
+        let stepClass = '';
+        if (index < currentStep.index) {
+            stepClass = 'completed';
+        } else if (index === currentStep.index && !isTerminal) {
+            stepClass = 'active';
+        } else if (index === currentStep.index && status === 'completed') {
+             stepClass = 'completed';
+        }
+        return `
+            <div class="tracker-step ${stepClass}">
                 <div class="step-icon-container">
-                    <i class="${t.icon}"></i>
+                    <i class="${step.icon}"></i>
                 </div>
-                <div class="step-text">${t.text}</div>
+                <div class="step-text">${step.text}</div>
             </div>
-        `}).join("");return`
-        <div class="order-tracker ${t?"p-2 mt-2 mb-0":"p-4"}">
+        `;
+    }).join('');
+    return `
+        <div class="order-tracker ${isMini ? 'p-2 mt-2 mb-0' : 'p-4'}">
             <div class="tracker-line">
-                <div class="tracker-progress" style="width: ${s}%;"></div>
+                <div class="tracker-progress" style="width: ${progressBarWidth}%;"></div>
             </div>
-            ${n}
+            ${trackerHtml}
         </div>
-    `}async function viewOrderDetailsModal(e){try{let t="undefined"!=typeof __app_id?__app_id:"default-app-id",a=window.FirebaseDB.collection("artifacts").doc(t).collection("public").doc("data").collection("orders"),i=document.getElementById("orderDetailsModal"),r=new bootstrap.Modal(i);r.show();let s=a.doc(e).onSnapshot(t=>{if(!t.exists){r.hide(),window.firebaseHelpers.showAlert("Order not found or deleted.","danger"),s(),loadOrdersPage();return}let a=t.data(),n=`order-status-${a.status||"pending"}`,l=(a.status||"pending").charAt(0).toUpperCase()+(a.status||"pending").slice(1),o=a.coinsUsed||0,c=a.discount||0,d=a.subtotalAmount||0,u=a.platformFee||0,m=a.platformCommissionAmount||0,p=a.sellerNetEarnings||0,f=a.settlementStatus||"unsettled",g=a.settledAmount||0,h=a.settledAt?window.firebaseHelpers.formatDateTime(a.settledAt):"N/A",b=o>0?`<tr><th>Coin Discount:</th><td><strong class="text-danger">-${window.firebaseHelpers.formatCurrency(c)} (${o} Coins)</strong></td></tr>`:"",y=`
+    `;
+}
+window.createOrderTrackerHtml = createOrderTrackerHtml;
+
+async function viewOrderDetailsModal(orderId) {
+    try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const ordersCollectionRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders');
+        const modalElement = document.getElementById('orderDetailsModal');
+        const modalInstance = new bootstrap.Modal(modalElement);
+        modalInstance.show();
+        const unsubscribe = ordersCollectionRef.doc(orderId).onSnapshot(docSnapshot => {
+            if (!docSnapshot.exists) {
+                modalInstance.hide();
+                window.firebaseHelpers.showAlert('Order not found or deleted.', 'danger');
+                unsubscribe();
+                loadOrdersPage();
+                return;
+            }
+            const order = docSnapshot.data();
+            const statusClass = `order-status-${order.status || 'pending'}`;
+            const statusText = (order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1);
+            const coinsUsed = order.coinsUsed || 0;
+            const discountApplied = order.discount || 0;
+            const subtotal = order.subtotalAmount || 0;
+            const platformFee = order.platformFee || 0;
+            
+            // NEW: Financial Details
+            const platformCommission = order.platformCommissionAmount || 0;
+            const sellerPayout = order.sellerNetEarnings || 0;
+            const settlementStatus = order.settlementStatus || 'unsettled';
+            const settledAmount = order.settledAmount || 0;
+            const settledAt = order.settledAt ? window.firebaseHelpers.formatDateTime(order.settledAt) : 'N/A';
+
+
+            const discountHtml = coinsUsed > 0 
+                ? `<tr><th>Coin Discount:</th><td><strong class="text-danger">-${window.firebaseHelpers.formatCurrency(discountApplied)} (${coinsUsed} Coins)</strong></td></tr>`
+                : '';
+            
+            // NEW: Settlement HTML
+            const settlementHtml = `
                 <h6 class="mt-4 text-dark"><i class="fas fa-handshake me-2"></i>Platform Settlement Details</h6>
                 <table class="table table-sm table-borderless">
-                    <tr><th>Rental Subtotal:</th><td>${window.firebaseHelpers.formatCurrency(d)}</td></tr>
-                    <tr><th>Platform Commission (${(100*a.platformCommissionRate).toFixed(1)}%):</th><td><strong class="text-danger">-${window.firebaseHelpers.formatCurrency(m)}</strong></td></tr>
-                    <tr><th>Seller Payout Due:</th><td><strong class="text-success">${window.firebaseHelpers.formatCurrency(p)}</strong></td></tr>
-                    <tr><th>Settlement Status:</th><td><span class="badge bg-${"settled"===f?"success":"warning"}">${f}</span></td></tr>
-                    ${"settled"===f?`
-                        <tr><th>Settled Amount:</th><td>${window.firebaseHelpers.formatCurrency(g)}</td></tr>
-                        <tr><th>Settled Date:</th><td>${h}</td></tr>
-                    `:""}
+                    <tr><th>Rental Subtotal:</th><td>${window.firebaseHelpers.formatCurrency(subtotal)}</td></tr>
+                    <tr><th>Platform Commission (${(order.platformCommissionRate * 100).toFixed(1)}%):</th><td><strong class="text-danger">-${window.firebaseHelpers.formatCurrency(platformCommission)}</strong></td></tr>
+                    <tr><th>Seller Payout Due:</th><td><strong class="text-success">${window.firebaseHelpers.formatCurrency(sellerPayout)}</strong></td></tr>
+                    <tr><th>Settlement Status:</th><td><span class="badge bg-${settlementStatus === 'settled' ? 'success' : 'warning'}">${settlementStatus}</span></td></tr>
+                    ${settlementStatus === 'settled' ? `
+                        <tr><th>Settled Amount:</th><td>${window.firebaseHelpers.formatCurrency(settledAmount)}</td></tr>
+                        <tr><th>Settled Date:</th><td>${settledAt}</td></tr>
+                    ` : ''}
                 </table>
-            `,v=`
-                <h5 class="mb-3">Order # ${e.substring(0,8)} Details</h5>
+            `;
+
+            const detailsHtml = `
+                <h5 class="mb-3">Order # ${orderId.substring(0, 8)} Details</h5>
                 <div class="alert alert-info d-flex justify-content-between">
-                    <div><strong>Current Status:</strong> <span class="status-badge ${n}">${l}</span></div>
-                    <div><strong>Date Placed:</strong> ${window.firebaseHelpers.formatDateTime(a.createdAt)}</div>
+                    <div><strong>Current Status:</strong> <span class="status-badge ${statusClass}">${statusText}</span></div>
+                    <div><strong>Date Placed:</strong> ${window.firebaseHelpers.formatDateTime(order.createdAt)}</div>
                 </div>
                 <h6 class="mt-4 text-primary">Customer & Pickup Information</h6>
                 <table class="table table-sm table-borderless">
-                    <tr><th>Customer Name:</th><td>${a.customerName||"N/A"}</td></tr>
-                    <tr><th>Phone:</th><td>${a.customerPhone||"N/A"}</td></tr>
-                    <tr><th>Email:</th><td>${a.customerEmail||"N/A"}</td></tr>
-                    <tr><th>Pickup Date/Time:</th><td><strong>${a.pickupDate||"N/A"} at ${a.pickupTime||"N/A"}</strong></td></tr>
-                    <tr><th>Pickup Pincode:</th><td>${a.orderPincode||"N/A"}</td></tr>
-                    <tr><th>Notes:</th><td>${a.notes||"None"}</td></tr>
+                    <tr><th>Customer Name:</th><td>${order.customerName || 'N/A'}</td></tr>
+                    <tr><th>Phone:</th><td>${order.customerPhone || 'N/A'}</td></tr>
+                    <tr><th>Email:</th><td>${order.customerEmail || 'N/A'}</td></tr>
+                    <tr><th>Pickup Date/Time:</th><td><strong>${order.pickupDate || 'N/A'} at ${order.pickupTime || 'N/A'}</strong></td></tr>
+                    <tr><th>Pickup Pincode:</th><td>${order.orderPincode || 'N/A'}</td></tr>
+                    <tr><th>Notes:</th><td>${order.notes || 'None'}</td></tr>
                 </table>
                 <h6 class="mt-4 text-success">Equipment Details</h6>
                 <ul class="list-group mb-4">
-                    ${a.items.map(e=>`
+                    ${order.items.map(item => `
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             <div>
-                                <strong>${e.name}</strong> 
-                                <small class="text-muted d-block">${e.rentalValue} ${e.rentalType} | Seller: ${e.businessName}</small>
-                                <small class="text-muted d-block">Address: ${e.sellerAddress}</small>
+                                <strong>${item.name}</strong> 
+                                <small class="text-muted d-block">${item.rentalValue} ${item.rentalType} | Seller: ${item.businessName}</small>
+                                <small class="text-muted d-block">Address: ${item.sellerAddress}</small>
                             </div>
-                            <span class="badge bg-success">${window.firebaseHelpers.formatCurrency(e.price)}</span>
+                            <span class="badge bg-success">${window.firebaseHelpers.formatCurrency(item.price)}</span>
                         </li>
-                    `).join("")}
+                    `).join('')}
                 </ul>
                 <h6 class="mt-4 text-warning">Customer Payment Summary</h6>
                 <table class="table table-sm table-borderless">
-                    <tr><th>Rental Subtotal:</th><td>${window.firebaseHelpers.formatCurrency(d)}</td></tr>
-                    ${b}
-                    <tr><th>Platform Fee (Customer-facing):</th><td>+${window.firebaseHelpers.formatCurrency(u)}</td></tr>
-                    <tr><th>Total Paid:</th><td><strong>${window.firebaseHelpers.formatCurrency(a.totalAmount||0)}</strong></td></tr>
-                    <tr><th>Payment Method:</th><td>${a.paymentMethod||"N/A"}</td></tr>
-                    <tr><th>Payment Status:</th><td><span class="badge bg-${"paid"===a.paymentStatus?"success":"danger"}">${a.paymentStatus||"N/A"}</span></td></tr>
-                    <tr><th>Transaction ID:</th><td><small>${a.transactionId||"N/A"}</small></td></tr>
+                    <tr><th>Rental Subtotal:</th><td>${window.firebaseHelpers.formatCurrency(subtotal)}</td></tr>
+                    ${discountHtml}
+                    <tr><th>Platform Fee (Customer-facing):</th><td>+${window.firebaseHelpers.formatCurrency(platformFee)}</td></tr>
+                    <tr><th>Total Paid:</th><td><strong>${window.firebaseHelpers.formatCurrency(order.totalAmount || 0)}</strong></td></tr>
+                    <tr><th>Payment Method:</th><td>${order.paymentMethod || 'N/A'}</td></tr>
+                    <tr><th>Payment Status:</th><td><span class="badge bg-${order.paymentStatus === 'paid' ? 'success' : 'danger'}">${order.paymentStatus || 'N/A'}</span></td></tr>
+                    <tr><th>Transaction ID:</th><td><small>${order.transactionId || 'N/A'}</small></td></tr>
                 </table>
-                ${y} <!-- NEW: Settlement Details -->
-            `,w=document.getElementById("order-tracker-container");w&&(w.innerHTML=createOrderTrackerHtml(a.status,!1));let C=document.getElementById("order-details-content");C&&(C.innerHTML=v);let $=i.querySelector(".modal-footer");$.innerHTML='<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>',"pending"===a.status&&($.innerHTML+=`
-                    <button class="btn btn-danger" onclick="cancelOrder('${a.id}')">Cancel Order</button>
-                `),loadOrdersPage(),checkCustomerNotifications()},e=>{r.hide(),window.firebaseHelpers.showAlert("Error listening for order updates.","danger")});i.addEventListener("hidden.bs.modal",function e(){s(),i.removeEventListener("hidden.bs.modal",e)})}catch(n){window.firebaseHelpers.showAlert("Error loading order details.","danger")}}async function cancelOrder(e){let t=`
+                ${settlementHtml} <!-- NEW: Settlement Details -->
+            `;
+            const trackerContainer = document.getElementById('order-tracker-container');
+            if (trackerContainer) {
+                trackerContainer.innerHTML = createOrderTrackerHtml(order.status, false);
+            }
+            const modalBodyContent = document.getElementById('order-details-content');
+            if (modalBodyContent) modalBodyContent.innerHTML = detailsHtml;
+            const modalFooter = modalElement.querySelector('.modal-footer');
+            modalFooter.innerHTML = `<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>`;
+            if (order.status === 'pending') {
+                modalFooter.innerHTML += `
+                    <button class="btn btn-danger" onclick="cancelOrder('${order.id}')">Cancel Order</button>
+                `;
+            }
+            loadOrdersPage();
+            checkCustomerNotifications();
+        }, error => {
+            modalInstance.hide();
+            window.firebaseHelpers.showAlert('Error listening for order updates.', 'danger');
+        });
+        modalElement.addEventListener('hidden.bs.modal', function onModalHidden() {
+            unsubscribe();
+            modalElement.removeEventListener('hidden.bs.modal', onModalHidden);
+        });
+    } catch (error) {
+        window.firebaseHelpers.showAlert('Error loading order details.', 'danger');
+    }
+}
+window.viewOrderDetailsModal = viewOrderDetailsModal;
+
+async function cancelOrder(orderId) {
+    const modalHtml = `
         <div class="modal fade" id="confirm-cancel-modal" tabindex="-1">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
@@ -647,7 +3042,165 @@ let currentUser=null,allEquipmentData=[],selectedEquipment={},isAuthInitialized=
                 </div>
             </div>
         </div>
-    `;document.body.insertAdjacentHTML("beforeend",t);let a=document.getElementById("confirm-cancel-modal"),i=new bootstrap.Modal(a);i.show(),document.getElementById("confirm-cancellation-btn").onclick=async()=>{i.hide();try{let t="undefined"!=typeof __app_id?__app_id:"default-app-id",r=window.FirebaseDB.collection("artifacts").doc(t).collection("public").doc("data").collection("orders").doc(e),s=await r.get();if(!s.exists||"pending"!==s.data().status){window.firebaseHelpers.showAlert("Order cannot be cancelled. It is no longer pending.","danger");return}await r.update({status:"cancelled",cancellationRequestedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()}),window.firebaseHelpers.showAlert("Cancellation requested. Status will be updated shortly.","success");let n=bootstrap.Modal.getInstance(document.getElementById("orderDetailsModal"));n&&n.hide(),loadOrdersPage()}catch(l){window.firebaseHelpers.showAlert("Failed to cancel order. Please contact support.","danger")}finally{a.remove()}}}function openReviewModal(e,t){document.getElementById("review-order-id").value=e;let a=t.split(",")[0].trim();document.getElementById("review-seller-id").value=a,document.getElementById("review-form").reset();let i=new bootstrap.Modal(document.getElementById("reviewModal"));i.show()}async function submitReview(){let e=document.getElementById("review-order-id").value,t=document.getElementById("review-seller-id").value,a=document.querySelector('input[name="sellerRating"]:checked')?.value,i=document.querySelector('input[name="equipmentRating"]:checked')?.value,r=document.querySelector('input[name="experienceRating"]:checked')?.value,s=document.getElementById("review-comment").value;if(!a||!i||!r){window.firebaseHelpers.showAlert("Please provide ratings for all categories.","warning");return}try{let n="undefined"!=typeof __app_id?__app_id:"default-app-id",l={orderId:e,sellerId:t,customerId:window.currentUser.uid,customerName:window.currentUser.name,sellerRating:parseInt(a),equipmentRating:parseInt(i),experienceRating:parseInt(r),rating:Math.round((parseInt(a)+parseInt(i)+parseInt(r))/3),comment:s,createdAt:firebase.firestore.FieldValue.serverTimestamp()};await window.FirebaseDB.collection("reviews").add(l);let o=window.FirebaseDB.collection("artifacts").doc(n).collection("public").doc("data").collection("orders").doc(e);await o.update({isReviewed:!0,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});let c=await o.get(),d=c.data().items||[];for(let u of d)if(u.id){let m=window.FirebaseDB.collection("equipment").doc(u.id),p=await m.get();if(p.exists){let f=p.data().rating||0,g=p.data().reviewCount||0,h=g+1,b=(f*g+parseInt(i))/h;await m.update({rating:b,reviewCount:h})}}window.firebaseHelpers.showAlert("Review submitted successfully!","success");let y=bootstrap.Modal.getInstance(document.getElementById("reviewModal"));y&&y.hide(),loadOrdersPage()}catch(v){window.firebaseHelpers.showAlert("Error submitting review. Please try again.","danger")}}function getStarRatingHtml(e){let t=parseFloat(e)||0,a=Math.floor(t),i=t%1>=.5,r='<div class="star-display mb-2">';for(let s=1;s<=5;s++)s<=a?r+='<i class="fas fa-star filled"></i>':s===a+1&&i?r+='<i class="fas fa-star-half-alt filled"></i>':r+='<i class="fas fa-star empty"></i>';let n=t>0?t.toFixed(1):"New";return r+`<span class="text-muted ms-1 small">(${n})</span></div>`}function updateChatBadgeCount(e){let t=document.getElementById("floating-chat-badge");t&&(e>0?(t.textContent=e>9?"9+":e,t.style.display="flex"):t.style.display="none")}function listenForUnreadChatMessages(){if(!window.currentUser||"customer"!==window.currentUser.role||!window.FirebaseDB){chatBadgeUnsubscribe&&chatBadgeUnsubscribe();return}chatBadgeUnsubscribe&&chatBadgeUnsubscribe();let e="undefined"!=typeof __app_id?__app_id:"default-app-id",t=window.FirebaseDB.collection("artifacts").doc(e).collection("public").doc("data").collection("conversations"),a=t.where("customerId","==",window.currentUser.uid);chatBadgeUnsubscribe=a.onSnapshot(e=>{let t=0;e.forEach(e=>{let a=e.data();t+=a.unreadCountCustomer||0}),updateChatBadgeCount(t)},e=>{updateChatBadgeCount(0)})}function renderChatWidget(){let e=document.getElementById("chat-widget-container");e&&(e.innerHTML=`
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modalElement = document.getElementById('confirm-cancel-modal');
+    const modalInstance = new bootstrap.Modal(modalElement);
+    modalInstance.show();
+    document.getElementById('confirm-cancellation-btn').onclick = async () => {
+        modalInstance.hide();
+        try {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const orderRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('orders').doc(orderId);
+            const orderDoc = await orderRef.get();
+            if (!orderDoc.exists || orderDoc.data().status !== 'pending') {
+                 window.firebaseHelpers.showAlert('Order cannot be cancelled. It is no longer pending.', 'danger');
+                 return;
+            }
+            await orderRef.update({
+                status: 'cancelled',
+                cancellationRequestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            window.firebaseHelpers.showAlert('Cancellation requested. Status will be updated shortly.', 'success');
+            const detailsModal = bootstrap.Modal.getInstance(document.getElementById('orderDetailsModal'));
+            if (detailsModal) detailsModal.hide();
+            loadOrdersPage();
+        } catch (error) {
+            window.firebaseHelpers.showAlert('Failed to cancel order. Please contact support.', 'danger');
+        } finally {
+            modalElement.remove();
+        }
+    };
+}
+window.cancelOrder = cancelOrder;
+
+function openReviewModal(orderId, sellerIdString) {
+    document.getElementById('review-order-id').value = orderId;
+    const primarySellerId = sellerIdString.split(',')[0].trim();
+    document.getElementById('review-seller-id').value = primarySellerId;
+    document.getElementById('review-form').reset();
+    const modal = new bootstrap.Modal(document.getElementById('reviewModal'));
+    modal.show();
+}
+window.openReviewModal = openReviewModal;
+
+async function submitReview() {
+    const orderId = document.getElementById('review-order-id').value;
+    const sellerId = document.getElementById('review-seller-id').value;
+    const sellerRating = document.querySelector('input[name="sellerRating"]:checked')?.value;
+    const equipmentRating = document.querySelector('input[name="equipmentRating"]:checked')?.value;
+    const experienceRating = document.querySelector('input[name="experienceRating"]:checked')?.value;
+    const comment = document.getElementById('review-comment').value;
+    if (!sellerRating || !equipmentRating || !experienceRating) {
+        window.firebaseHelpers.showAlert('Please provide ratings for all categories.', 'warning');
+        return;
+    }
+    try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const reviewData = {
+            orderId: orderId,
+            sellerId: sellerId,
+            customerId: window.currentUser.uid,
+            customerName: window.currentUser.name,
+            sellerRating: parseInt(sellerRating),
+            equipmentRating: parseInt(equipmentRating),
+            experienceRating: parseInt(experienceRating),
+            rating: Math.round((parseInt(sellerRating) + parseInt(equipmentRating) + parseInt(experienceRating)) / 3),
+            comment: comment,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        await window.FirebaseDB.collection('reviews').add(reviewData);
+        const orderRef = window.FirebaseDB.collection('artifacts').doc(appId)
+            .collection('public').doc('data').collection('orders').doc(orderId);
+        await orderRef.update({
+            isReviewed: true,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        const orderDoc = await orderRef.get();
+        const orderItems = orderDoc.data().items || [];
+        for (const item of orderItems) {
+            if (item.id) {
+                const equipmentRef = window.FirebaseDB.collection('equipment').doc(item.id);
+                const equipDoc = await equipmentRef.get();
+                if (equipDoc.exists) {
+                    const currentRating = equipDoc.data().rating || 0;
+                    const reviewCount = equipDoc.data().reviewCount || 0;
+                    const newCount = reviewCount + 1;
+                    const newRating = ((currentRating * reviewCount) + parseInt(equipmentRating)) / newCount;
+                    await equipmentRef.update({
+                        rating: newRating,
+                        reviewCount: newCount
+                    });
+                }
+            }
+        }
+        window.firebaseHelpers.showAlert('Review submitted successfully!', 'success');
+        const modal = bootstrap.Modal.getInstance(document.getElementById('reviewModal'));
+        if (modal) modal.hide();
+        loadOrdersPage();
+    } catch (error) {
+        window.firebaseHelpers.showAlert('Error submitting review. Please try again.', 'danger');
+    }
+}
+window.submitReview = submitReview;
+
+function getStarRatingHtml(rating) {
+    const r = parseFloat(rating) || 0;
+    const fullStars = Math.floor(r);
+    const hasHalfStar = r % 1 >= 0.5;
+    let html = '<div class="star-display mb-2">';
+    for (let i = 1; i <= 5; i++) {
+        if (i <= fullStars) {
+            html += '<i class="fas fa-star filled"></i>';
+        } else if (i === fullStars + 1 && hasHalfStar) {
+            html += '<i class="fas fa-star-half-alt filled"></i>';
+        } else {
+            html += '<i class="fas fa-star empty"></i>'; 
+        }
+    }
+    const text = r > 0 ? r.toFixed(1) : 'New';
+    html += `<span class="text-muted ms-1 small">(${text})</span></div>`;
+    return html;
+}
+
+function updateChatBadgeCount(count) {
+    const badge = document.getElementById('floating-chat-badge');
+    if (badge) {
+        if (count > 0) {
+            badge.textContent = count > 9 ? '9+' : count;
+            badge.style.display = 'flex';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+}
+
+function listenForUnreadChatMessages() {
+    if (!window.currentUser || window.currentUser.role !== 'customer' || !window.FirebaseDB) {
+        if (chatBadgeUnsubscribe) chatBadgeUnsubscribe();
+        return;
+    }
+    if (chatBadgeUnsubscribe) chatBadgeUnsubscribe();
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const conversationsRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations');
+    const query = conversationsRef.where('customerId', '==', window.currentUser.uid);
+    chatBadgeUnsubscribe = query.onSnapshot(snapshot => {
+        let totalUnread = 0;
+        snapshot.forEach(doc => {
+            const chat = doc.data();
+            totalUnread += chat.unreadCountCustomer || 0;
+        });
+        updateChatBadgeCount(totalUnread);
+    }, error => {
+        updateChatBadgeCount(0);
+    });
+}
+
+function renderChatWidget() {
+    const container = document.getElementById('chat-widget-container');
+    if (!container) return;
+    container.innerHTML = `
         <div class="chat-btn-floating" onclick="toggleChatWindow()">
             <i class="fas fa-comments"></i>
             <div id="floating-chat-badge" class="chat-badge" style="display:none;">0</div> 
@@ -687,30 +3240,341 @@ let currentUser=null,allEquipmentData=[],selectedEquipment={},isAuthInitialized=
                 </div>
             </div>
         </div>
-    `,window.currentUser&&loadUserConversations())}function toggleChatWindow(){let e=document.getElementById("customer-chat-window");e&&(e.classList.toggle("hidden"),e.classList.contains("hidden")||!window.currentUser||activeChatId||loadUserConversations(),e.classList.contains("hidden")||updateChatBadgeCount(0))}async function loadUserConversations(){let e=document.getElementById("chat-body"),t=document.getElementById("chat-input-container"),a=document.getElementById("quick-replies-container"),i=document.getElementById("chat-header-title"),r=document.getElementById("chat-header-status");if(!e)return;if(activeChatId=null,chatUnsubscribe&&(chatUnsubscribe(),chatUnsubscribe=null),t.classList.add("hidden"),a&&(a.style.display="none"),r&&(r.style.display="none"),i.textContent="My Chats",!window.currentUser){e.innerHTML='<div class="text-center text-muted mt-5"><p>Please login to chat.</p></div>';return}e.innerHTML='<div class="text-center mt-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';let s="undefined"!=typeof __app_id?__app_id:"default-app-id",n=window.FirebaseDB.collection("artifacts").doc(s).collection("public").doc("data").collection("conversations");try{let l=await n.where("customerId","==",window.currentUser.uid).orderBy("updatedAt","desc").get();if(e.innerHTML="",l.empty){e.innerHTML='<div class="text-center text-muted mt-5"><p>No active chats.<br>Go to Orders to start one.</p></div>';return}l.forEach(t=>{let a=t.data(),i=a.updatedAt?window.firebaseHelpers.formatTimeAgo(a.updatedAt):"",r=a.unreadCountCustomer>0?`<span class="badge bg-danger rounded-pill">${a.unreadCountCustomer}</span>`:"";e.innerHTML+=`
-                <div class="p-3 border-bottom bg-white hover-bg-light cursor-pointer" onclick="loadChatMessages('${t.id}', '${a.sellerBusinessName}', '${a.sellerId}')" style="cursor:pointer;">
+    `;
+    if (window.currentUser) {
+        loadUserConversations();
+    }
+}
+
+function toggleChatWindow() {
+    const windowEl = document.getElementById('customer-chat-window');
+    if (windowEl) {
+        windowEl.classList.toggle('hidden');
+        if (!windowEl.classList.contains('hidden') && window.currentUser && !activeChatId) {
+            loadUserConversations();
+        }
+        if (!windowEl.classList.contains('hidden')) {
+             updateChatBadgeCount(0);
+        }
+    }
+}
+window.toggleChatWindow = toggleChatWindow;
+
+async function loadUserConversations() {
+    const body = document.getElementById('chat-body');
+    const inputContainer = document.getElementById('chat-input-container');
+    const quickReplies = document.getElementById('quick-replies-container');
+    const title = document.getElementById('chat-header-title');
+    const statusDiv = document.getElementById('chat-header-status');
+    if (!body) return;
+    activeChatId = null;
+    if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
+    inputContainer.classList.add('hidden');
+    if (quickReplies) quickReplies.style.display = 'none';
+    if (statusDiv) statusDiv.style.display = 'none';
+    title.textContent = 'My Chats';
+    if (!window.currentUser) {
+        body.innerHTML = '<div class="text-center text-muted mt-5"><p>Please login to chat.</p></div>';
+        return;
+    }
+    body.innerHTML = '<div class="text-center mt-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const conversationsRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations');
+    try {
+        const snapshot = await conversationsRef
+            .where('customerId', '==', window.currentUser.uid)
+            .orderBy('updatedAt', 'desc')
+            .get();
+        body.innerHTML = '';
+        if (snapshot.empty) {
+            body.innerHTML = '<div class="text-center text-muted mt-5"><p>No active chats.<br>Go to Orders to start one.</p></div>';
+            return;
+        }
+        snapshot.forEach(doc => {
+            const chat = doc.data();
+            const time = chat.updatedAt ? window.firebaseHelpers.formatTimeAgo(chat.updatedAt) : '';
+            const unread = chat.unreadCountCustomer > 0 ? `<span class="badge bg-danger rounded-pill">${chat.unreadCountCustomer}</span>` : '';
+            
+            body.innerHTML += `
+                <div class="p-3 border-bottom bg-white hover-bg-light cursor-pointer" onclick="loadChatMessages('${doc.id}', '${chat.sellerBusinessName}', '${chat.sellerId}')" style="cursor:pointer;">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <strong class="text-dark">${a.sellerBusinessName}</strong>
-                        <span class="small text-muted">${i}</span>
+                        <strong class="text-dark">${chat.sellerBusinessName}</strong>
+                        <span class="small text-muted">${time}</span>
                     </div>
                     <div class="d-flex justify-content-between align-items-center">
-                        <small class="text-muted text-truncate" style="max-width: 200px;">${a.lastMessage||"Click to chat"}</small>
-                        ${r}
+                        <small class="text-muted text-truncate" style="max-width: 200px;">${chat.lastMessage || 'Click to chat'}</small>
+                        ${unread}
                     </div>
                 </div>
-            `})}catch(o){e.innerHTML='<div class="text-center text-danger mt-3">Error loading chats.</div>'}}async function loadChatMessages(e,t,a){activeChatId=e;let i=document.getElementById("chat-body"),r=document.getElementById("chat-input-container"),s=document.getElementById("quick-replies-container"),n=document.getElementById("chat-header-title"),l=document.getElementById("chat-header-status"),o=document.getElementById("status-text"),c=l.querySelector(".status-dot");n.innerHTML=`<button class="btn btn-sm text-white p-0 me-2" onclick="loadUserConversations()"><i class="fas fa-arrow-left"></i></button> ${t}`,r.classList.remove("hidden"),s&&(s.style.display="flex"),l&&(l.style.display="flex"),i.innerHTML='<div class="text-center mt-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>',a&&window.FirebaseDB.collection("users").doc(a).onSnapshot(e=>{let t=e.data(),a=t&&t.isOnline;o&&(o.textContent=a?"Online":"Offline"),c&&(c.className=`status-dot ${a?"online":"offline"}`);let r="custom-status-msg",s=document.getElementById(r);if(a||s||!i)a&&s&&s.remove();else{let n=document.createElement("div");n.id=r,n.className="system-message",n.textContent="Seller is currently offline. You can leave a message.",i.appendChild(n)}});let d="undefined"!=typeof __app_id?__app_id:"default-app-id",u=window.FirebaseDB.collection("artifacts").doc(d).collection("public").doc("data").collection("conversations").doc(e),m=u.collection("messages");chatUnsubscribe&&chatUnsubscribe(),chatUnsubscribe=m.orderBy("timestamp","asc").onSnapshot(e=>{i&&(i.innerHTML="",e.empty?i.innerHTML=`
+            `;
+        });
+    } catch (error) {
+        body.innerHTML = '<div class="text-center text-danger mt-3">Error loading chats.</div>';
+    }
+}
+window.loadUserConversations = loadUserConversations;
+
+async function loadChatMessages(chatId, titleName, sellerId) {
+    activeChatId = chatId;
+    const body = document.getElementById('chat-body');
+    const inputContainer = document.getElementById('chat-input-container');
+    const quickReplies = document.getElementById('quick-replies-container');
+    const title = document.getElementById('chat-header-title');
+    const statusDiv = document.getElementById('chat-header-status');
+    const statusText = document.getElementById('status-text');
+    const statusDot = statusDiv.querySelector('.status-dot');
+    title.innerHTML = `<button class="btn btn-sm text-white p-0 me-2" onclick="loadUserConversations()"><i class="fas fa-arrow-left"></i></button> ${titleName}`;
+    inputContainer.classList.remove('hidden');
+    if (quickReplies) quickReplies.style.display = 'flex';
+    if (statusDiv) statusDiv.style.display = 'flex';
+    body.innerHTML = '<div class="text-center mt-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+    if (sellerId) {
+        window.FirebaseDB.collection('users').doc(sellerId).onSnapshot(doc => {
+            const seller = doc.data();
+            const isOnline = seller && seller.isOnline;
+            if (statusText) statusText.textContent = isOnline ? 'Online' : 'Offline';
+            if (statusDot) statusDot.className = `status-dot ${isOnline ? 'online' : 'offline'}`;
+            const customMsgId = 'custom-status-msg';
+            const existingMsg = document.getElementById(customMsgId);
+            if (!isOnline && !existingMsg && body) {
+                const msg = document.createElement('div');
+                msg.id = customMsgId;
+                msg.className = 'system-message';
+                msg.textContent = `Seller is currently offline. You can leave a message.`;
+                body.appendChild(msg);
+            } else if (isOnline && existingMsg) {
+                existingMsg.remove();
+            }
+        });
+    }
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const chatDocRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations').doc(chatId);
+    const messagesRef = chatDocRef.collection('messages');
+    if (chatUnsubscribe) chatUnsubscribe();
+    chatUnsubscribe = messagesRef.orderBy('timestamp', 'asc').onSnapshot(snapshot => {
+        if (!body) return;
+        body.innerHTML = '';
+        if (snapshot.empty) {
+            body.innerHTML = `
                 <div class="system-message mt-4">
                     Welcome to FarmRent Chat!<br>How can we help you today?
                 </div>
-            `:(e.forEach(e=>{let t=e.data(),a=t.senderId===window.currentUser.uid,r=t.timestamp?t.timestamp.toDate().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"";i.innerHTML+=`
-                    <div style="display: flex; justify-content: ${a?"flex-end":"flex-start"}; margin-bottom: 8px;">
-                        <div class="message-bubble ${a?"message-sent":"message-received"}">
-                            ${t.text}
-                            <span class="message-time">${r}</span>
+            `;
+        } else {
+            snapshot.forEach(doc => {
+                const msg = doc.data();
+                const isMe = msg.senderId === window.currentUser.uid;
+                const date = msg.timestamp ? msg.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+                body.innerHTML += `
+                    <div style="display: flex; justify-content: ${isMe ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
+                        <div class="message-bubble ${isMe ? 'message-sent' : 'message-received'}">
+                            ${msg.text}
+                            <span class="message-time">${date}</span>
                         </div>
                     </div>
-                `}),i.scrollTop=i.scrollHeight),u.update({unreadCountCustomer:0}),checkCustomerNotifications())}),u.onSnapshot(e=>{let t=e.data(),a=document.getElementById("customer-typing-indicator");t&&t.typing&&t.typing.seller&&a?(a.style.display="flex",i&&(i.scrollTop=i.scrollHeight)):a&&(a.style.display="none")});let p=document.getElementById("chat-message-input");p&&(p.oninput=()=>{u.set({typing:{customer:!0}},{merge:!0}),clearTimeout(typingTimeout),typingTimeout=setTimeout(()=>{u.set({typing:{customer:!1}},{merge:!0})},2e3)},p.onkeypress=e=>{"Enter"===e.key&&sendChatMessage()})}async function openOrderChat(e,t,a){if(!window.currentUser){window.firebaseHelpers.showAlert("Please login to chat.","warning");return}let i=document.getElementById("customer-chat-window");i&&i.classList.remove("hidden");let r=`${e}_${t}_${window.currentUser.uid}`,s="undefined"!=typeof __app_id?__app_id:"default-app-id",n=window.FirebaseDB.collection("artifacts").doc(s).collection("public").doc("data").collection("conversations").doc(r),l=await n.get();l.exists||await n.set({orderId:e,sellerId:t,customerId:window.currentUser.uid,customerName:window.currentUser.name,sellerBusinessName:a,createdAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp(),unreadCountCustomer:0,unreadCountSeller:1}),loadChatMessages(r,a,t)}function sendQuickReply(e){let t=document.getElementById("chat-message-input");t&&(t.value=e,sendChatMessage())}async function sendChatMessage(){let e=document.getElementById("chat-message-input");if(!e)return;let t=e.value.trim();if(!t||!activeChatId||!window.currentUser)return;e.value="";let a="undefined"!=typeof __app_id?__app_id:"default-app-id",i=window.FirebaseDB.collection("artifacts").doc(a).collection("public").doc("data").collection("conversations").doc(activeChatId);try{clearTimeout(typingTimeout),await i.set({typing:{customer:!1}},{merge:!0}),await i.collection("messages").add({senderId:window.currentUser.uid,text:t,timestamp:firebase.firestore.FieldValue.serverTimestamp()}),await i.update({lastMessage:t,updatedAt:firebase.firestore.FieldValue.serverTimestamp(),unreadCountSeller:firebase.firestore.FieldValue.increment(1)})}catch(r){}}async function updateCartCount(){let e=await getCartFromFirestore(),t=document.getElementById("cart-count");t&&(t.textContent=e.length)}if(window.lookupReferralCode=lookupReferralCode,window.getCartFromFirestore=getCartFromFirestore,document.addEventListener("DOMContentLoaded",async()=>{await initializeAuth();let e=window.location.pathname.split("/").pop();"browse.html"===e?loadBrowsePageData():"cart.html"===e?(loadCartPage(),updateNavbarPincodeDisplay()):"checkout.html"===e?(loadCheckoutPage(),updateNavbarPincodeDisplay()):"profile.html"===e?(loadProfilePage(),updateNavbarPincodeDisplay()):"orders.html"===e?(loadOrdersPage(),updateNavbarPincodeDisplay()):"seller.html"===e||"seller-pending.html"===e?(window.loadSellerDashboard&&window.loadSellerDashboard(),updateNavbarPincodeDisplay()):"index.html"===e||""===e?(loadHomepageData(),checkAndPromptForPincode()):updateNavbarPincodeDisplay(),initializeEventListeners(),await getPlatformFinancialSettings(),"seller.html"!==e&&"seller-pending.html"!==e&&"admin.html"!==e&&setTimeout(()=>{document.getElementById("chat-widget-container")&&renderChatWidget()},1e3)}),window.getPostOfficeData=getPostOfficeData,window.populateLocationFields=populateLocationFields,window.getCurrentLocationPincode=getCurrentLocationPincode,window.showPincodeModal=showPincodeModal,window.savePincode=savePincode,window.skipPincode=skipPincode,window.updateCartForNewPincode=updateCartForNewPincode,window.revertToPreviousPincode=revertToPreviousPincode,window.changePincodeToMatchEquipment=changePincodeToMatchEquipment,window.showCustomWarningModal=showCustomWarningModal,window.logout=logout,window.showEquipmentDetailsModal=showEquipmentDetailsModal,window.addToCartModal=addToCartModal,window.rentNowModal=rentNowModal,window.resolveMixedPincodeCart=resolveMixedPincodeCart,window.changePincodeToMatchCart=changePincodeToMatchCart,window.clearCartForCurrentLocation=clearCartForCurrentLocation,window.startCheckout=startCheckout,window.markCustomerNotificationsAsRead=markCustomerNotificationsAsRead,window.subscribeNewsletter=subscribeNewsletter,window.filterEquipment=filterEquipment,window.removeItemFromCart=removeItemFromCart,window.createOrderTrackerHtml=createOrderTrackerHtml,window.viewOrderDetailsModal=viewOrderDetailsModal,window.cancelOrder=cancelOrder,window.openReviewModal=openReviewModal,window.submitReview=submitReview,window.toggleChatWindow=toggleChatWindow,window.loadUserConversations=loadUserConversations,window.loadChatMessages=loadChatMessages,window.openOrderChat=openOrderChat,window.sendQuickReply=sendQuickReply,window.sendChatMessage=sendChatMessage,window.updateCartCount=updateCartCount,"undefined"==typeof Razorpay){let e=document.createElement("script");e.src="https://checkout.razorpay.com/v1/checkout.js",document.head.appendChild(e)}function getRecentPincodes(){let e=localStorage.getItem("recentPincodes");return e?JSON.parse(e):[]}function addToRecentPincodes(e){let t=getRecentPincodes();return(t=t.filter(t=>t!==e)).unshift(e),t=t.slice(0,5),localStorage.setItem("recentPincodes",JSON.stringify(t)),t}function renderRecentPincodes(){let e=document.getElementById("recent-pincodes");if(!e)return;let t=getRecentPincodes();if(0===t.length){e.innerHTML=`
+                `;
+            });
+            body.scrollTop = body.scrollHeight;
+        }
+        chatDocRef.update({ unreadCountCustomer: 0 });
+        checkCustomerNotifications();
+    });
+    chatDocRef.onSnapshot(doc => {
+        const data = doc.data();
+        const indicator = document.getElementById('customer-typing-indicator');
+        if (data && data.typing && data.typing.seller && indicator) {
+            indicator.style.display = 'flex';
+            if (body) body.scrollTop = body.scrollHeight;
+        } else if (indicator) {
+            indicator.style.display = 'none';
+        }
+    });
+    const input = document.getElementById('chat-message-input');
+    if (input) {
+        input.oninput = () => {
+            chatDocRef.set({ typing: { customer: true } }, { merge: true });
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => {
+                chatDocRef.set({ typing: { customer: false } }, { merge: true });
+            }, 2000);
+        };
+        input.onkeypress = (e) => { 
+            if (e.key === 'Enter') sendChatMessage(); 
+        };
+    }
+}
+window.loadChatMessages = loadChatMessages;
+
+async function openOrderChat(orderId, sellerId, businessName) {
+    if (!window.currentUser) {
+        window.firebaseHelpers.showAlert('Please login to chat.', 'warning');
+        return;
+    }
+    const windowEl = document.getElementById('customer-chat-window');
+    if (windowEl) windowEl.classList.remove('hidden');
+    const chatId = `${orderId}_${sellerId}_${window.currentUser.uid}`;
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const chatRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations').doc(chatId);
+    const doc = await chatRef.get();
+    if (!doc.exists) {
+        await chatRef.set({
+            orderId: orderId,
+            sellerId: sellerId,
+            customerId: window.currentUser.uid,
+            customerName: window.currentUser.name,
+            sellerBusinessName: businessName,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            unreadCountCustomer: 0,
+            unreadCountSeller: 1
+        });
+    }
+    loadChatMessages(chatId, businessName, sellerId);
+}
+window.openOrderChat = openOrderChat;
+
+function sendQuickReply(text) {
+    const input = document.getElementById('chat-message-input');
+    if (input) {
+        input.value = text;
+        sendChatMessage();
+    }
+}
+window.sendQuickReply = sendQuickReply;
+
+async function sendChatMessage() {
+    const input = document.getElementById('chat-message-input');
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text || !activeChatId || !window.currentUser) return;
+    input.value = '';
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const chatRef = window.FirebaseDB.collection('artifacts').doc(appId).collection('public').doc('data').collection('conversations').doc(activeChatId);
+    try {
+        clearTimeout(typingTimeout);
+        await chatRef.set({ typing: { customer: false } }, { merge: true });
+        await chatRef.collection('messages').add({
+            senderId: window.currentUser.uid,
+            text: text,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        await chatRef.update({
+            lastMessage: text,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            unreadCountSeller: firebase.firestore.FieldValue.increment(1)
+        });
+    } catch (error) {}
+}
+window.sendChatMessage = sendChatMessage;
+
+async function updateCartCount() { 
+    const cart = await getCartFromFirestore(); 
+    const cartCountElement = document.getElementById('cart-count');
+    if (cartCountElement) {
+        cartCountElement.textContent = cart.length;
+    }
+}
+window.updateCartCount = updateCartCount;
+
+if (typeof Razorpay === 'undefined') {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    document.head.appendChild(script);
+}
+
+window.applyCoinDiscount = function() {
+    const coinInput = document.getElementById('coins-to-apply');
+    const warningText = document.getElementById('coin-warning-text');
+    if (!coinInput) return;
+    let requestedCoins = parseInt(coinInput.value) || 0;
+    const cart = window.razorpayContext?.items || [];
+    if (cart.length === 0) {
+        warningText.textContent = "Cart is empty. Please add items first.";
+        warningText.classList.remove('text-muted', 'text-success', 'text-warning');
+        warningText.classList.add('text-danger');
+        return;
+    }
+    let subtotal = 0;
+    cart.forEach(item => {
+        subtotal += Number(item.price) || 0;
+    });
+    const maxDiscountAllowed = Math.floor(subtotal * 0.5);
+    let appliedCoins = 0;
+    if (requestedCoins < 0) {
+        appliedCoins = 0;
+        warningText.textContent = `Coins cannot be negative.`;
+        warningText.classList.remove('text-muted', 'text-success', 'text-warning');
+        warningText.classList.add('text-danger');
+    } else if (requestedCoins > availableCoins) {
+        appliedCoins = Math.min(availableCoins, maxDiscountAllowed);
+        warningText.textContent = `Applied available maximum: ${appliedCoins} coins.`;
+        warningText.classList.remove('text-muted', 'text-danger', 'text-success');
+        warningText.classList.add('text-warning');
+    } else if (requestedCoins > maxDiscountAllowed) {
+        appliedCoins = maxDiscountAllowed;
+        warningText.textContent = `Applied maximum possible: ${maxDiscountAllowed} coins. (Capped at 50% of subtotal)`;
+        warningText.classList.remove('text-muted', 'text-success', 'text-warning');
+        warningText.classList.add('text-danger');
+    } else {
+        appliedCoins = requestedCoins;
+        warningText.textContent = `Applied ${appliedCoins} coins successfully.`;
+        warningText.classList.remove('text-muted', 'text-danger', 'text-warning');
+        warningText.classList.add('text-success');
+    }
+    coinsToApply = appliedCoins; 
+    coinInput.value = appliedCoins; 
+    displayCheckoutSummary(cart);
+}
+
+window.getReferralLink = function(code) {
+    if (!code) return "Code not available.";
+    const baseUrl = window.location.origin;
+    return `${baseUrl}/farmrent/customer-auth.html&ref=${code}`;
+}
+
+// Store recent pincodes in localStorage
+function getRecentPincodes() {
+    const recent = localStorage.getItem('recentPincodes');
+    return recent ? JSON.parse(recent) : [];
+}
+
+function addToRecentPincodes(pincode) {
+    let recent = getRecentPincodes();
+    recent = recent.filter(p => p !== pincode); // Remove if already exists
+    recent.unshift(pincode); // Add to beginning
+    recent = recent.slice(0, 5); // Keep only last 5
+    localStorage.setItem('recentPincodes', JSON.stringify(recent));
+    return recent;
+}
+
+function renderRecentPincodes() {
+    const recentContainer = document.getElementById('recent-pincodes');
+    if (!recentContainer) return;
+    
+    const recentPincodes = getRecentPincodes();
+    
+    if (recentPincodes.length === 0) {
+        recentContainer.innerHTML = `
             <div class="text-center w-100">
                 <small class="text-muted">No recent locations</small>
             </div>
-        `;return}e.innerHTML="",t.forEach(t=>{let a=document.createElement("button");a.type="button",a.className="btn btn-sm btn-outline-secondary",a.textContent=t,a.onclick=()=>{document.getElementById("pincode-input").value=t,setTimeout(()=>{document.getElementById("pincode-form").dispatchEvent(new Event("submit"))},500)},e.appendChild(a)})}window.applyCoinDiscount=function(){let e=document.getElementById("coins-to-apply"),t=document.getElementById("coin-warning-text");if(!e)return;let a=parseInt(e.value)||0,i=window.razorpayContext?.items||[];if(0===i.length){t.textContent="Cart is empty. Please add items first.",t.classList.remove("text-muted","text-success","text-warning"),t.classList.add("text-danger");return}let r=0;i.forEach(e=>{r+=Number(e.price)||0});let s=Math.floor(.5*r),n=0;a<0?(n=0,t.textContent="Coins cannot be negative.",t.classList.remove("text-muted","text-success","text-warning"),t.classList.add("text-danger")):a>availableCoins?(n=Math.min(availableCoins,s),t.textContent=`Applied available maximum: ${n} coins.`,t.classList.remove("text-muted","text-danger","text-success"),t.classList.add("text-warning")):a>s?(n=s,t.textContent=`Applied maximum possible: ${s} coins. (Capped at 50% of subtotal)`,t.classList.remove("text-muted","text-success","text-warning"),t.classList.add("text-danger")):(n=a,t.textContent=`Applied ${n} coins successfully.`,t.classList.remove("text-muted","text-danger","text-warning"),t.classList.add("text-success")),coinsToApply=n,e.value=n,displayCheckoutSummary(i)},window.getReferralLink=function(e){if(!e)return"Code not available.";let t=window.location.origin;return`${t}/farmrent/customer-auth.html&ref=${e}`};
+        `;
+        return;
+    }
+    
+    recentContainer.innerHTML = '';
+    recentPincodes.forEach(pincode => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-outline-secondary';
+        btn.textContent = pincode;
+        btn.onclick = () => {
+            document.getElementById('pincode-input').value = pincode;
+            // Auto-submit after 500ms for better UX
+            setTimeout(() => {
+                document.getElementById('pincode-form').dispatchEvent(new Event('submit'));
+            }, 500);
+        };
+        recentContainer.appendChild(btn);
+    });
+}
