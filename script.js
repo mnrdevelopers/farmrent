@@ -2621,25 +2621,29 @@ async function loadProfilePage() {
     const referralCode = window.currentUser.referralCode || generateReferralCode();
     if (referralCodeDisplayEl) referralCodeDisplayEl.value = referralCode;
     if (referralLinkDisplayEl) referralLinkDisplayEl.value = window.getReferralLink(referralCode);
-    const isSeller = user.role === 'seller';
-    const hasPincode = !!user.pincode;
-    if (isSeller && hasPincode) {
-        const pincodeInput = document.getElementById('profile-pincode');
-        if (pincodeInput) {
-            pincodeInput.readOnly = true;
-            pincodeInput.classList.add('bg-light', 'text-muted');
-        }
-        const pincodeGroup = document.getElementById('pincode-input-group');
-        if (pincodeGroup) {
-            if (!pincodeGroup.querySelector('.alert')) {
-                pincodeGroup.innerHTML += `
-                    <div class="alert alert-warning p-2 mt-2 small">
-                        <i class="fas fa-lock me-1"></i> Your Seller Pincode is permanent for consistency. Contact support to change location.
-                    </div>
-                `;
-            }
+    
+    // UPDATED: Removed the readOnly lock for sellers in the customer profile view
+    // Sellers can now change their pincode here to act as a customer in a different area.
+    const pincodeInput = document.getElementById('profile-pincode');
+    if (pincodeInput) {
+        pincodeInput.readOnly = false;
+        pincodeInput.classList.remove('bg-light', 'text-muted');
+    }
+    
+    const pincodeGroup = document.getElementById('pincode-input-group');
+    if (pincodeGroup) {
+        const existingAlert = pincodeGroup.querySelector('.alert');
+        if (existingAlert) existingAlert.remove();
+        
+        if (window.currentUser.role === 'seller') {
+            pincodeGroup.insertAdjacentHTML('beforeend', `
+                <div class="alert alert-info p-2 mt-2 small">
+                    <i class="fas fa-info-circle me-1"></i> As a Seller, changing this pincode allows you to browse equipment as a customer in a different area.
+                </div>
+            `);
         }
     }
+
     if (user.pincode) {
         (async () => {
              await populateLocationFields('profile-pincode', 'profile-village', 'profile-city', 'profile-state', 'pincode-status-message');
@@ -2690,14 +2694,16 @@ async function handleProfileUpdate(e) {
         pincode: pincodeInput,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
-    if (window.currentUser.role === 'seller' && window.currentUser.pincode) {
-        updates.pincode = window.currentUser.pincode;
-    }
+    
     try {
         await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(updates);
         window.firebaseHelpers.showAlert('Profile updated successfully!', 'success');
         window.currentUser = { ...window.currentUser, ...updates };
         await window.firebaseHelpers.pincodeSystem.setPincode(updates.pincode); 
+        
+        // Update local state variables
+        window.customerPincode = updates.pincode;
+        
         const path = window.location.pathname.split('/').pop();
         if (path === 'browse.html') {
              updatePincodeDisplay();
