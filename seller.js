@@ -2337,9 +2337,17 @@ async function loadProfileData() {
         : 'N/A';
     document.getElementById('bank-account-display').textContent = accDisplay;
     
+    // UPDATED: In the Seller Dashboard view, we keep the Pincode editable but show a warning
+    // This allows the seller to update their operating area.
+    const pincodeInput = document.getElementById('profile-pincode');
+    if (pincodeInput) {
+        pincodeInput.readOnly = false;
+        pincodeInput.classList.remove('bg-light', 'text-muted');
+    }
+    
     updateSellerInfo();
 }
-    
+
 document.getElementById('profile-form')?.addEventListener('submit', async function(e) {
     e.preventDefault();
     
@@ -2350,21 +2358,16 @@ document.getElementById('profile-form')?.addEventListener('submit', async functi
     const cityInput = document.getElementById('profile-city')?.value;
     const stateInput = document.getElementById('profile-state')?.value;
     
-    // Validate pincode format
     if (!pincodeInput || !/^[0-9]{6}$/.test(pincodeInput)) {
         window.firebaseHelpers.showAlert('Please enter a valid 6-digit Pincode.', 'danger');
         return;
     }
     
-    // Check if pincode has changed
     const isPincodeChanged = sellerData.pincode && pincodeInput !== sellerData.pincode;
     
     if (isPincodeChanged) {
-        // Show warning modal for pincode change
         const confirmed = await showPincodeChangeWarning(sellerData.pincode, pincodeInput);
-        if (!confirmed) {
-            return; // User cancelled the change
-        }
+        if (!confirmed) return;
     }
     
     if (villageSelect && !villageSelect.value) {
@@ -2387,12 +2390,11 @@ document.getElementById('profile-form')?.addEventListener('submit', async functi
             city: cityInput,
             state: stateInput,
             village: villageSelect ? villageSelect.value : '',
-            pincode: pincodeInput, // This can now be changed
+            pincode: pincodeInput,
             bio: document.getElementById('profile-bio')?.value,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
         
-        // If pincode changed, also update status to pending for re-verification
         if (isPincodeChanged) {
             updates.status = 'pending';
             window.firebaseHelpers.showAlert('Pincode changed! Your profile will be re-verified by admin.', 'warning');
@@ -2430,21 +2432,24 @@ document.getElementById('profile-form')?.addEventListener('submit', async functi
             document.getElementById('confirm-password').value = '';
         }
         
-        await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(updates);
+       await window.FirebaseDB.collection('users').doc(window.currentUser.uid).update(updates);
         
         sellerData = { ...sellerData, ...updates };
         window.currentUser = { ...window.currentUser, ...updates };
-        updateSellerInfo();
         
+        // Update the browser-wide pincode filter too
+        if (window.firebaseHelpers && window.firebaseHelpers.pincodeSystem) {
+            await window.firebaseHelpers.pincodeSystem.setPincode(updates.pincode);
+        }
+        
+        updateSellerInfo();
         window.firebaseHelpers.showAlert('Profile updated successfully', 'success');
         
-        // If status changed to pending, redirect to pending page
         if (isPincodeChanged && updates.status === 'pending') {
             setTimeout(() => {
                 window.location.href = 'seller-pending.html';
             }, 2000);
         }
-        
     } catch (error) {
         console.error('Error updating profile:', error);
         window.firebaseHelpers.showAlert('Error updating profile: ' + error.message, 'danger');
