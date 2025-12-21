@@ -2485,8 +2485,23 @@ function displayCheckoutSummary(cart) {
     if (feesEl) feesEl.textContent = window.firebaseHelpers.formatCurrency(fees);
     const totalEl = document.getElementById('checkout-total');
     if (totalEl) totalEl.textContent = window.firebaseHelpers.formatCurrency(total);
-    window.updatePaymentButtonUI(total);
+    
+    // FIXED: Use the newly defined function
+    updatePaymentButtonUI(total);
 }
+
+// NEW: Update payment button with total amount
+function updatePaymentButtonUI(totalAmount) {
+    const payBtn = document.getElementById('pay-now-btn');
+    if (!payBtn) return;
+    
+    // Format the amount
+    const formattedAmount = window.firebaseHelpers.formatCurrency(totalAmount);
+    
+    // Update the button text
+    payBtn.innerHTML = `<i class="fas fa-lock me-2"></i>Pay Securely Now (${formattedAmount})`;
+}
+window.updatePaymentButtonUI = updatePaymentButtonUI;
 
 async function processPayment() {
     const form = document.getElementById('checkout-form');
