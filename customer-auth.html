@@ -150,7 +150,7 @@
         }
         
         .role-benefits {
-            background: rgba(43, 92, 43, 0.05); /* Light green tint */
+            background: rgba(43, 92, 43, 0.05);
             padding: 15px;
             border-radius: 8px;
             margin: 20px 0;
@@ -221,7 +221,6 @@
     </style>
 </head>
 <body>
-    <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container">
             <a class="navbar-brand" href="index.html">
@@ -234,13 +233,11 @@
         </div>
     </nav>
 
-    <!-- Main Authentication Container -->
     <div class="container">
         <div class="row justify-content-center">
             <div class="col-lg-10">
                 <div class="auth-container">
                     <div class="row g-0">
-                        <!-- Sidebar with Role Info -->
                         <div class="col-lg-5">
                             <div class="auth-sidebar">
                                 <a href="index.html" class="back-home text-decoration-none text-sun-yellow mb-4 d-inline-flex align-items-center">
@@ -271,7 +268,6 @@
                             </div>
                         </div>
                         
-                        <!-- Authentication Form -->
                         <div class="col-lg-7">
                             <div class="auth-form">
                                 <div class="auth-tabs" id="auth-tabs">
@@ -284,7 +280,6 @@
                                     <p class="mt-2">Processing...</p>
                                 </div>
                                 
-                                <!-- Login Form -->
                                 <div id="login-form" class="form-section active">
                                     <h3 class="form-title">Customer Login</h3>
                                     
@@ -315,7 +310,6 @@
                                     </form>
                                 </div>
                                 
-                                <!-- Signup Form -->
                                 <div id="signup-form" class="form-section">
                                     <h3 class="form-title">Customer Registration</h3>
                                     
@@ -357,13 +351,6 @@
                                             </div>
                                         </div>
 
-                                        <!-- Referral Code Field (Kept Simple) -->
-                                        <div class="mb-3">
-                                            <label for="referralCode" class="form-label">Referral Code (Optional)</label>
-                                            <input type="text" class="form-control" id="referralCode" name="referralCode" placeholder="Enter friend's referral code (8 characters)" maxlength="8">
-                                            <small class="form-text text-muted">Use a referral code so your friend (the referrer) gets **100 Coins** when you place your first order!</small>
-                                        </div>
-                                        
                                         <div class="mb-3 form-check">
                                             <input type="checkbox" class="form-check-input" id="termsAgree" name="termsAgree" required>
                                             <label class="form-check-label" for="termsAgree">
@@ -385,7 +372,6 @@
                                     Login to manage your rentals and access your account.
                                 </div>
                                 
-                                <!-- Reset Password Modal (Shared) -->
                                 <div class="modal fade" id="resetPasswordModal" tabindex="-1">
                                     <div class="modal-dialog">
                                         <div class="modal-content">
@@ -415,20 +401,13 @@
         </div>
     </div>
 
-    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <!-- Firebase Configuration and Helpers -->
     <script src="firebase-config.js"></script>
     <script src="script.js"></script>
-    
-    <!-- Core Authentication Logic -->
     <script src="auth-script.js"></script>
 
-    <!-- Page Specific Script -->
     <script>
         const CURRENT_ROLE = 'customer';
-        const urlReferralCode = new URLSearchParams(window.location.search).get('ref') || '';
 
         function switchTab(tabName) {
             document.querySelectorAll('.auth-tab').forEach(tab => tab.classList.remove('active'));
@@ -452,37 +431,15 @@
         }
 
        document.addEventListener('DOMContentLoaded', () => {
-    // Check for existing session first
-    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
-    
-    // If user is already logged in and on correct page, redirect immediately
-    if (currentUser && currentUser.role === CURRENT_ROLE) {
-        // Small delay to ensure Firebase is initialized
-        setTimeout(() => {
-            window.redirectUser();
-        }, 500);
-        return;
-    }
-    
-    // Check for Google redirect result (for backward compatibility)
-    window.handleGoogleRedirectResult(CURRENT_ROLE);
-
-    // Pre-fill referral code if available in URL
-    const referralCodeInput = document.getElementById('referralCode');
-    if (referralCodeInput && urlReferralCode) {
-        referralCodeInput.value = urlReferralCode.toUpperCase();
-    }
-
-    // Initial view setup
-    switchTab('login');
-    
-    // Setup additional listeners
-    if (typeof setupPincodeListener === 'function') {
-        setupPincodeListener();
-    }
-});
+            const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+            if (currentUser && currentUser.role === CURRENT_ROLE) {
+                setTimeout(() => { window.redirectUser(); }, 500);
+                return;
+            }
+            window.handleGoogleRedirectResult(CURRENT_ROLE);
+            switchTab('login');
+        });
         
-        // Handle login form submission
         document.getElementById('loginForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const email = document.getElementById('loginEmail').value;
@@ -491,7 +448,6 @@
             window.handleEmailLogin(email, password, CURRENT_ROLE);
         });
         
-        // Handle signup form submission
         document.getElementById('signupForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
@@ -502,33 +458,19 @@
             const confirmPassword = document.getElementById('signupConfirmPassword').value;
             const termsAgree = document.getElementById('termsAgree').checked;
             const newsletter = document.getElementById('newsletter').checked;
-            const referralCode = document.getElementById('referralCode')?.value.trim().toUpperCase() || '';
-            let referrerId = null;
-            
-            if (referralCode && referralCode.length !== 8) { showAlert('Referral Code must be 8 characters long.', 'warning'); return; }
-            if (referralCode) {
-                if (window.lookupReferralCode) {
-                    referrerId = await window.lookupReferralCode(referralCode);
-                    if (!referrerId) { showAlert('Invalid Referral Code. Please check the code and try again.', 'warning'); return; }
-                } else { console.warn('lookupReferralCode not available. Skipping referral check.'); }
-            }
 
             if (!name || !mobile || !email || !password || !confirmPassword || !termsAgree || mobile.length !== 10 || isNaN(mobile) || password !== confirmPassword || password.length < 6) {
-                 showAlert('Please correct form errors (fill all fields, match passwords, 10-digit mobile, accept terms, min 6 char password).', 'warning');
+                 showAlert('Please correct form errors.', 'warning');
                  return;
             }
             
-            const userData = { name, mobile, email, password, newsletter, referredBy: referrerId };
-            
+            const userData = { name, mobile, email, password, newsletter };
             window.handleUserRegistration(userData, CURRENT_ROLE);
         });
 
-        // Export core functions
         window.switchTab = switchTab;
         window.showResetPassword = showResetPassword;
         window.resetPassword = resetPassword;
-        // FIX: Removed the recursive redefinition. The HTML element's onclick attribute already calls the globally available function correctly.
-        // window.signInWithGoogle = (role) => window.signInWithGoogle(CURRENT_ROLE);
     </script>
 </body>
 </html>
