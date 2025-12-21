@@ -14,6 +14,12 @@ let chatUnsubscribe = null;
 let typingTimeout = null;
 let chatBadgeUnsubscribe = null;
 
+// Helper to get price including platform markup for customers
+function getDisplayPrice(basePrice) {
+    if (!basePrice) return 0;
+    return Math.round(basePrice * (1 + platformFeeRate));
+}
+
 function generateReferralCode() {
     return Math.random().toString(36).substring(2, 10).toUpperCase();
 }
@@ -170,8 +176,7 @@ async function getPlatformFinancialSettings() {
         const doc = await settingsRef.get();
         if (doc.exists) {
             const data = doc.data();
-            // platformFee is charged to the customer (already in use)
-            // Seller commission is intentionally excluded/set to 0% as per user request.
+            // platformFee is used to markup the base price shown to customers
             platformFeeRate = (data.platformFee / 100) || 0.05; 
         } else {
             platformFeeRate = 0.05;
@@ -965,6 +970,11 @@ function createEquipmentCard(equipment, id, isBrowsePage = false) {
         ? `<button class="btn btn-primary w-100" onclick="showEquipmentDetailsModal('${id}')">View Details</button>`
         : `<a href="item.html?id=${id}" class="btn btn-primary w-100">View Details</a>`;
     const ratingHtml = getStarRatingHtml(equipment.rating || 0);
+
+    // MARKUP APPLIED HERE: Showing price + platform fee to customer
+    const displayPriceAcre = getDisplayPrice(equipment.pricePerAcre || 0);
+    const displayPriceHour = getDisplayPrice(equipment.pricePerHour || 0);
+
     return `
         <div class="${cardClass}">
             ${!pincodeMatches && currentPincode ? '<div class="card-header bg-warning text-dark small py-1"><i class="fas fa-map-marker-alt me-1"></i>Different Location</div>' : ''}
@@ -979,8 +989,8 @@ function createEquipmentCard(equipment, id, isBrowsePage = false) {
                 ${pincodeWarning}
                 <div class="mt-auto">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <div class="price-tag">₹${equipment.pricePerAcre || 0}/acre</div>
-                        <small class="text-muted">or ₹${equipment.pricePerHour || 0}/hour</small>
+                        <div class="price-tag">₹${displayPriceAcre}/acre</div>
+                        <small class="text-muted">or ₹${displayPriceHour}/hour</small>
                     </div>
                     <p class="mb-2 small text-muted"><i class="fas fa-map-marker-alt me-1"></i> Pincode: ${equipment.pincode || 'N/A'}</p>
                     ${actionButtonHtml}
@@ -1080,6 +1090,11 @@ function buildModalContent(equipment, sellerInfo) {
     const pickupAddress = sellerInfo 
         ? `${sellerInfo.address || 'Seller Address Missing'}, ${sellerInfo.village || ''}, ${sellerInfo.city || ''}, ${sellerInfo.state || ''}`
         : 'Address details are missing. Contact Seller.';
+
+    // MARKUP APPLIED HERE
+    const displayPriceAcre = getDisplayPrice(equipment.pricePerAcre || 0);
+    const displayPriceHour = getDisplayPrice(equipment.pricePerHour || 0);
+
     return `
         <div class="row">
             <div class="col-md-6">
@@ -1107,7 +1122,7 @@ function buildModalContent(equipment, sellerInfo) {
                     <span class="badge ${statusClass} text-white p-2">${statusText}</span>
                     <span class="text-muted small">Listed by: <strong>${businessName}</strong></span>
                 </div>
-                <h3 class="text-primary mb-3">${window.firebaseHelpers.formatCurrency(equipment.pricePerAcre)}/Acre | ${window.firebaseHelpers.formatCurrency(equipment.pricePerHour)}/Hour</h3>
+                <h3 class="text-primary mb-3">₹${displayPriceAcre}/Acre | ₹${displayPriceHour}/Hour</h3>
                 <p>${equipment.description}</p>
                 <ul class="list-unstyled">
                     <li><i class="fas fa-tags me-2 text-warning"></i> <strong>Category:</strong> ${equipment.category}</li>
@@ -1134,17 +1149,18 @@ function updateModalPrice(type, value) {
         updateRentalDetails(); 
         return;
     }
-    let price = 0;
-    if (type === 'acre') {
-        price = (selectedEquipment.pricePerAcre || 0) * duration;
-    } else {
-        price = (selectedEquipment.pricePerHour || 0) * duration;
-    }
+    
+    // MARKUP APPLIED HERE: The price stored in calculatedPrice will now include the fee
+    let basePrice = type === 'acre' ? (selectedEquipment.pricePerAcre || 0) : (selectedEquipment.pricePerHour || 0);
+    let markupPrice = getDisplayPrice(basePrice);
+    let totalPrice = markupPrice * duration;
+
     selectedEquipment.rentalDetails = {
         ...selectedEquipment.rentalDetails,
-        calculatedPrice: price
+        calculatedPrice: totalPrice,
+        basePrice: basePrice * duration // Keep track of base for payout
     };
-    if(priceElement) priceElement.textContent = window.firebaseHelpers.formatCurrency(price);
+    if(priceElement) priceElement.textContent = window.firebaseHelpers.formatCurrency(totalPrice);
 }
 
 async function addToCartModal() {
@@ -1199,14 +1215,15 @@ async function addToCartModal() {
              return;
         }
     }
-    const cartItem = {
+   const cartItem = {
         id: item.id,
         name: item.name,
         sellerId: item.sellerId,
         businessName: item.businessName,
-        price: calculatedPrice,
-        pricePerAcre: item.pricePerAcre, 
-        pricePerHour: item.pricePerHour,
+        price: calculatedPrice, // This is already marked up
+        basePrice: rentalDetails.basePrice, // Store original for seller payout
+        pricePerAcre: getDisplayPrice(item.pricePerAcre), 
+        pricePerHour: getDisplayPrice(item.pricePerHour),
         rentalType: durationType,
         rentalValue: durationValue,
         imageUrl: item.images && item.images[0],
@@ -1240,7 +1257,7 @@ async function rentNowModal() {
         window.firebaseHelpers.showAlert('Please select the required **Pickup Date and Time**.', 'danger');
         return;
     }
-    const { calculatedPrice, pickupDate, pickupTime } = rentalDetails;
+    const { calculatedPrice, basePrice, pickupDate, pickupTime } = rentalDetails;
     const itemPincode = item.pincode;
     if (!itemPincode) {
         window.firebaseHelpers.showAlert('Equipment missing Pincode information. Cannot proceed to checkout.', 'danger');
@@ -1280,8 +1297,9 @@ async function rentNowModal() {
             sellerId: item.sellerId,
             businessName: item.businessName,
             price: calculatedPrice,
-            pricePerAcre: item.pricePerAcre, 
-            pricePerHour: item.pricePerHour,
+            basePrice: basePrice,
+            pricePerAcre: getDisplayPrice(item.pricePerAcre), 
+            pricePerHour: getDisplayPrice(item.pricePerHour),
             rentalType: rentalDetails.durationType,
             rentalValue: rentalDetails.durationValue,
             imageUrl: item.images && item.images[0],
@@ -2380,8 +2398,8 @@ async function displayCartItems(cart) {
             </div>
         `;
     });
-    const fees = subtotal * platformFeeRate; 
-    const total = subtotal + fees;
+    const fees = 0; // UPDATED: Fees are now already built into the item prices
+    const total = subtotal;
     updateCartSummary(subtotal, fees, total, isDisabled);
 }
 
@@ -2399,8 +2417,15 @@ function updateCartSummary(subtotal, fees, total, isDisabled) {
     if (subtotalEl) subtotalEl.textContent = window.firebaseHelpers.formatCurrency(subtotal);
     const discountEl = document.getElementById('cart-discount');
     if (discountEl) discountEl.textContent = window.firebaseHelpers.formatCurrency(0); 
+    
+    // UPDATED: Hide the fees row if it's 0 (since they are built-in)
     const feesEl = document.getElementById('cart-fees');
-    if (feesEl) feesEl.textContent = window.firebaseHelpers.formatCurrency(fees);
+    if (feesEl) {
+        feesEl.textContent = window.firebaseHelpers.formatCurrency(fees);
+        const feesRow = feesEl.closest('div.d-flex');
+        if (feesRow) feesRow.style.display = fees === 0 ? 'none' : 'flex';
+    }
+    
     const totalEl = document.getElementById('cart-total');
     if (totalEl) totalEl.textContent = window.firebaseHelpers.formatCurrency(total);
     const checkoutEl = document.getElementById('checkout-btn');
@@ -2447,7 +2472,7 @@ function displayCheckoutSummary(cart) {
     let requestedCoins = coinsToApply;
     let effectiveCoinsUsed = Math.min(requestedCoins, availableCoins, maxDiscountAllowed);
     const totalDiscount = effectiveCoinsUsed;
-    const fees = subtotal * platformFeeRate;
+    const fees = 0; // Built-in
     let total = subtotal - totalDiscount + fees;
     if (total < 1) {
         const excessDiscount = Math.abs(total - 1);
@@ -2468,7 +2493,8 @@ function displayCheckoutSummary(cart) {
     }; 
     const feeLabelElement = document.getElementById('checkout-fees-label');
     if (feeLabelElement) {
-        feeLabelElement.textContent = `Platform Fee (${(platformFeeRate * 100).toFixed(0)}%):`;
+        const feeRow = feeLabelElement.closest('div.d-flex');
+        if (feeRow) feeRow.style.display = 'none'; // Hide the platform fee row
     }
     const coinInput = document.getElementById('coins-to-apply');
     if (coinInput) coinInput.value = coinsToApply;
