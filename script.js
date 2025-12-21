@@ -20,26 +20,7 @@ function getDisplayPrice(basePrice) {
     return Math.round(basePrice * (1 + platformFeeRate));
 }
 
-function generateReferralCode() {
-    return Math.random().toString(36).substring(2, 10).toUpperCase();
-}
-
-async function lookupReferralCode(code) {
-     if (!code || code.length !== 8 || !window.FirebaseDB) return null;
-     try {
-         const snapshot = await window.FirebaseDB.collection('users')
-             .where('referralCode', '==', code)
-             .limit(1)
-             .get();
-         if (!snapshot.empty) {
-             return snapshot.docs[0].id;
-         }
-     } catch (e) {}
-     return null;
-}
-window.lookupReferralCode = lookupReferralCode;
-
-function getCustomerNotificationRef(userId) {
+async function getCustomerNotificationRef(userId) {
     if (!window.FirebaseDB) return null;
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     return window.FirebaseDB.collection('artifacts').doc(appId)
@@ -716,12 +697,10 @@ async function initializeAuthInternal() {
                         const userData = window.currentUser;
                         let needsUpdate = false;
                         if (userData.coins === undefined) { userData.coins = 0; needsUpdate = true; }
-                        if (userData.referralCode === undefined) { userData.referralCode = generateReferralCode(); needsUpdate = true; }
                         if (userData.firstOrderPlaced === undefined) { userData.firstOrderPlaced = false; needsUpdate = true; }
                         if (needsUpdate) {
                             await docRef.set({
                                 coins: userData.coins,
-                                referralCode: userData.referralCode,
                                 firstOrderPlaced: userData.firstOrderPlaced,
                             }, { merge: true });
                             window.currentUser = { uid: user.uid, ...doc.data(), ...userData };
@@ -1785,7 +1764,7 @@ async function checkCustomerNotifications() {
                     const orderId = parts[0];
                     const sellerId = parts[1];
                     const sellerName = notif.message.split(':')[0].replace('New message from ', '').trim();
-                    const chatAction = `openOrderChat('${orderId}', '${sellerId}', '${sellerName}')`;
+                    const chatAction = `openOrderChat('${orderId}', '${sellerId}', '${sellerName.trim()}')`;
                     if (listElement) listElement.innerHTML += `
                         <li>
                             <a class="dropdown-item d-flex justify-content-between align-items-center ${unreadClass}" href="#" onclick="${chatAction}" title="${notif.message}">
@@ -2612,12 +2591,10 @@ async function loadProfilePage() {
         const userData = userDoc.data();
         let needsUpdate = false;
         if (userData.coins === undefined) { userData.coins = 0; needsUpdate = true; }
-        if (userData.referralCode === undefined) { userData.referralCode = generateReferralCode(); needsUpdate = true; }
         if (userData.firstOrderPlaced === undefined) { userData.firstOrderPlaced = false; needsUpdate = true; }
         if (needsUpdate) {
             await userDocRef.set({
                 coins: userData.coins,
-                referralCode: userData.referralCode,
                 firstOrderPlaced: userData.firstOrderPlaced,
             }, { merge: true });
         }
@@ -2642,11 +2619,8 @@ async function loadProfilePage() {
     if (profileUserNameEl) profileUserNameEl.textContent = user.name || 'User';
     const profileCoinBalanceEl = document.getElementById('profile-coin-balance');
     if (profileCoinBalanceEl) profileCoinBalanceEl.textContent = `${availableCoins || 0} Coins`;
-    const referralCodeDisplayEl = document.getElementById('referral-code-display');
-    const referralLinkDisplayEl = document.getElementById('referral-link-display');
-    const referralCode = window.currentUser.referralCode || generateReferralCode();
-    if (referralCodeDisplayEl) referralCodeDisplayEl.value = referralCode;
-    if (referralLinkDisplayEl) referralLinkDisplayEl.value = window.getReferralLink(referralCode);
+    
+    // REMOVED: Referral code display elements
     
     // UPDATED: Removed the readOnly lock for sellers in the customer profile view
     // Sellers can now change their pincode here to act as a customer in a different area.
@@ -3556,12 +3530,6 @@ window.applyCoinDiscount = function() {
     coinsToApply = appliedCoins; 
     coinInput.value = appliedCoins; 
     displayCheckoutSummary(cart);
-}
-
-window.getReferralLink = function(code) {
-    if (!code) return "Code not available.";
-    const baseUrl = window.location.origin;
-    return `${baseUrl}/farmrent/customer-auth.html&ref=${code}`;
 }
 
 // Store recent pincodes in localStorage
